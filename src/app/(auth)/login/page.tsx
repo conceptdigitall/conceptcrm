@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { MessageSquare, UsersRound } from "lucide-react";
+import { ConceptLogo } from "@/components/brand/concept-logo";
 
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
@@ -75,23 +76,22 @@ function LoginPageInner() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            {inviteToken ? (
-              <UsersRound className="h-6 w-6 text-primary" />
-            ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
-            )}
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-4 overflow-hidden">
+      {/* Respiro e profundidade: glow sutil no fundo */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#0624C7]/10 rounded-full blur-3xl pointer-events-none" />
+
+      <Card className="relative z-10 w-full max-w-md border-border bg-card/95 backdrop-blur-md shadow-2xl">
+        <CardHeader className="items-center text-center pb-6">
+          <div className="mb-4">
+            <ConceptLogo variant="badge" size="lg" />
           </div>
-          <CardTitle className="text-xl text-foreground">
-            {inviteToken ? t('titleAccept') : t('titleWelcome')}
+          <CardTitle className="text-2xl font-heading font-black tracking-tight text-foreground uppercase">
+            {inviteToken ? t('titleAccept') : "CONCEPT CRM"}
           </CardTitle>
-          <CardDescription className="text-muted-foreground">
+          <CardDescription className="text-xs text-muted-foreground font-medium max-w-xs mt-1.5 uppercase tracking-widest">
             {inviteToken
               ? t('descAccept')
-              : t('descWelcome')}
+              : "Engenharia de Vendas & Ativos Digitais"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -143,7 +143,7 @@ function LoginPageInner() {
             <Button
               type="submit"
               disabled={loading}
-              className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="mt-3 h-11 w-full bg-[#0624C7] hover:bg-[#082CE8] text-white font-heading font-bold tracking-wide shadow-lg shadow-[#0624C7]/25 transition-all duration-150 disabled:opacity-50"
             >
               {loading ? t('signingIn') : t('signIn')}
             </Button>

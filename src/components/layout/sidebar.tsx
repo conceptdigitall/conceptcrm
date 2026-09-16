@@ -26,6 +26,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import { ConceptLogo } from "@/components/brand/concept-logo";
 import type { AccountRole } from "@/lib/auth/roles";
 
 // Per-role chip metadata used in the sidebar's account strip + the
@@ -39,9 +40,9 @@ const ROLE_CHIP: Record<
   owner: {
     icon: Crown,
     labelKey: "roleOwner",
-    // Amber: scarce, immutable, "the boss" — gets visual emphasis.
+    // Dourado/Amarelo Concept (#FCE026): exclusivo, líder
     className:
-      "border-amber-500/40 bg-amber-500/10 text-amber-300",
+      "border-[#FCE026]/40 bg-[#FCE026]/10 text-[#FCE026]",
   },
   admin: {
     icon: Shield,
@@ -187,13 +188,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">
-              {t("title")}
-            </span>
+          <Link href="/dashboard" className="flex items-center gap-2 group transition-opacity hover:opacity-90">
+            <ConceptLogo variant="full" size="sm" />
           </Link>
           <button
             type="button"
@@ -229,9 +225,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     href={item.href}
                     className={cn(
                       // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 lg:py-2",
                       isActive
-                        ? "bg-primary/10 text-primary"
+                        ? "bg-[#0624C7] text-white shadow-sm font-semibold"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground",
                     )}
                   >
@@ -240,7 +236,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     {item.beta && (
                       <span
                         aria-label={t("beta")}
-                        className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
+                        className="rounded-full border border-[#FCE026]/40 bg-[#FCE026]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#FCE026]"
                       >
                         {t("beta")}
                       </span>

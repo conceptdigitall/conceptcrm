@@ -14,16 +14,17 @@
  */
 
 export const THEME_IDS = [
+  "concept",
+  "cobalt",
   "violet",
   "emerald",
-  "cobalt",
   "amber",
   "rose",
 ] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
-export const DEFAULT_THEME: ThemeId = "violet";
+export const DEFAULT_THEME: ThemeId = "concept";
 
 export const STORAGE_KEY = "wacrm.theme";
 
@@ -68,10 +69,16 @@ export interface ThemeMeta {
 
 export const THEMES: ReadonlyArray<ThemeMeta> = [
   {
-    id: "violet",
-    name: "Violet",
-    tagline: "The default — confident, slightly playful.",
-    swatch: "oklch(0.526 0.247 293)",
+    id: "concept",
+    name: "Concept Digital",
+    tagline: "Engenharia de vendas — azul institucional com precisão ouro.",
+    swatch: "#0624C7",
+  },
+  {
+    id: "cobalt",
+    name: "Cobalt",
+    tagline: "Clean B2B-SaaS blue — calm and product-y.",
+    swatch: "oklch(0.585 0.2 254)",
   },
   {
     id: "emerald",
