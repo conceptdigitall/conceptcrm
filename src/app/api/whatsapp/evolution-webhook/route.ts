@@ -144,12 +144,14 @@ export async function POST(req: Request) {
     const { accountId, userId } = await getAccountAndUser();
 
     // 2. Localizar ou criar o contato de forma segura
-    let { data: contact, error: contactErr } = await supabase
+    let contact: { id: string } | null = null;
+    const { data: initialContact, error: contactErr } = await supabase
       .from('contacts')
       .select('id')
       .eq('account_id', accountId)
       .eq('phone', senderNumber)
       .maybeSingle();
+    contact = initialContact;
 
     if (contactErr) {
       console.warn('[Evolution Webhook] Aviso ao consultar contato:', contactErr.message);
@@ -190,7 +192,7 @@ export async function POST(req: Request) {
     // 3. Localizar ou criar a conversa (conversation) para aparecer na Inbox
     let conversationId: string | null = null;
     if (contact?.id) {
-      let { data: conv, error: convFetchErr } = await supabase
+      const { data: conv, error: convFetchErr } = await supabase
         .from('conversations')
         .select('id, unread_count')
         .eq('account_id', accountId)
@@ -286,7 +288,14 @@ export async function POST(req: Request) {
     await simulateHumanPresence(remoteJid, randomDelay);
 
     const [replyText] = await Promise.all([
-      generateClaudeReply(senderName, messageText),
+      generateClaudeReply({
+        userName: senderName,
+        userMessage: messageText,
+        contactId: contact?.id,
+        accountId,
+        userId,
+        conversationId,
+      }),
       sleep(randomDelay)
     ]);
 
@@ -326,15 +335,38 @@ export async function POST(req: Request) {
   }
 }
 
-async function generateClaudeReply(userName: string, userMessage: string): Promise<string> {
+interface GenerateReplyParams {
+  userName: string;
+  userMessage: string;
+  contactId?: string | null;
+  accountId?: string | null;
+  userId?: string | null;
+  conversationId?: string | null;
+}
+
+async function generateClaudeReply({
+  userName,
+  userMessage,
+  contactId,
+  accountId,
+  userId,
+  conversationId,
+}: GenerateReplyParams): Promise<string> {
   if (!process.env.ANTHROPIC_API_KEY) {
     console.warn('[Evolution Webhook] ANTHROPIC_API_KEY não configurada no .env.local');
     return '';
   }
 
+  const nowBrasilia = new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'full',
+    timeStyle: 'medium',
+    timeZone: 'America/Sao_Paulo',
+  }).format(new Date());
+
   const systemPrompt = `
 Você é a inteligência executiva de atendimento da Concept Digital (Engenharia de vendas, design e soluções em software).
 Você atende empresários, médicos, advogados e gestores de alto padrão que chegam via WhatsApp.
+Data e hora de referência atual: ${nowBrasilia}.
 
 DIRETRIZES DA MARCA E POSICIONAMENTO:
 - Propósito: Elevar o posicionamento digital de negócios premium através de engenharia de vendas e design funcional.
@@ -346,50 +378,169 @@ DIRETRIZES DA MARCA E POSICIONAMENTO:
 
 PORTFÓLIO DE SOLUÇÕES:
 1. Ecossistema Integrado de Conversão (Pacote Principal):
-   - Une aquisição, conversão e gestão: Landing Page Premium + CRM Próprio Integrado + Dashboard de Métricas & Tráfego (Meta Ads).
+   - Landing Page Premium + CRM Próprio Integrado + Dashboard de Métricas & Tráfego (Meta Ads).
    - Faixa de Investimento Estimada: Entre R$ 1.000,00 e R$ 1.500,00 (sujeito a alinhamento de escopo).
 2. Contratações Modulares / Individuais:
    - Landing Page de Alta Conversão: Minimalista, ultra-rápida, foco em conversão.
    - CRM Próprio & Gestão de Leads: Organização de contatos, métricas e eliminação de perda de vendas no WhatsApp.
    - Softwares e Sistemas Sob Demanda: Web Apps, plataformas internas, integrações de APIs e e-commerces.
 
-REGRAS DE CONDUTA NO CHAT:
-1. Respostas concisas e fluidas para WhatsApp (máximo de 2 a 4 frases). Nada de blocos gigantes de texto.
-2. Apresentação de Preços: Mencione faixas estimadas de investimento (ex: pacotes a partir de R$ 1.000 a R$ 1.500) com naturalidade e sofisticação, sempre condicionando ao diagnóstico das necessidades específicas do projeto.
-3. Objetivo Principal: Esclarecer o escopo, validar se o cliente busca solução modular ou o pacote integrado, e propor uma rápida sessão de diagnóstico técnico com o arquiteto de soluções, consultando preferência de dia/horário.
-4. Postura Comercial: Nunca pressionar o cliente. Explique com calma como a tecnologia resolve o gargalo dele.
-5. Nome do cliente: "${userName}". Use o primeiro nome de forma natural e sutil.
+REGRAS RÍGIDAS DE CONDUTA NO CHAT:
+1. Responda SEMPRE em no máximo 2 ou 3 frases curtas. Seja direto, acolhedor e fale como um amigo estratégico de negócios no WhatsApp. NUNCA gere blocos longos de texto nem listas sem solicitação.
+2. Gatilho de Conversão: Sempre sugira uma demonstração rápida de 20 minutos por chamada no Google Meet para mostrar na tela como ficaria a estrutura do cliente na prática.
+3. Horário de atendimento: Segunda a sexta-feira, das 09h às 18h.
+4. Apresentação de Preços: Mencione faixas estimadas de investimento (ex: pacotes a partir de R$ 1.000 a R$ 1.500) com naturalidade e sofisticação, sempre condicionando ao diagnóstico das necessidades específicas do projeto.
+5. Agendamento via Tool: Assim que o lead concordar com uma chamada ou sugerir um dia e horário comercial (segunda a sexta-feira, das 09h às 18h), acione IMEDIATAMENTE a ferramenta "schedule_appointment" com a data/hora em formato ISO 8601.
+6. Nome do cliente: "${userName}". Use o primeiro nome de forma natural e sutil.
 `;
+
+  const tools: Anthropic.Tool[] = [
+    {
+      name: 'schedule_appointment',
+      description: 'Acione esta ferramenta para registrar a reunião/demonstração no Google Meet quando o lead concordar com dia e horário (segunda a sexta-feira, das 09h às 18h).',
+      input_schema: {
+        type: 'object',
+        properties: {
+          datetime_iso: {
+            type: 'string',
+            description: 'Data e hora da reunião no formato ISO 8601 (ex: 2026-09-25T14:00:00-03:00)',
+          },
+          title: {
+            type: 'string',
+            description: 'Título da reunião. Padrão: Sessão de Diagnóstico & Demonstração',
+          },
+          notes: {
+            type: 'string',
+            description: 'Breve contexto ou necessidade manifestada pelo lead',
+          },
+        },
+        required: ['datetime_iso'],
+      },
+    },
+  ];
+
+  // Recupera histórico recente da conversa para manter contexto fluido
+  const chatMessages: Anthropic.MessageParam[] = [];
+  if (conversationId) {
+    try {
+      const { data: history } = await supabase
+        .from('messages')
+        .select('sender_type, content_text')
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
+      if (history && history.length > 0) {
+        const sorted = history.reverse();
+        for (const m of sorted) {
+          if (!m.content_text?.trim()) continue;
+          const role = m.sender_type === 'customer' ? 'user' : 'assistant';
+          if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role !== role) {
+            chatMessages.push({ role, content: m.content_text });
+          }
+        }
+      }
+    } catch (hErr) {
+      console.warn('[Evolution Webhook] Aviso ao buscar histórico recente:', hErr);
+    }
+  }
+
+  if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role !== 'user') {
+    chatMessages.push({ role: 'user', content: userMessage });
+  } else {
+    chatMessages[chatMessages.length - 1] = { role: 'user', content: userMessage };
+  }
+
+  // Helper para processar tool calls de agendamento
+  const processToolCall = async (toolUse: Anthropic.ToolUseBlock): Promise<string> => {
+    const input = toolUse.input as { datetime_iso?: string; title?: string; notes?: string };
+    const rawIso = input.datetime_iso || new Date().toISOString();
+    const scheduledDate = new Date(rawIso);
+    const meetingUrl = 'https://meet.google.com/new';
+
+    if (contactId) {
+      try {
+        const payload: Record<string, unknown> = {
+          contact_id: contactId,
+          title: input.title || 'Sessão de Diagnóstico & Demonstração',
+          scheduled_at: !isNaN(scheduledDate.getTime()) ? scheduledDate.toISOString() : new Date().toISOString(),
+          duration_minutes: 20,
+          status: 'confirmed',
+          meeting_url: meetingUrl,
+          notes: input.notes || null,
+        };
+        if (accountId) payload.account_id = accountId;
+        if (userId) payload.user_id = userId;
+
+        const { error: insErr } = await supabase.from('appointments').insert(payload);
+        if (insErr) {
+          console.warn('[Evolution Webhook] Aviso ao salvar agendamento:', insErr.message);
+        } else {
+          console.info(`[Evolution Webhook] Agendamento salvo com sucesso para contato ${contactId}!`);
+        }
+      } catch (dbErr) {
+        console.error('[Evolution Webhook] Falha ao registrar agendamento:', dbErr);
+      }
+    }
+
+    const formattedDate = !isNaN(scheduledDate.getTime())
+      ? new Intl.DateTimeFormat('pt-BR', {
+          weekday: 'long',
+          day: '2-digit',
+          month: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'America/Sao_Paulo',
+        }).format(scheduledDate)
+      : rawIso;
+
+    // Mensagem de confirmação concisa com data, hora e link da chamada
+    return `Perfeito, ${userName}! Agendado para ${formattedDate}.\n\nAqui está o link da nossa chamada no Google Meet: ${meetingUrl}\n\nTe vejo lá!`;
+  };
 
   const primaryModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
   try {
     const response = await anthropic.messages.create({
       model: primaryModel,
-      max_tokens: 300,
+      max_tokens: 160,
       temperature: 0.5,
       system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
+      tools,
+      messages: chatMessages,
     });
 
-    const block = response.content[0];
-    return block.type === 'text' ? block.text : '';
+    const toolUse = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
+    if (toolUse && toolUse.name === 'schedule_appointment') {
+      return await processToolCall(toolUse);
+    }
+
+    const textBlock = response.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
+    return textBlock?.text || '';
   } catch (err) {
     console.error(`[Evolution Webhook] Erro ao chamar Claude (${primaryModel}):`, err);
-    // Fallback para claude-3-5-haiku-20241022 caso a chave/conta precise de fallback
+    // Fallback para claude-3-5-haiku-20241022 caso a conta/modelo precise de fallback
     try {
       const fallbackResponse = await anthropic.messages.create({
         model: 'claude-3-5-haiku-20241022',
-        max_tokens: 300,
+        max_tokens: 160,
         temperature: 0.5,
         system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
+        tools,
+        messages: chatMessages,
       });
-      const block = fallbackResponse.content[0];
-      return block.type === 'text' ? block.text : '';
+
+      const fallbackToolUse = fallbackResponse.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
+      if (fallbackToolUse && fallbackToolUse.name === 'schedule_appointment') {
+        return await processToolCall(fallbackToolUse);
+      }
+
+      const textBlock = fallbackResponse.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
+      return textBlock?.text || '';
     } catch (fallbackErr) {
       console.error('[Evolution Webhook] Erro no fallback do Claude:', fallbackErr);
       return '';
     }
   }
 }
+

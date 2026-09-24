@@ -22,6 +22,7 @@
     "notifications": "Notificações",
     "contacts": "Contatos",
     "pipelines": "Pipelines",
+    "appointments": "Agendamentos",
     "broadcasts": "Disparos",
     "automations": "Automações",
     "flows": "Fluxos",
@@ -47,6 +48,7 @@
     "notifications": "Notificações",
     "contacts": "Contatos",
     "pipelines": "Pipelines",
+    "appointments": "Agendamentos",
     "broadcasts": "Disparos",
     "automations": "Automações",
     "settings": "Configurações",
@@ -76,6 +78,8 @@
       "newContactsToday": "Novos contatos hoje",
       "openDealsValue": "Valor dos negócios abertos",
       "messagesSentToday": "Mensagens enviadas hoje",
+      "scheduledMeetings": "Reuniões Agendadas",
+      "thisWeekMeetings": "ativas nesta semana",
       "newTodayVsYesterday": "novos hoje vs. ontem",
       "vsYesterday": "vs. ontem",
       "openDeals": "{count} {count, plural, =1 {negócio aberto} other {negócios abertos}}",
@@ -84,6 +88,7 @@
     "quickActions": {
       "newContact": "Novo contato",
       "newDeal": "Novo negócio",
+      "newAppointment": "Novo agendamento",
       "newBroadcast": "Novo disparo",
       "newAutomation": "Nova automação"
     },

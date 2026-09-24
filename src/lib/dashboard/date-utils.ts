@@ -49,4 +49,18 @@ export function mondayIndex(d: Date): number {
   return (jsDow + 6) % 7
 }
 
+export function startOfThisWeek(d: Date = new Date()): Date {
+  const out = startOfLocalDay(d)
+  const dow = mondayIndex(out)
+  out.setDate(out.getDate() - dow)
+  return out
+}
+
+export function endOfThisWeek(d: Date = new Date()): Date {
+  const start = startOfThisWeek(d)
+  const end = new Date(start)
+  end.setDate(end.getDate() + 7)
+  return end
+}
+
 export const DOW_SHORT_MON_FIRST = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] as const

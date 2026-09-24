@@ -22,6 +22,7 @@
     "notifications": "알림",
     "contacts": "연락처",
     "pipelines": "파이프라인",
+    "appointments": "예약",
     "broadcasts": "브로드캐스트",
     "automations": "자동화",
     "flows": "플로우",
@@ -47,6 +48,7 @@
     "notifications": "알림",
     "contacts": "연락처",
     "pipelines": "파이프라인",
+    "appointments": "예약",
     "broadcasts": "브로드캐스트",
     "automations": "자동화",
     "settings": "설정",
@@ -76,6 +78,8 @@
       "newContactsToday": "오늘의 신규 연락처",
       "openDealsValue": "진행 중인 딜 금액",
       "messagesSentToday": "오늘 보낸 메시지",
+      "scheduledMeetings": "예약된 미팅",
+      "thisWeekMeetings": "이번 주 활성",
       "newTodayVsYesterday": "어제 대비 신규",
       "vsYesterday": "어제 대비",
       "openDeals": "진행 중인 딜 {count}건",
@@ -84,6 +88,7 @@
     "quickActions": {
       "newContact": "새 연락처",
       "newDeal": "새 딜",
+      "newAppointment": "새 예약",
       "newBroadcast": "새 브로드캐스트",
       "newAutomation": "새 자동화"
     },

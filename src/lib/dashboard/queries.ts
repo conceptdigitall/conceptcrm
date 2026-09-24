@@ -2,10 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   daysAgoStart,
   DOW_SHORT_MON_FIRST,
+  endOfThisWeek,
   lastNDayKeys,
   localDayKey,
   mondayIndex,
   startOfLocalDay,
+  startOfThisWeek,
 } from './date-utils'
 import type {
   ActivityItem,
@@ -32,6 +34,8 @@ type DB = SupabaseClient
 export async function loadMetrics(db: DB): Promise<MetricsBundle> {
   const todayStart = startOfLocalDay().toISOString()
   const yesterdayStart = daysAgoStart(1).toISOString()
+  const weekStart = startOfThisWeek().toISOString()
+  const weekEnd = endOfThisWeek().toISOString()
 
   const [
     openConvCur,
@@ -42,6 +46,7 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
     openDeals,
     messagesToday,
     messagesYesterday,
+    appointmentsCount,
   ] = await Promise.all([
     db.from('conversations').select('id', { count: 'exact', head: true }).eq('status', 'open'),
     db
@@ -73,6 +78,19 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       .eq('sender_type', 'agent')
       .gte('created_at', yesterdayStart)
       .lt('created_at', todayStart),
+    (async () => {
+      try {
+        const res = await db
+          .from('appointments')
+          .select('id', { count: 'exact', head: true })
+          .neq('status', 'cancelled')
+          .gte('scheduled_at', weekStart)
+          .lt('scheduled_at', weekEnd)
+        return res.count ?? 0
+      } catch {
+        return 0
+      }
+    })(),
   ])
 
   const openDealsRows = (openDeals.data ?? []) as { value: number | null }[]
@@ -96,6 +114,7 @@ export async function loadMetrics(db: DB): Promise<MetricsBundle> {
       current: messagesToday.count ?? 0,
       previous: messagesYesterday.count ?? 0,
     },
+    scheduledMeetingsThisWeek: appointmentsCount,
   }
 }
 

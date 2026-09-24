@@ -140,6 +140,24 @@ export interface ContactTag {
   tag_id: string;
 }
 
+export type AppointmentStatus = 'confirmed' | 'cancelled' | 'completed';
+
+export interface Appointment {
+  id: string;
+  contact_id?: string | null;
+  account_id?: string | null;
+  user_id?: string | null;
+  title: string;
+  scheduled_at: string;
+  duration_minutes: number;
+  status: AppointmentStatus;
+  meeting_url?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  contact?: Pick<Contact, 'id' | 'name' | 'phone' | 'email' | 'avatar_url'> | null;
+}
+
 export interface CustomField {
   id: string;
   user_id: string;
