@@ -86,35 +86,55 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    if (body.event !== 'messages.upsert') {
-      return NextResponse.json({ status: 'ignored_event' });
+    // 1. FILTRO: Ignora se o evento não for estritamente nova mensagem
+    if (body.event !== 'messages.upsert' && body.event !== 'MESSAGES_UPSERT') {
+      return NextResponse.json({ status: 'ignored_not_upsert' });
     }
 
     const data = body.data;
     const key = data?.key;
 
-    // Ignora mensagens enviadas pelo próprio número ou grupos
-    if (key?.fromMe) return NextResponse.json({ status: 'from_me_ignored' });
+    // 2. FILTRO ANTI-LOOP: Ignora qualquer mensagem enviada por você ou pelo bot
+    if (key?.fromMe) {
+      return NextResponse.json({ status: 'ignored_from_me' });
+    }
+
+    // Ignora mensagens de grupos ou status broadcast
     const remoteJid = key?.remoteJid || '';
     if (remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') {
       return NextResponse.json({ status: 'group_ignored' });
     }
 
+    // 3. FILTRO DE NÚMERO GENÉRICO/TESTE (Ex: 99999-0099)
+    const rawNumberDigits = (key?.remoteJid || '').replace(/\D/g, '');
+    const isFakeNumber = 
+      rawNumberDigits.includes('999990099') || 
+      rawNumberDigits.length < 10 || 
+      rawNumberDigits.startsWith('0000');
+
+    if (isFakeNumber) {
+      console.warn(`[Segurança] Disparo bloqueado para número teste/inválido: ${rawNumberDigits}`);
+      return NextResponse.json({ status: 'blocked_fake_number' });
+    }
+
+    // 4. FILTRO DE CONTEÚDO VAZIO
     const messageText =
-      data.message?.conversation ||
-      data.message?.extendedTextMessage?.text ||
+      data?.message?.conversation ||
+      data?.message?.extendedTextMessage?.text ||
       '';
 
-    if (!messageText.trim()) return NextResponse.json({ status: 'no_text' });
+    if (!messageText.trim()) {
+      return NextResponse.json({ status: 'ignored_empty_text' });
+    }
 
-    // 1. Extrair número limpo tratando variações de JID (@s.whatsapp.net, @lid)
+    // 5. Extrair número limpo tratando variações de JID (@s.whatsapp.net, @lid)
     let rawNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '');
     if (remoteJid.endsWith('@lid') && data?.participant) {
       const altNumber = String(data.participant).replace('@s.whatsapp.net', '').replace('@lid', '');
       if (altNumber) rawNumber = altNumber;
     }
     const senderNumber = rawNumber.replace(/\D/g, '') || rawNumber;
-    const senderName = data.pushName || 'Novo Lead';
+    const senderName = data?.pushName || 'Novo Lead';
 
     console.log(`[Nova Mensagem] ${senderName} (${senderNumber}): ${messageText}`);
 
