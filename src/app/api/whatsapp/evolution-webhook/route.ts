@@ -22,6 +22,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function simulateHumanPresence(remoteJid: string, delayMs: number) {
   try {
+    const cleanNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
     await fetch(`${EVOLUTION_URL}/chat/markMessageAsRead/${INSTANCE}`, {
       method: 'POST',
       headers: { 'apikey': EVOLUTION_KEY, 'Content-Type': 'application/json' },
@@ -34,7 +35,7 @@ async function simulateHumanPresence(remoteJid: string, delayMs: number) {
       method: 'POST',
       headers: { 'apikey': EVOLUTION_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        number: remoteJid.replace('@s.whatsapp.net', ''),
+        number: cleanNumber,
         presence: 'composing',
         delay: delayMs,
       }),
@@ -45,7 +46,7 @@ async function simulateHumanPresence(remoteJid: string, delayMs: number) {
 }
 
 async function sendEvolutionMessage(number: string, text: string) {
-  const cleanNumber = number.replace('@s.whatsapp.net', '');
+  const cleanNumber = number.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
   const res = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
     method: 'POST',
     headers: { 'apikey': EVOLUTION_KEY, 'Content-Type': 'application/json' },
@@ -106,8 +107,14 @@ export async function POST(req: Request) {
 
     if (!messageText.trim()) return NextResponse.json({ status: 'no_text' });
 
-    const senderName = data.pushName || 'Lead WhatsApp';
-    const senderNumber = remoteJid.replace('@s.whatsapp.net', '');
+    // 1. Extrair número limpo tratando variações de JID (@s.whatsapp.net, @lid)
+    let rawNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '');
+    if (remoteJid.endsWith('@lid') && data?.participant) {
+      const altNumber = String(data.participant).replace('@s.whatsapp.net', '').replace('@lid', '');
+      if (altNumber) rawNumber = altNumber;
+    }
+    const senderNumber = rawNumber.replace(/\D/g, '') || rawNumber;
+    const senderName = data.pushName || 'Novo Lead';
 
     console.log(`[Nova Mensagem] ${senderName} (${senderNumber}): ${messageText}`);
 
@@ -116,16 +123,26 @@ export async function POST(req: Request) {
     // ========================================================
     const { accountId, userId } = await getAccountAndUser();
 
-    // Busca ou cria o contato
-    let { data: contact } = await supabase
+    // 2. Localizar ou criar o contato de forma segura
+    let { data: contact, error: contactErr } = await supabase
       .from('contacts')
       .select('id')
       .eq('account_id', accountId)
       .eq('phone', senderNumber)
       .maybeSingle();
 
+    if (contactErr) {
+      console.warn('[Evolution Webhook] Aviso ao consultar contato:', contactErr.message);
+      const { data: fallbackContact } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('phone', senderNumber)
+        .maybeSingle();
+      contact = fallbackContact;
+    }
+
     if (!contact) {
-      const { data: newContact, error: errContact } = await supabase
+      const { data: createdContact, error: insertContactErr } = await supabase
         .from('contacts')
         .insert({
           account_id: accountId,
@@ -136,24 +153,24 @@ export async function POST(req: Request) {
         .select('id')
         .maybeSingle();
 
-      if (errContact) {
-        console.error('[Evolution Webhook] Erro ao criar contato:', errContact);
+      if (insertContactErr) {
+        console.error('[Evolution Webhook] Erro ao criar contato novo:', insertContactErr);
+        // Em caso de concorrência simultânea, recupera o contato inserido
         const { data: retryContact } = await supabase
           .from('contacts')
           .select('id')
-          .eq('account_id', accountId)
           .eq('phone', senderNumber)
           .maybeSingle();
         contact = retryContact;
       } else {
-        contact = newContact;
+        contact = createdContact;
       }
     }
 
-    // Busca ou cria a conversa vinculada ao contato
+    // 3. Localizar ou criar a conversa (conversation) para aparecer na Inbox
     let conversationId: string | null = null;
     if (contact?.id) {
-      let { data: conv } = await supabase
+      let { data: conv, error: convFetchErr } = await supabase
         .from('conversations')
         .select('id, unread_count')
         .eq('account_id', accountId)
@@ -162,10 +179,14 @@ export async function POST(req: Request) {
         .limit(1)
         .maybeSingle();
 
+      if (convFetchErr) {
+        console.warn('[Evolution Webhook] Aviso ao consultar conversa:', convFetchErr.message);
+      }
+
       const nowIso = new Date().toISOString();
 
       if (!conv) {
-        const { data: newConv, error: errConv } = await supabase
+        const { data: newConv, error: convErr } = await supabase
           .from('conversations')
           .insert({
             account_id: accountId,
@@ -179,13 +200,13 @@ export async function POST(req: Request) {
           .select('id')
           .maybeSingle();
 
-        if (errConv) {
-          console.error('[Evolution Webhook] Erro ao criar conversa:', errConv);
+        if (convErr) {
+          console.error('[Evolution Webhook] Erro ao criar conversation:', convErr);
           const { data: retryConv } = await supabase
             .from('conversations')
             .select('id')
-            .eq('account_id', accountId)
             .eq('contact_id', contact.id)
+            .order('created_at', { ascending: true })
             .limit(1)
             .maybeSingle();
           conversationId = retryConv?.id ?? null;
@@ -206,7 +227,7 @@ export async function POST(req: Request) {
           .eq('id', conv.id);
       }
 
-      // Grava a mensagem recebida na tabela messages com upsert (anti-duplicidade)
+      // 4. Salvar a mensagem na conversa criada com upsert
       if (conversationId) {
         const messageId = key?.id || null;
 
