@@ -358,6 +358,37 @@ export async function sendTextMessage(
   args: SendTextMessageArgs
 ): Promise<MetaSendResult> {
   const { phoneNumberId, accessToken, to, text, contextMessageId } = args
+
+  // Suporte transparente à Evolution API
+  const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
+  const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || 'concept_master_evolution_2026';
+  const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
+
+  if (EVOLUTION_URL && EVOLUTION_KEY && INSTANCE) {
+    try {
+      const cleanNumber = to.replace(/\D/g, '');
+      const evoRes = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
+        method: 'POST',
+        headers: {
+          'apikey': EVOLUTION_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          number: cleanNumber,
+          text: text,
+        }),
+      });
+
+      const evoData = await evoRes.json();
+      if (evoRes.ok && evoData?.key?.id) {
+        return { messageId: evoData.key.id };
+      }
+      console.warn('[Evolution Send Fallback] Falha no retorno da Evolution API:', evoData);
+    } catch (evoErr) {
+      console.error('[Evolution Send Error in sendTextMessage]:', evoErr);
+    }
+  }
+
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
@@ -853,6 +884,15 @@ export interface SendTypingIndicatorArgs {
 export async function sendTypingIndicator(
   args: SendTypingIndicatorArgs
 ): Promise<void> {
+  const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
+  const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || 'concept_master_evolution_2026';
+  const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
+
+  if (EVOLUTION_URL && EVOLUTION_KEY && INSTANCE) {
+    // Na Evolution API, a presença é tratada diretamente via chat/sendPresence
+    return;
+  }
+
   const { phoneNumberId, accessToken, messageId } = args
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const response = await fetch(url, {

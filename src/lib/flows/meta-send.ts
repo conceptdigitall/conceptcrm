@@ -47,6 +47,9 @@ export async function loadAccountMetaCredentials(
     .eq('account_id', accountId)
     .single()
   if (configErr || !config) {
+    if (process.env.EVOLUTION_API_URL || process.env.EVOLUTION_INSTANCE_NAME) {
+      return { phoneNumberId: 'evolution', accessToken: 'evolution' }
+    }
     throw new Error('WhatsApp not configured for this account')
   }
   return {

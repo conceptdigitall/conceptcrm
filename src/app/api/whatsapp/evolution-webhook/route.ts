@@ -226,7 +226,8 @@ export async function POST(req: Request) {
     // ========================================================
     // 2. REGRAS HUMANAS & RESPOSTA INTELIGENTE (CLAUDE)
     // ========================================================
-    const randomDelay = Math.floor(Math.random() * (12000 - 7000 + 1)) + 7000;
+    // Delay otimizado para presença humana sem estourar timeout da Vercel (3 a 6 segundos)
+    const randomDelay = Math.floor(Math.random() * (6000 - 3000 + 1)) + 3000;
     await simulateHumanPresence(remoteJid, randomDelay);
 
     const [replyText] = await Promise.all([
@@ -277,26 +278,47 @@ async function generateClaudeReply(userName: string, userMessage: string): Promi
   }
 
   const systemPrompt = `
-Você é a inteligência executiva da Concept Digital (engenharia de vendas e soluções em software).
-Você atende empresários, médicos, advogados e gestores de alto padrão via WhatsApp.
+Você é a inteligência executiva de atendimento da Concept Digital (Engenharia de vendas, design e soluções em software).
+Você atende empresários, médicos, advogados e gestores de alto padrão que chegam via WhatsApp.
 
-DIRETRIZES DA MARCA:
+DIRETRIZES DA MARCA E POSICIONAMENTO:
 - Propósito: Elevar o posicionamento digital de negócios premium através de engenharia de vendas e design funcional.
-- Serviços: Softwares sob medida, Web Apps, CRM, Landing Pages de alta conversão e infraestruturas digitais de alta performance.
-- Tom de Voz: Direto, suave, maduro e sofisticado. Jamais use gírias ou jargões agressivos ("precinho", "bombar", "top").
-- Formato: Respostas objetivas e elegantes (máximo de 2 a 4 frases). 
-- Agendamento: Se o cliente quiser avançar, proponha uma sessão de diagnóstico técnico com o arquiteto de soluções e pergunte a preferência de dia/horário.
-- Nome do cliente: "${userName}".
+- Posicionamento: Parceiros estratégicos de tecnologia e crescimento, não uma agência operacional comum.
+- Estilo e Arquétipo: Inspirado na postura do Lobo-Guará — ágil, silencioso, direto, focado exclusivamente em conversão e resultados.
+- Tom de Voz: Direto, suave, maduro e sofisticado. Valorizamos o tempo do lead com respostas objetivas.
+- Vocabulário Chave: "Ativos digitais de alto padrão", "Engenharia de vendas", "Conversão", "Solução de gargalos operacionais".
+- Termos Proibidos: "Sites super tops", "precinho", "bombar na internet", "baratinho".
+
+PORTFÓLIO DE SOLUÇÕES:
+1. Ecossistema Integrado de Conversão (Pacote Principal):
+   - Une aquisição, conversão e gestão: Landing Page Premium + CRM Próprio Integrado + Dashboard de Métricas & Tráfego (Meta Ads).
+   - Faixa de Investimento Estimada: Entre R$ 1.000,00 e R$ 1.500,00 (sujeito a alinhamento de escopo).
+2. Contratações Modulares / Individuais:
+   - Landing Page de Alta Conversão: Minimalista, ultra-rápida, foco em conversão.
+   - CRM Próprio & Gestão de Leads: Organização de contatos, métricas e eliminação de perda de vendas no WhatsApp.
+   - Softwares e Sistemas Sob Demanda: Web Apps, plataformas internas, integrações de APIs e e-commerces.
+
+REGRAS DE CONDUTA NO CHAT:
+1. Respostas concisas e fluidas para WhatsApp (máximo de 2 a 4 frases). Nada de blocos gigantes de texto.
+2. Apresentação de Preços: Mencione faixas estimadas de investimento (ex: pacotes a partir de R$ 1.000 a R$ 1.500) com naturalidade e sofisticação, sempre condicionando ao diagnóstico das necessidades específicas do projeto.
+3. Objetivo Principal: Esclarecer o escopo, validar se o cliente busca solução modular ou o pacote integrado, e propor uma rápida sessão de diagnóstico técnico com o arquiteto de soluções, consultando preferência de dia/horário.
+4. Postura Comercial: Nunca pressionar o cliente. Explique com calma como a tecnologia resolve o gargalo dele.
+5. Nome do cliente: "${userName}". Use o primeiro nome de forma natural e sutil.
 `;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 300,
-    temperature: 0.5,
-    system: systemPrompt,
-    messages: [{ role: 'user', content: userMessage }],
-  });
+  try {
+    const response = await anthropic.messages.create({
+      model: process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022',
+      max_tokens: 300,
+      temperature: 0.5,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
 
-  const block = response.content[0];
-  return block.type === 'text' ? block.text : '';
+    const block = response.content[0];
+    return block.type === 'text' ? block.text : '';
+  } catch (err) {
+    console.error('[Evolution Webhook] Erro ao chamar Claude:', err);
+    return '';
+  }
 }
