@@ -206,19 +206,33 @@ export async function POST(req: Request) {
           .eq('id', conv.id);
       }
 
-      // Grava a mensagem recebida na tabela messages
+      // Grava a mensagem recebida na tabela messages com upsert (anti-duplicidade)
       if (conversationId) {
-        const { error: msgErr } = await supabase.from('messages').insert({
-          conversation_id: conversationId,
-          content_text: messageText,
-          content_type: 'text',
-          sender_type: 'customer',
-          status: 'delivered',
-          message_id: key?.id || undefined,
-        });
+        const messageId = key?.id || null;
+
+        const { data: insertedRows, error: msgErr } = await supabase
+          .from('messages')
+          .upsert(
+            {
+              conversation_id: conversationId,
+              message_id: messageId,
+              content_text: messageText,
+              content_type: 'text',
+              sender_type: 'customer',
+              status: 'delivered',
+            },
+            { onConflict: 'conversation_id,message_id', ignoreDuplicates: true }
+          )
+          .select('id');
 
         if (msgErr) {
           console.error('[Evolution Webhook] Erro ao salvar mensagem do cliente:', msgErr);
+        }
+
+        // Se a mensagem já existia (replay/retentativa da Evolution API), encerra sem duplicar resposta
+        if (messageId && (!insertedRows || insertedRows.length === 0)) {
+          console.info('[Evolution Webhook] Mensagem duplicada ignorada (idempotente):', messageId);
+          return NextResponse.json({ status: 'duplicate_ignored' });
         }
       }
     }
@@ -306,9 +320,11 @@ REGRAS DE CONDUTA NO CHAT:
 5. Nome do cliente: "${userName}". Use o primeiro nome de forma natural e sutil.
 `;
 
+  const primaryModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
+
   try {
     const response = await anthropic.messages.create({
-      model: process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022',
+      model: primaryModel,
       max_tokens: 300,
       temperature: 0.5,
       system: systemPrompt,
@@ -318,7 +334,21 @@ REGRAS DE CONDUTA NO CHAT:
     const block = response.content[0];
     return block.type === 'text' ? block.text : '';
   } catch (err) {
-    console.error('[Evolution Webhook] Erro ao chamar Claude:', err);
-    return '';
+    console.error(`[Evolution Webhook] Erro ao chamar Claude (${primaryModel}):`, err);
+    // Fallback para claude-3-5-haiku-20241022 caso a chave/conta precise de fallback
+    try {
+      const fallbackResponse = await anthropic.messages.create({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 300,
+        temperature: 0.5,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      });
+      const block = fallbackResponse.content[0];
+      return block.type === 'text' ? block.text : '';
+    } catch (fallbackErr) {
+      console.error('[Evolution Webhook] Erro no fallback do Claude:', fallbackErr);
+      return '';
+    }
   }
 }
