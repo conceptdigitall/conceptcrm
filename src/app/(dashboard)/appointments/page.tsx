@@ -639,6 +639,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                 const contactInitial = (contact?.name?.[0] || contact?.phone?.[0] || 'L').toUpperCase();
                 const scheduledDate = new Date(appt.scheduled_at);
                 const isPast = scheduledDate < new Date();
+                const countdown = getDaysUntilInfo(scheduledDate);
 
                 return (
                   <TableRow key={appt.id} className="border-border hover:bg-muted/40 transition-colors">
@@ -685,8 +686,14 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                           {formatDateTimeBR(scheduledDate)}
                         </span>
                       </div>
-                      {isPast && appt.status === 'confirmed' ? (
-                        <span className="mt-1 inline-flex items-center gap-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
+                      {appt.status === 'confirmed' ? (
+                        <div className="mt-1">
+                          <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${countdown.badgeClass}`}>
+                            {countdown.label}
+                          </span>
+                        </div>
+                      ) : isPast ? (
+                        <span className="mt-1 inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                           Horário já transcorrido
                         </span>
                       ) : null}
@@ -732,7 +739,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                         >
                           <MoreHorizontal className="size-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuContent align="end" className="w-52">
                           {appt.contact?.id && (
                             <DropdownMenuItem
                               render={
@@ -746,6 +753,20 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                               Abrir conversa no Chat
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            render={
+                              <a
+                                href={getGoogleCalendarUrl(appt)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 text-foreground"
+                              />
+                            }
+                          >
+                            <CalendarCheck className="size-4 text-emerald-500" />
+                            Adicionar ao Google Calendar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => handleUpdateStatus(appt.id, 'completed')}
                             disabled={appt.status === 'completed'}
@@ -799,6 +820,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
             const contact = appt.contact;
             const contactInitial = (contact?.name?.[0] || contact?.phone?.[0] || 'L').toUpperCase();
             const scheduledDate = new Date(appt.scheduled_at);
+            const countdown = getDaysUntilInfo(scheduledDate);
 
             return (
               <div
@@ -836,16 +858,23 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                     ) : null}
                   </div>
 
-                  <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <CalendarIcon className="size-3.5 text-[#0624C7]" />
                       <span className="font-medium text-foreground">
                         {formatDateTimeBR(scheduledDate)}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="size-3" />
-                      <span>{appt.duration_minutes || 30} min</span>
+                    <div className="flex items-center gap-2">
+                      {appt.status === 'confirmed' ? (
+                        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] ${countdown.badgeClass}`}>
+                          {countdown.label}
+                        </span>
+                      ) : null}
+                      <div className="flex items-center gap-1">
+                        <Clock className="size-3" />
+                        <span>{appt.duration_minutes || 30} min</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -859,10 +888,21 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                       className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0624C7] py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#0624C7]/90 active:scale-98"
                     >
                       <Video className="size-3.5" />
-                      <span>Entrar na Reunião</span>
+                      <span>Entrar no Meet</span>
                       <ExternalLink className="size-3 opacity-80" />
                     </a>
                   ) : null}
+
+                  <a
+                    href={getGoogleCalendarUrl(appt)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Adicionar ao Google Calendar"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs font-semibold text-foreground shadow-xs transition-colors hover:bg-muted active:scale-98"
+                  >
+                    <CalendarCheck className="size-3.5 text-emerald-500" />
+                    <span className="hidden sm:inline">Google Calendar</span>
+                  </a>
 
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -871,7 +911,21 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                     >
                       <MoreHorizontal className="size-4" />
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-52">
+                      <DropdownMenuItem
+                        render={
+                          <a
+                            href={getGoogleCalendarUrl(appt)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 text-foreground"
+                          />
+                        }
+                      >
+                        <CalendarCheck className="size-4 text-emerald-500" />
+                        Adicionar ao Google Calendar
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={() => handleUpdateStatus(appt.id, 'completed')}>
                         <CheckCircle2 className="size-4 text-emerald-500" />
                         Concluir Reunião
@@ -1237,3 +1291,79 @@ function formatDateTimeBR(date: Date): string {
     minute: '2-digit',
   }).format(date);
 }
+
+function getDaysUntilInfo(targetDate: Date): { label: string; badgeClass: string } {
+  if (isNaN(targetDate.getTime())) return { label: '', badgeClass: '' };
+
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+
+  const toDateOnly = (d: Date) => {
+    const parts = new Intl.DateTimeFormat('pt-BR', options).formatToParts(d);
+    const day = parts.find((p) => p.type === 'day')?.value || '01';
+    const month = parts.find((p) => p.type === 'month')?.value || '01';
+    const year = parts.find((p) => p.type === 'year')?.value || '2026';
+    return new Date(`${year}-${month}-${day}T00:00:00-03:00`);
+  };
+
+  const dNow = toDateOnly(now);
+  const dTarget = toDateOnly(targetDate);
+  const diffMs = dTarget.getTime() - dNow.getTime();
+  const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  if (days === 0) {
+    return {
+      label: '🚨 É Hoje!',
+      badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse font-semibold',
+    };
+  } else if (days === 1) {
+    return {
+      label: '⏳ Falta 1 dia (Amanhã)',
+      badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 font-medium',
+    };
+  } else if (days > 1) {
+    return {
+      label: `⏳ Faltam ${days} dias`,
+      badgeClass: 'bg-muted text-muted-foreground border border-border font-medium',
+    };
+  } else if (days === -1) {
+    return {
+      label: 'Ontem',
+      badgeClass: 'bg-muted/40 text-muted-foreground/70 border border-transparent',
+    };
+  } else {
+    return {
+      label: `${Math.abs(days)} dias atrás`,
+      badgeClass: 'bg-muted/40 text-muted-foreground/70 border border-transparent',
+    };
+  }
+}
+
+function getGoogleCalendarUrl(appt: Appointment): string {
+  const start = new Date(appt.scheduled_at);
+  const duration = appt.duration_minutes || 30;
+  const end = new Date(start.getTime() + duration * 60000);
+
+  const formatGCal = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const dates = `${formatGCal(start)}/${formatGCal(end)}`;
+
+  const clientName = appt.contact?.name || 'Cliente';
+  const clientPhone = appt.contact?.phone || '';
+  const details = `Reunião: ${appt.title}\nCliente: ${clientName} (${clientPhone})\nObservações: ${appt.notes || 'N/A'}\nGoogle Meet: ${appt.meeting_url || 'https://meet.google.com/new'}`;
+
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: appt.title || `Reunião com ${clientName}`,
+    dates,
+    details,
+    location: appt.meeting_url || 'https://meet.google.com/new',
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
