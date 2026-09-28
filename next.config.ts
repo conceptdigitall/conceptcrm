@@ -25,6 +25,8 @@ const SECURITY_HEADERS = [
     value: "max-age=63072000; includeSubDomains; preload",
   },
   { key: "X-Content-Type-Options", value: "nosniff" },
+  // CRM interno: nenhum buscador deve indexar (reforça o robots.txt e o meta robots).
+  { key: "X-Robots-Tag", value: "noindex, nofollow" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {

@@ -8,6 +8,7 @@ import {
 import { HANDOFF_SENTINEL, aiRequestTimeoutMs } from './defaults'
 import { generateOpenAi } from './providers/openai'
 import { generateAnthropic } from './providers/anthropic'
+import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting'
 
 export interface GenerateArgs {
   config: AiConfig
@@ -63,6 +64,7 @@ export function parseGeneration(
   usage: AiUsage | null = null,
 ): GenerateResult {
   const handoff = raw.includes(HANDOFF_SENTINEL)
-  const text = raw.split(HANDOFF_SENTINEL).join('').trim()
+  // WhatsApp mostra os asteriscos de markdown literalmente: a resposta sai sempre em texto puro
+  const text = cleanReplyFormatting(raw.split(HANDOFF_SENTINEL).join(''))
   return { text, handoff, usage }
 }

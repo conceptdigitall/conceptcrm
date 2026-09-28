@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import Anthropic from '@anthropic-ai/sdk';
+import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting';
 
 export const maxDuration = 60;
 
@@ -304,31 +305,34 @@ export async function POST(req: Request) {
     ]);
 
     if (replyText) {
-      // Envia via WhatsApp
-      await sendEvolutionMessage(remoteJid, replyText);
+      const sanitizedReply = cleanReplyFormatting(replyText);
+      if (sanitizedReply) {
+        // Envia via WhatsApp
+        await sendEvolutionMessage(remoteJid, sanitizedReply);
 
-      // Salva a resposta da IA no CRM também
-      if (conversationId) {
-        const { error: botMsgErr } = await supabase.from('messages').insert({
-          conversation_id: conversationId,
-          content_text: replyText,
-          content_type: 'text',
-          sender_type: 'bot',
-          status: 'sent',
-        });
+        // Salva a resposta da IA no CRM também
+        if (conversationId) {
+          const { error: botMsgErr } = await supabase.from('messages').insert({
+            conversation_id: conversationId,
+            content_text: sanitizedReply,
+            content_type: 'text',
+            sender_type: 'bot',
+            status: 'sent',
+          });
 
-        if (botMsgErr) {
-          console.error('[Evolution Webhook] Erro ao salvar mensagem do bot:', botMsgErr);
+          if (botMsgErr) {
+            console.error('[Evolution Webhook] Erro ao salvar mensagem do bot:', botMsgErr);
+          }
+
+          await supabase
+            .from('conversations')
+            .update({
+              last_message_text: sanitizedReply,
+              last_message_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', conversationId);
         }
-
-        await supabase
-          .from('conversations')
-          .update({
-            last_message_text: replyText,
-            last_message_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', conversationId);
       }
     }
 
@@ -489,6 +493,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
    - Assim que o lead concordar com a demonstração ou indicar um dia e horário comercial (segunda a sexta-feira, das 09h às 18h), acione IMEDIATAMENTE a ferramenta "schedule_appointment".
    - Extraia e passe para os parâmetros da ferramenta tudo o que o cliente tiver mencionado: nome real (client_name), empresa/nicho (client_company), e-mail (client_email), e um breve resumo das necessidades/gargalos (notes).
 6. Nome do cliente atual: "${userName}". Use o primeiro nome de forma natural e sutil.
+7. PROIBIDO FORMATAR EM NEGRITO OU USAR ASTERISCOS (REGRA CRÍTICA): NUNCA use negrito, asteriscos duplos (**) ou simples (*) nas mensagens enviadas ao lead. Escreva sempre em texto puro, fluido e natural, exatamente como uma pessoa real conversando no WhatsApp, sem nenhuma formatação markdown.
 `;
 
   const tools: Anthropic.Tool[] = [
@@ -544,8 +549,10 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
         for (const m of sorted) {
           if (!m.content_text?.trim()) continue;
           const role = m.sender_type === 'customer' ? 'user' : 'assistant';
+          const cleanContent = cleanReplyFormatting(m.content_text);
+          if (!cleanContent) continue;
           if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role !== role) {
-            chatMessages.push({ role, content: m.content_text });
+            chatMessages.push({ role, content: cleanContent });
           }
         }
       }
@@ -715,7 +722,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     }
 
     const textBlock = response.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
-    return textBlock?.text || '';
+    return cleanReplyFormatting(textBlock?.text || '');
   } catch (err) {
     console.error(`[Evolution Webhook] Erro ao chamar Claude (${primaryModel}):`, err);
     // Fallback para claude-3-5-haiku-20241022 caso a conta/modelo precise de fallback
@@ -735,7 +742,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
       }
 
       const textBlock = fallbackResponse.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
-      return textBlock?.text || '';
+      return cleanReplyFormatting(textBlock?.text || '');
     } catch (fallbackErr) {
       console.error('[Evolution Webhook] Erro no fallback do Claude:', fallbackErr);
       return '';

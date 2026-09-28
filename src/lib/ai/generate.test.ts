@@ -68,6 +68,14 @@ describe('parseGeneration', () => {
       usage,
     })
   })
+
+  it('strips bold markdown asterisks', () => {
+    expect(parseGeneration('Hello **world** and **there**')).toEqual({
+      text: 'Hello world and there',
+      handoff: false,
+      usage: null,
+    })
+  })
 })
 
 describe('generateReply — OpenAI', () => {
