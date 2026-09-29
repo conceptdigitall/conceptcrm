@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
-import type { LeadSearch } from '@/types';
+import type { LeadSearch, MarketingVideo } from '@/types';
 import { claimNext, requeueStale } from './queue';
 import { runProspectingJob } from './prospecting';
+import { runVideoJob } from './video';
 
 const POLL_MS = 5000;
 
@@ -10,6 +11,8 @@ function requireEnv(name: string): string {
   if (!v) throw new Error(`Falta ${name} no .env.local`);
   return v;
 }
+
+requireEnv('ANTHROPIC_API_KEY');
 
 const db = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
   auth: { persistSession: false },
@@ -23,6 +26,12 @@ async function tick(): Promise<boolean> {
   if (search) {
     console.log(`[prospecção] ${search.query} em ${search.location}`);
     await runProspectingJob(db, search);
+    return true;
+  }
+  const video = await claimNext<MarketingVideo>(db, 'marketing_videos');
+  if (video) {
+    console.log(`[marketing] ${video.prompt.slice(0, 60)}`);
+    await runVideoJob(db, video);
     return true;
   }
   return false;
