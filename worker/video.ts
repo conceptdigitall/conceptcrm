@@ -4,6 +4,7 @@ import { extname, join } from 'node:path';
 import Anthropic from '@anthropic-ai/sdk';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildFixPrompt, buildUserPrompt, extractHtml } from '@/lib/marketing/prompt';
+import { validateVideoInput } from '@/lib/marketing/validate';
 import type { MarketingVideo } from '@/types';
 import { runCommand } from './exec';
 import { failJob, finishJob } from './queue';
@@ -92,6 +93,16 @@ export async function runVideoJob(
   db: SupabaseClient, video: MarketingVideo, overrides: Partial<VideoDeps> = {},
 ): Promise<void> {
   const deps = { ...defaultDeps, ...overrides };
+  // The worker downloads with the service role, which ignores storage RLS:
+  // only files under this job's own account folder may be used.
+  const valid = validateVideoInput(
+    { prompt: video.prompt, imagePaths: video.image_paths, format: video.format, tone: video.tone },
+    video.account_id,
+  );
+  if (!valid.ok) {
+    await failJob(db, 'marketing_videos', video.id, valid.error);
+    return;
+  }
   const dir = await mkdtemp(join(tmpdir(), 'hf-'));
   try {
     // Scaffold may be empty in tests; the real one comes from Step 1.

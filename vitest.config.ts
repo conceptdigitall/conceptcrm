@@ -15,6 +15,8 @@ export default defineConfig({
       ENCRYPTION_KEY:
         "0000000000000000000000000000000000000000000000000000000000000000",
       META_APP_SECRET: "test-meta-app-secret",
+      // Test accounts allowed into Prospecção/Marketing routes.
+      NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS: "acc-1",
     },
     clearMocks: true,
   },

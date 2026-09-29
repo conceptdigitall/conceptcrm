@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { isInternalAccount } from '@/lib/internal-accounts';
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   let ctx;
@@ -7,6 +8,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     ctx = await requireRole('agent');
   } catch (err) {
     return toErrorResponse(err);
+  }
+  if (!isInternalAccount(ctx.accountId)) {
+    return NextResponse.json({ error: 'Recurso interno da Concept Digital' }, { status: 403 });
   }
   const { id } = await params;
 

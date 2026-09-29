@@ -76,6 +76,14 @@ describe('runVideoJob', () => {
     await runVideoJob(db, video, d);
     expect(updates.at(-1)).toMatchObject({ status: 'failed', error: expect.stringContaining('HTML') });
   });
+  it("refuses image paths outside the job's own account folder without downloading", async () => {
+    const { db, updates, uploads } = fakeDb();
+    const d = deps();
+    await runVideoJob(db, { ...video, image_paths: ['account-other/uploads/1-x.jpg'] }, d);
+    expect(d.compose).not.toHaveBeenCalled();
+    expect(uploads).toEqual([]);
+    expect(updates.at(-1)).toMatchObject({ status: 'failed', error: 'Foto inválida' });
+  });
   it('fails cleanly when rendering throws', async () => {
     const { db, updates } = fakeDb();
     const d = deps({ render: vi.fn().mockRejectedValue(new Error('ffmpeg crashed')) });

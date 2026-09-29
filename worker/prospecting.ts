@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mapPlaceToLead, parseScraperOutput } from '@/lib/prospecting/map-scraper';
+import { validateSearchInput } from '@/lib/prospecting/validate';
 import type { LeadSearch } from '@/types';
 import { runCommand } from './exec';
 import { failJob, finishJob } from './queue';
@@ -43,6 +44,14 @@ export async function runProspectingJob(
   deps: { scrape?: (queryLine: string, depth: number) => Promise<string> } = {},
 ): Promise<void> {
   const scrape = deps.scrape ?? scrapeWithDocker;
+  // RLS lets agents write rows directly, so re-check what the API would have.
+  const valid = validateSearchInput({
+    query: search.query, location: search.location, maxResults: search.max_results,
+  });
+  if (!valid.ok) {
+    await failJob(db, 'lead_searches', search.id, valid.error);
+    return;
+  }
   try {
     const output = await scrape(`${search.query} em ${search.location}`, depthFor(search.max_results));
     const rows = parseScraperOutput(output)

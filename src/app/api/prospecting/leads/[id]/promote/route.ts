@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { isInternalAccount } from '@/lib/internal-accounts';
+import { phoneLookupVariants } from '@/lib/prospecting/phone';
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   let ctx;
@@ -7,6 +9,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     ctx = await requireRole('agent');
   } catch (err) {
     return toErrorResponse(err);
+  }
+  if (!isInternalAccount(ctx.accountId)) {
+    return NextResponse.json({ error: 'Recurso interno da Concept Digital' }, { status: 403 });
   }
   const { id } = await params;
 
@@ -19,13 +24,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (lead.contact_id) return NextResponse.json({ contactId: lead.contact_id, existing: true });
   if (!lead.phone) return NextResponse.json({ error: 'Lead sem telefone' }, { status: 409 });
 
-  // lead.phone is already digits-only (normalizeBrPhone), which is exactly
-  // what contacts.phone_normalized holds — so this finds WhatsApp contacts too.
+  // lead.phone is digits-only (normalizeBrPhone), the same shape as
+  // contacts.phone_normalized; the variants also catch WhatsApp's
+  // ninth-digit-less form of the same mobile.
   const { data: existing } = await ctx.supabase
     .from('contacts')
     .select('id')
     .eq('account_id', ctx.accountId)
-    .eq('phone_normalized', lead.phone)
+    .in('phone_normalized', phoneLookupVariants(lead.phone))
+    .limit(1)
     .maybeSingle();
 
   let contactId: string;

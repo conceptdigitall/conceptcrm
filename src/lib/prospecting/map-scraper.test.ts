@@ -27,7 +27,7 @@ describe('mapPlaceToLead', () => {
         category: 'Barbearia',
         address: 'Rua X, 10 - Santos',
         phone: '(13) 99123-4567',
-        website: '',
+        web_site: '',
         review_rating: 4.1,
         review_count: 8,
         place_id: 'ChIJ123',
@@ -50,6 +50,17 @@ describe('mapPlaceToLead', () => {
       maps_url: 'https://maps.google.com/?cid=1',
       score: 100,
     });
+  });
+  it('reads the site from the real scraper key web_site', () => {
+    const [noSite, withSite] = parseScraperOutput(fixture).map((p) => mapPlaceToLead(p, ctx));
+    expect(noSite.website).toBeNull();
+    expect(withSite.website).toBe('https://exemplo2.com.br');
+    expect(withSite.score_reasons).not.toContain('Sem site');
+  });
+  it('drops non-http site and maps links', () => {
+    const lead = mapPlaceToLead({ title: 'X', web_site: 'javascript:alert(1)', link: 'data:text/html,x' }, ctx);
+    expect(lead.website).toBeNull();
+    expect(lead.maps_url).toBeNull();
   });
   it('maps every fixture entry without throwing', () => {
     for (const p of parseScraperOutput(fixture)) {

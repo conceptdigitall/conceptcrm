@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   existingContact: null as unknown,
   insertContact: vi.fn(),
   updateLead: vi.fn(),
+  lookup: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/account', () => ({
@@ -29,7 +30,12 @@ function supabase() {
       }
       return {
         select: () => ({
-          eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: mocks.existingContact, error: null }) }) }),
+          eq: () => ({
+            in: (_col: string, values: string[]) => {
+              mocks.lookup(values);
+              return { limit: () => ({ maybeSingle: async () => ({ data: mocks.existingContact, error: null }) }) };
+            },
+          }),
         }),
         insert: (row: unknown) => {
           mocks.insertContact(row);
@@ -70,6 +76,7 @@ describe('POST promote', () => {
     mocks.existingContact = { id: 'c-old' };
     const res = await POST(req(), params);
     expect(await res.json()).toEqual({ contactId: 'c-old', existing: true });
+    expect(mocks.lookup).toHaveBeenCalledWith(['5513991234567', '551391234567']);
     expect(mocks.insertContact).not.toHaveBeenCalled();
   });
   it('is idempotent when already promoted', async () => {

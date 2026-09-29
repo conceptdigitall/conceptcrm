@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimNext, failJob, finishJob, requeueStale } from './queue';
+import { claimNext, failJob, finishJob, requeueOrphaned } from './queue';
 
 type Row = Record<string, unknown> & { id: string; status: string; created_at: string; started_at?: string | null };
 
@@ -13,6 +13,7 @@ function fakeDb(rows: Row[]) {
         select: () => q,
         update: (p: Record<string, unknown>) => { patch = p; return q; },
         eq: (col: string, v: unknown) => { filters.push((r) => r[col] === v); return q; },
+        in: (col: string, vs: unknown[]) => { filters.push((r) => vs.includes(r[col])); return q; },
         lt: (col: string, v: string) => { filters.push((r) => typeof r[col] === 'string' && (r[col] as string) < v); return q; },
         order: () => q,
         limit: () => q,
@@ -33,27 +34,34 @@ function fakeDb(rows: Row[]) {
 describe('queue', () => {
   it('claims the oldest pending job and marks it running', async () => {
     const db = fakeDb([
-      { id: 'b', status: 'pending', created_at: '2026-09-29T10:02:00Z' },
-      { id: 'a', status: 'pending', created_at: '2026-09-29T10:01:00Z' },
+      { id: 'b', status: 'pending', created_at: '2026-09-29T10:02:00Z', account_id: 'acc-1' },
+      { id: 'a', status: 'pending', created_at: '2026-09-29T10:01:00Z', account_id: 'acc-1' },
     ]);
-    const job = await claimNext<Row>(db, 'lead_searches');
+    const job = await claimNext<Row>(db, 'lead_searches', ['acc-1']);
     expect(job?.id).toBe('a');
     expect(db.rows.find((r) => r.id === 'a')?.status).toBe('running');
     expect(db.rows.find((r) => r.id === 'b')?.status).toBe('pending');
   });
-  it('returns null when nothing is pending', async () => {
-    expect(await claimNext(fakeDb([{ id: 'a', status: 'done', created_at: 'x' }]), 'lead_searches')).toBeNull();
-  });
-  it('requeues jobs running for more than 30 minutes', async () => {
-    const old = new Date(Date.now() - 31 * 60 * 1000).toISOString();
-    const fresh = new Date().toISOString();
+  it('only claims jobs from the allowed accounts', async () => {
     const db = fakeDb([
-      { id: 'old', status: 'running', created_at: 'x', started_at: old },
-      { id: 'new', status: 'running', created_at: 'y', started_at: fresh },
+      { id: 'outsider', status: 'pending', created_at: '2026-09-29T10:00:00Z', account_id: 'x' },
+      { id: 'concept', status: 'pending', created_at: '2026-09-29T10:05:00Z', account_id: 'acc-1' },
     ]);
-    await requeueStale(db, 'marketing_videos');
-    expect(db.rows.find((r) => r.id === 'old')?.status).toBe('pending');
-    expect(db.rows.find((r) => r.id === 'new')?.status).toBe('running');
+    const job = await claimNext<Row>(db, 'lead_searches', ['acc-1']);
+    expect(job?.id).toBe('concept');
+    expect(db.rows.find((r) => r.id === 'outsider')?.status).toBe('pending');
+  });
+  it('returns null when nothing is pending', async () => {
+    expect(await claimNext(fakeDb([{ id: 'a', status: 'done', created_at: 'x' }]), 'lead_searches', ['acc-1'])).toBeNull();
+  });
+  it('requeueOrphaned returns every running job to pending, however recent', async () => {
+    const db = fakeDb([
+      { id: 'recent', status: 'running', created_at: 'x', started_at: new Date().toISOString() },
+      { id: 'done', status: 'done', created_at: 'y', started_at: new Date().toISOString() },
+    ]);
+    expect(await requeueOrphaned(db, 'lead_searches')).toBe(1);
+    expect(db.rows.find((r) => r.id === 'recent')?.status).toBe('pending');
+    expect(db.rows.find((r) => r.id === 'done')?.status).toBe('done');
   });
   it('fail and finish set status and finished_at', async () => {
     const db = fakeDb([

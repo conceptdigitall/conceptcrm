@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBrMobile, normalizeBrPhone } from './phone';
+import { isBrMobile, normalizeBrPhone, phoneLookupVariants } from './phone';
 
 describe('normalizeBrPhone', () => {
   it('adds 55 to a formatted mobile', () => {
@@ -26,5 +26,14 @@ describe('isBrMobile', () => {
   it('is false for landlines and null', () => {
     expect(isBrMobile('551332221111')).toBe(false);
     expect(isBrMobile(null)).toBe(false);
+  });
+});
+
+describe('phoneLookupVariants', () => {
+  it('adds the WhatsApp form without the ninth digit for mobiles', () => {
+    expect(phoneLookupVariants('5513991234567')).toEqual(['5513991234567', '551391234567']);
+  });
+  it('keeps landlines as-is', () => {
+    expect(phoneLookupVariants('551332221111')).toEqual(['551332221111']);
   });
 });

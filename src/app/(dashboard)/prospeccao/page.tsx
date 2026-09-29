@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
 import { hasStalePending } from '@/lib/jobs/stale';
+import { safeHttpUrl } from '@/lib/prospecting/url';
 import type { Lead, LeadSearch, LeadStatus } from '@/types';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -200,7 +201,7 @@ export default function ProspeccaoPage() {
               </TableCell>
               <TableCell className="text-sm">
                 <div>{l.phone ?? '—'}</div>
-                {l.website && <a className="text-xs underline" href={l.website} target="_blank" rel="noreferrer">site</a>}
+                {safeHttpUrl(l.website) && <a className="text-xs underline" href={safeHttpUrl(l.website) ?? undefined} target="_blank" rel="noreferrer">site</a>}
                 {l.email && <div className="text-xs">{l.email}</div>}
               </TableCell>
               <TableCell>
@@ -214,8 +215,8 @@ export default function ProspeccaoPage() {
                 </select>
               </TableCell>
               <TableCell className="space-x-1 whitespace-nowrap">
-                {l.maps_url && (
-                  <a className={buttonVariants({ variant: 'ghost', size: 'icon' })} title="Abrir no Maps" href={l.maps_url} target="_blank" rel="noreferrer">
+                {safeHttpUrl(l.maps_url) && (
+                  <a className={buttonVariants({ variant: 'ghost', size: 'icon' })} title="Abrir no Maps" href={safeHttpUrl(l.maps_url) ?? undefined} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-4 w-4" />
                   </a>
                 )}

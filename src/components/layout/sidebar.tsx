@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { ConceptLogo } from "@/components/brand/concept-logo";
 import type { AccountRole } from "@/lib/auth/roles";
+import { isInternalAccount } from "@/lib/internal-accounts";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -91,6 +92,8 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Concept Digital's own tools; hidden unless the account is internal. */
+  internalOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -100,8 +103,8 @@ const navItems: NavItem[] = [
   { href: "/contacts", labelKey: "contacts", icon: Users },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
   { href: "/appointments", labelKey: "appointments", icon: Calendar },
-  { href: "/prospeccao", labelKey: "prospecting", icon: Search },
-  { href: "/marketing", labelKey: "marketing", icon: Clapperboard },
+  { href: "/prospeccao", labelKey: "prospecting", icon: Search, internalOnly: true },
+  { href: "/marketing", labelKey: "marketing", icon: Clapperboard, internalOnly: true },
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
   { href: "/automations", labelKey: "automations", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
@@ -210,7 +213,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {navItems.filter((item) => !item.internalOnly || isInternalAccount(account?.id)).map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

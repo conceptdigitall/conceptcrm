@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { LeadSearch, MarketingVideo } from '@/types';
-import { claimNext, requeueStale } from './queue';
+import { internalAccountIds } from '@/lib/internal-accounts';
+import { claimNext, requeueOrphaned } from './queue';
 import { runProspectingJob } from './prospecting';
 import { runVideoJob } from './video';
 
@@ -13,6 +14,10 @@ function requireEnv(name: string): string {
 }
 
 requireEnv('ANTHROPIC_API_KEY');
+const accountIds = internalAccountIds();
+if (accountIds.length === 0) {
+  throw new Error('Falta NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS no .env.local (contas que o worker atende)');
+}
 
 const db = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
   auth: { persistSession: false },
@@ -22,13 +27,13 @@ let stopping = false;
 process.on('SIGINT', () => { stopping = true; console.log('\nParando depois do job atual…'); });
 
 async function tick(): Promise<boolean> {
-  const search = await claimNext<LeadSearch>(db, 'lead_searches');
+  const search = await claimNext<LeadSearch>(db, 'lead_searches', accountIds);
   if (search) {
     console.log(`[prospecção] ${search.query} em ${search.location}`);
     await runProspectingJob(db, search);
     return true;
   }
-  const video = await claimNext<MarketingVideo>(db, 'marketing_videos');
+  const video = await claimNext<MarketingVideo>(db, 'marketing_videos', accountIds);
   if (video) {
     console.log(`[marketing] ${video.prompt.slice(0, 60)}`);
     await runVideoJob(db, video);
@@ -38,8 +43,8 @@ async function tick(): Promise<boolean> {
 }
 
 async function main() {
-  const a = await requeueStale(db, 'lead_searches');
-  const b = await requeueStale(db, 'marketing_videos');
+  const a = await requeueOrphaned(db, 'lead_searches');
+  const b = await requeueOrphaned(db, 'marketing_videos');
   if (a + b > 0) console.log(`Devolvidos à fila: ${a + b} job(s) travados`);
   console.log('Worker rodando. Ctrl+C para parar.');
   while (!stopping) {

@@ -1,5 +1,6 @@
 import { isBrMobile, normalizeBrPhone } from './phone';
 import { scoreLead } from './score';
+import { safeHttpUrl } from './url';
 
 export interface ScraperPlace {
   title?: string;
@@ -7,6 +8,8 @@ export interface ScraperPlace {
   address?: string;
   complete_address?: unknown;
   phone?: string;
+  // gosom/google-maps-scraper's JSON key; `website` kept as a fallback.
+  web_site?: string;
   website?: string;
   review_rating?: number | string | null;
   review_count?: number | string | null;
@@ -69,7 +72,7 @@ export function mapPlaceToLead(
 ): LeadInsert {
   const phone = normalizeBrPhone(str(place.phone));
   const isMobile = isBrMobile(phone);
-  const website = str(place.website);
+  const website = safeHttpUrl(str(place.web_site) ?? str(place.website));
   const rating = num(place.review_rating);
   const reviewCount = num(place.review_count);
   const { score, reasons } = scoreLead({ website, rating, reviewCount, isMobile });
@@ -88,7 +91,7 @@ export function mapPlaceToLead(
     email,
     rating: rating === null ? null : Math.round(rating * 10) / 10,
     review_count: reviewCount === null ? null : Math.round(reviewCount),
-    maps_url: str(place.link),
+    maps_url: safeHttpUrl(str(place.link)),
     raw: place,
     score,
     score_reasons: reasons,

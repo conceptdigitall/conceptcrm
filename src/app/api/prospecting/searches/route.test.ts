@@ -54,6 +54,12 @@ describe('POST /api/prospecting/searches', () => {
     expect(res.status).toBe(400);
     expect(mocks.insert).not.toHaveBeenCalled();
   });
+  it('403s for an account that is not internal, without inserting', async () => {
+    mocks.requireRole.mockResolvedValue({ ...ctx(), accountId: 'outsider' });
+    const res = await POST(req({ query: 'barbearia', location: 'Santos' }));
+    expect(res.status).toBe(403);
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
   it('returns the auth error when the role check fails', async () => {
     mocks.requireRole.mockRejectedValue(new Error('nope'));
     const res = await POST(req({ query: 'a', location: 'b' }));

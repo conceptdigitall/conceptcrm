@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, Download, Loader2, RotateCcw, Trash2, Wand2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
 import { buildMediaPath } from '@/lib/storage/upload-media';
 import { hasStalePending } from '@/lib/jobs/stale';
+import { pathsToSign, type SignedEntry } from '@/lib/marketing/signed-urls';
 import type { MarketingVideo, VideoFormat, VideoTone } from '@/types';
 import { Button } from '@/components/ui/button';
 
@@ -42,19 +43,25 @@ export default function MarketingPage() {
 
   const [now, setNow] = useState(() => Date.now());
 
+  // Reused across polls: a new token changes <video src> and restarts playback.
+  const signedCache = useRef(new Map<string, SignedEntry>());
+
   const fetchData = useCallback(async () => {
     const { data } = await supabase
       .from('marketing_videos').select('*').order('created_at', { ascending: false }).limit(50);
     const rows = (data ?? []) as MarketingVideo[];
-    const paths = rows.flatMap((v) => [v.video_path, v.poster_path]).filter((p): p is string => Boolean(p));
-    let byPath = new Map<string, string>();
-    if (paths.length > 0) {
-      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrls(paths, 3600);
-      byPath = new Map((signed ?? []).flatMap((s) => (s.path && s.signedUrl ? [[s.path, s.signedUrl] as const] : [])));
+    const cache = signedCache.current;
+    const now = Date.now();
+    const toSign = pathsToSign(rows, cache, now);
+    if (toSign.length > 0) {
+      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrls(toSign, 3600);
+      for (const s of signed ?? []) {
+        if (s.path && s.signedUrl) cache.set(s.path, { url: s.signedUrl, signedAt: now });
+      }
     }
     const signedUrls = Object.fromEntries(rows.map((v) => [v.id, {
-      video: v.video_path ? byPath.get(v.video_path) : undefined,
-      poster: v.poster_path ? byPath.get(v.poster_path) : undefined,
+      video: v.video_path ? cache.get(v.video_path)?.url : undefined,
+      poster: v.poster_path ? cache.get(v.poster_path)?.url : undefined,
     }]));
     return { rows, signedUrls };
   }, [supabase]);

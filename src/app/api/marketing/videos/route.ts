@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { isInternalAccount } from '@/lib/internal-accounts';
 import { validateVideoInput } from '@/lib/marketing/validate';
 
 export async function POST(request: Request) {
@@ -8,6 +9,9 @@ export async function POST(request: Request) {
     ctx = await requireRole('agent');
   } catch (err) {
     return toErrorResponse(err);
+  }
+  if (!isInternalAccount(ctx.accountId)) {
+    return NextResponse.json({ error: 'Recurso interno da Concept Digital' }, { status: 403 });
   }
 
   const body = await request.json().catch(() => null);

@@ -58,6 +58,13 @@ describe('runProspectingJob', () => {
     expect(calls.upsert).toHaveLength(0);
     expect(calls.update.at(-1)).toMatchObject({ status: 'done', result_count: 0 });
   });
+  it('refuses a row whose query has a newline (written around the API) without scraping', async () => {
+    const { db, calls } = fakeDb();
+    const scrape = vi.fn();
+    await runProspectingJob(db, { ...search, query: 'a\nb' }, { scrape });
+    expect(scrape).not.toHaveBeenCalled();
+    expect(calls.update.at(-1)).toMatchObject({ status: 'failed', error: 'Use uma linha só' });
+  });
   it('fails the job with a readable error when the scraper throws', async () => {
     const { db, calls } = fakeDb();
     await runProspectingJob(db, search, { scrape: async () => { throw new Error('docker: not found'); } });

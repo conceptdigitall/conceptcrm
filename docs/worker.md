@@ -8,14 +8,18 @@ que roda na máquina da Concept (a Vercel não roda Docker nem Chrome/FFmpeg).
 - Espaço livre em disco: deixe pelo menos ~5 GB. O Docker e o render (Chrome + FFmpeg)
   usam bastante memória, e com o disco quase cheio o Docker fica em modo só leitura e o
   render pode esgotar o espaço.
-- `.env.local` com `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `ANTHROPIC_API_KEY`
+- `.env.local` com `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY` e
+  `NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS` (id da conta da Concept; as abas e o worker só atendem
+  essas contas). Na Vercel, cadastre `NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS` também, senão as
+  abas ficam escondidas e as rotas respondem 403.
 
 ## Rodar
     npm run worker
 
-Ctrl+C para parar (termina o job atual antes). Pedidos feitos com o worker
-parado ficam "Na fila" e são processados quando ele voltar. Jobs travados em
-"running" por mais de 30 min voltam para a fila na inicialização.
+Ctrl+C para parar. Pedidos feitos com o worker parado ficam "Na fila" e são
+processados quando ele voltar. Ao iniciar, o worker devolve para a fila todo job
+que ficou em "running" (ele roda sozinho, então esses jobs ficaram órfãos).
+Rode só um worker por vez.
 
 ## Custos e limites
 - Prospecção: grátis; o Google pode bloquear buscas grandes (use proxy se precisar).

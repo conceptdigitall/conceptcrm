@@ -2,9 +2,12 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 export type JobTable = 'lead_searches' | 'marketing_videos';
 
-export async function claimNext<T>(db: SupabaseClient, table: JobTable): Promise<T | null> {
+export async function claimNext<T>(
+  db: SupabaseClient, table: JobTable, accountIds: string[],
+): Promise<T | null> {
   const { data: candidates } = await db
-    .from(table).select('id').eq('status', 'pending').order('created_at', { ascending: true }).limit(1);
+    .from(table).select('id').eq('status', 'pending').in('account_id', accountIds)
+    .order('created_at', { ascending: true }).limit(1);
   const next = candidates?.[0];
   if (!next) return null;
   // Conditional update: if another worker (or a retry) changed the row,
@@ -30,15 +33,13 @@ export async function failJob(db: SupabaseClient, table: JobTable, id: string, m
     .eq('id', id);
 }
 
-export async function requeueStale(
-  db: SupabaseClient, table: JobTable, olderThanMs = 30 * 60 * 1000,
-): Promise<number> {
-  const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+// Only one worker runs at a time, so at startup any `running` row was
+// orphaned by a previous run (crash, Ctrl+C, Mac asleep).
+export async function requeueOrphaned(db: SupabaseClient, table: JobTable): Promise<number> {
   const { data } = await db
     .from(table)
     .update({ status: 'pending', started_at: null })
     .eq('status', 'running')
-    .lt('started_at', cutoff)
     .select();
   return data?.length ?? 0;
 }

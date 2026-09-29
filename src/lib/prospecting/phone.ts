@@ -20,3 +20,10 @@ export function isBrMobile(normalized: string | null): boolean {
   const local = normalized.slice(4); // after 55 + DDD
   return local.length === 9 && local.startsWith('9');
 }
+
+// WhatsApp often reports Brazilian mobiles without the ninth digit
+// (551391234567), and the webhook stores that form. Match both.
+export function phoneLookupVariants(normalized: string): string[] {
+  if (!isBrMobile(normalized)) return [normalized];
+  return [normalized, normalized.slice(0, 4) + normalized.slice(5)];
+}
