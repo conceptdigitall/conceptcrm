@@ -650,7 +650,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `interface LayaClientDeps { fetchImpl?: typeof fetch; sleep?: (ms: number) => Promise<void>; maxAttempts?: number }`
   - `layaBatch(baseUrl: string, states: string[], question: LayaQuestion, deps?: LayaClientDeps): Promise<LayaAnswer[]>` — uma resposta por estado, na mesma ordem.
 
-- [ ] **Step 1: Escrever os testes**
+- [x] **Step 1: Escrever os testes**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -703,12 +703,12 @@ describe('layaBatch', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `npx vitest run worker/laya-client.test.ts`
 Expected: FAIL com "Cannot find module './laya-client'".
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 ```ts
 import type { LayaAnswer, LayaQuestion } from '@/lib/prospecting/columns';
@@ -763,12 +763,12 @@ export async function layaBatch(
 }
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `npx vitest run worker/laya-client.test.ts`
 Expected: PASS (7 testes).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add worker/laya-client.ts worker/laya-client.test.ts
