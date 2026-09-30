@@ -16,12 +16,13 @@ const anthropic = new Anthropic({
 });
 
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
-const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || 'concept_master_evolution_2026';
+const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function simulateHumanPresence(remoteJid: string, delayMs: number) {
+  if (!EVOLUTION_URL || !EVOLUTION_KEY || !INSTANCE) return;
   try {
     const cleanNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
     await fetch(`${EVOLUTION_URL}/chat/markMessageAsRead/${INSTANCE}`, {
@@ -47,6 +48,9 @@ async function simulateHumanPresence(remoteJid: string, delayMs: number) {
 }
 
 async function sendEvolutionMessage(number: string, text: string) {
+  if (!EVOLUTION_URL || !EVOLUTION_KEY || !INSTANCE) {
+    throw new Error('Evolution API não configurada (EVOLUTION_API_KEY ou EVOLUTION_INSTANCE_NAME ausente)');
+  }
   let cleanNumber = number.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
   if (cleanNumber.length >= 10 && cleanNumber.length <= 11 && !cleanNumber.startsWith('55')) {
     cleanNumber = '55' + cleanNumber;
