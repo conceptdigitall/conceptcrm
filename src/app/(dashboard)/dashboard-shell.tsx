@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { AccountAccessAlert } from "@/components/layout/account-access-alert";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { BrowserNotificationsListener } from "@/components/notifications/browser-notifications-listener";
@@ -53,7 +54,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
       <BrowserNotificationsListener />
       <Sidebar open={sidebarOpen} onClose={closeSidebar} />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
+        <Header />
         {/* Thinner horizontal padding on mobile so cards have room to breathe. */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Above every page: writes are being rejected and here's why.
@@ -61,6 +62,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           <AccountAccessAlert />
           {children}
         </main>
+        {/* Mobile-only tab bar. A flex sibling of <main> (not fixed), so it
+            never covers page content like the inbox composer. */}
+        <MobileBottomNav onOpenMore={() => setSidebarOpen(true)} />
       </div>
     </div>
   );

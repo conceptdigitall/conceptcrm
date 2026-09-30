@@ -32,6 +32,8 @@ import {
 import { ConceptLogo } from "@/components/brand/concept-logo";
 import type { AccountRole } from "@/lib/auth/roles";
 import { isInternalAccount } from "@/lib/internal-accounts";
+import { ModeToggle } from "@/components/layout/mode-toggle";
+import { MOBILE_PRIMARY_HREFS } from "@/components/layout/mobile-bottom-nav";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -200,14 +202,19 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link href="/dashboard" className="flex items-center gap-2 group transition-opacity hover:opacity-90">
             <ConceptLogo variant="full" size="sm" />
           </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("closeMenu")}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          {/* Mobile only: the header drops the theme toggle on small
+              screens, so it lives here instead of disappearing. */}
+          <div className="flex items-center gap-1 lg:hidden">
+            <ModeToggle />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("closeMenu")}
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Main navigation */}
@@ -229,7 +236,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 item.href === "/notifications" && unreadNotifications > 0;
 
               return (
-                <li key={item.href}>
+                // Already one tap away in the mobile bottom bar — hide it
+                // from the drawer so "Mais" only offers what's left.
+                <li
+                  key={item.href}
+                  className={cn(MOBILE_PRIMARY_HREFS.has(item.href) && "hidden lg:block")}
+                >
                   <Link
                     href={item.href}
                     className={cn(
