@@ -361,7 +361,7 @@ export async function sendTextMessage(
 
   // Suporte transparente à Evolution API
   const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
-  const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || 'concept_master_evolution_2026';
+  const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
   const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
 
   if (EVOLUTION_URL && EVOLUTION_KEY && INSTANCE) {
@@ -885,7 +885,7 @@ export async function sendTypingIndicator(
   args: SendTypingIndicatorArgs
 ): Promise<void> {
   const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
-  const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || 'concept_master_evolution_2026';
+  const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
   const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
 
   if (EVOLUTION_URL && EVOLUTION_KEY && INSTANCE) {
