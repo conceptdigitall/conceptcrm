@@ -11,7 +11,6 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useTotalUnread } from "@/hooks/use-total-unread";
 
 // Hick's Law: decision time grows with the number of choices. On mobile
 // we surface only the four destinations used every day as one-tap tabs;
@@ -36,12 +35,13 @@ export function isNavItemActive(pathname: string, href: string): boolean {
 
 interface MobileBottomNavProps {
   onOpenMore: () => void;
+  /** Passed down from the shell — see `useTotalUnread` there. */
+  totalUnread: number;
 }
 
-export function MobileBottomNav({ onOpenMore }: MobileBottomNavProps) {
+export function MobileBottomNav({ onOpenMore, totalUnread }: MobileBottomNavProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const totalUnread = useTotalUnread();
 
   // "Mais" reads as active when the current page is one of the drawer's
   // destinations, so the user always sees where they are.
