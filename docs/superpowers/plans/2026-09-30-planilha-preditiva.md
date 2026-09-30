@@ -1725,7 +1725,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `sortScore(kind: ColumnKind, options: string[], cell: CellLike | undefined): number` (maior = mais para cima; célula vazia = -1)
   - Componentes `AiColumnHeader`, `AiCell`, `NewColumnInput`, `TitleHelp`, função `fetchAllColumnValues(supabase)`
 
-- [ ] **Step 1: Testes de exibição e ordenação (acrescentar a `columns.test.ts`)**
+- [x] **Step 1: Testes de exibição e ordenação (acrescentar a `columns.test.ts`)**
 
 Acrescente `displayedCell, sortScore` ao import e:
 
@@ -1764,7 +1764,7 @@ describe('sortScore', () => {
 
 Run: `npx vitest run src/lib/prospecting/columns.test.ts` → FAIL ("displayedCell is not a function").
 
-- [ ] **Step 2: Implementar (acrescentar a `columns.ts`)**
+- [x] **Step 2: Implementar (acrescentar a `columns.ts`)**
 
 Troque o import do topo por `import type { ColumnKind, Lead, LeadColumnValue } from '@/types';` e acrescente:
 
@@ -1796,7 +1796,7 @@ export function sortScore(kind: ColumnKind, options: string[], cell: CellLike | 
 
 Run: `npx vitest run src/lib/prospecting/columns.test.ts` → PASS.
 
-- [ ] **Step 3: Componentes**
+- [x] **Step 3: Componentes**
 
 `src/components/prospecting/ai-columns.tsx`:
 
@@ -1949,7 +1949,7 @@ export function AiCell({ column, cell, disabled, onCorrect }: {
 }
 ```
 
-- [ ] **Step 4: Integrar na página**
+- [x] **Step 4: Integrar na página**
 
 Em `src/app/(dashboard)/prospeccao/page.tsx`:
 
@@ -2130,16 +2130,16 @@ import { AiCell, AiColumnHeader, NewColumnInput, TitleHelp, fetchAllColumnValues
               <TableCell />
 ```
 
-- [ ] **Step 5: Tipos, lint e testes**
+- [x] **Step 5: Tipos, lint e testes**
 
 Run: `npx tsc --noEmit && npx eslint "src/app/(dashboard)/prospeccao" src/components/prospecting src/lib/prospecting && npx vitest run src/lib/prospecting`
 Expected: sem erros; testes PASS.
 
-- [ ] **Step 6: Ver no navegador**
+- [x] **Step 6: Ver no navegador**
 
 Suba o app (preview do projeto ou `npm run dev`), faça login com a conta da Concept e abra `/prospeccao`. Confira: quadro "Como escrever o título"; campo "Nova coluna IA…" como último cabeçalho; criar `Tem site?` mostra "processando…". Sem leads ainda, a tabela fica vazia; o preenchimento real é na Task 9. Leia o console do navegador: sem erros.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/lib/prospecting/columns.ts src/lib/prospecting/columns.test.ts src/components/prospecting/ai-columns.tsx "src/app/(dashboard)/prospeccao/page.tsx"
