@@ -1271,7 +1271,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `DELETE /api/prospecting/columns/:id` → 200 `{ ok: true }` | 404
   - `PATCH /api/prospecting/columns/:id/values/:leadId` `{ value: string | null }` → 200 `{ value: LeadColumnValue }` | 400 | 404
 
-- [ ] **Step 1: Testes de criar**
+- [x] **Step 1: Testes de criar**
 
 `src/app/api/prospecting/columns/route.test.ts`:
 
@@ -1347,7 +1347,7 @@ describe('POST /api/prospecting/columns', () => {
 
 Run: `npx vitest run src/app/api/prospecting/columns/route.test.ts` → FAIL ("Cannot find module './route'").
 
-- [ ] **Step 2: Implementar criar**
+- [x] **Step 2: Implementar criar**
 
 `src/app/api/prospecting/columns/route.ts`:
 
@@ -1400,7 +1400,7 @@ export async function POST(request: Request) {
 
 Run: `npx vitest run src/app/api/prospecting/columns/route.test.ts` → PASS (4).
 
-- [ ] **Step 3: Testes de tentar de novo e excluir**
+- [x] **Step 3: Testes de tentar de novo e excluir**
 
 `src/app/api/prospecting/columns/[id]/route.test.ts`:
 
@@ -1482,7 +1482,7 @@ describe('DELETE /api/prospecting/columns/:id', () => {
 
 Run: `npx vitest run "src/app/api/prospecting/columns/[id]/route.test.ts"` → FAIL.
 
-- [ ] **Step 4: Implementar tentar de novo e excluir**
+- [x] **Step 4: Implementar tentar de novo e excluir**
 
 `src/app/api/prospecting/columns/[id]/retry/route.ts`:
 
@@ -1552,7 +1552,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
 Run: `npx vitest run "src/app/api/prospecting/columns/[id]/route.test.ts"` → PASS (6).
 
-- [ ] **Step 5: Testes de correção**
+- [x] **Step 5: Testes de correção**
 
 `src/app/api/prospecting/columns/[id]/values/[leadId]/route.test.ts`:
 
@@ -1634,7 +1634,7 @@ describe('PATCH /api/prospecting/columns/:id/values/:leadId', () => {
 
 Run: `npx vitest run "src/app/api/prospecting/columns/[id]/values"` → FAIL.
 
-- [ ] **Step 6: Implementar correção**
+- [x] **Step 6: Implementar correção**
 
 `src/app/api/prospecting/columns/[id]/values/[leadId]/route.ts`:
 
@@ -1698,7 +1698,7 @@ export async function PATCH(
 
 Run: `npx vitest run src/app/api/prospecting/columns` → PASS (15).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/app/api/prospecting/columns
