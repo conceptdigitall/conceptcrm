@@ -384,7 +384,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `allowedValues(kind: ColumnKind, options: string[]): string[]`
   - `canonicalValue(kind: ColumnKind, options: string[], input: unknown): string | null`
 
-- [ ] **Step 1: Escrever os testes (acrescentar ao arquivo)**
+- [x] **Step 1: Escrever os testes (acrescentar ao arquivo)**
 
 Atualize o import no topo:
 
@@ -495,12 +495,12 @@ describe('allowedValues / canonicalValue', () => {
 });
 ```
 
-- [ ] **Step 2: Rodar e ver falhar**
+- [x] **Step 2: Rodar e ver falhar**
 
 Run: `npx vitest run src/lib/prospecting/columns.test.ts`
 Expected: FAIL com "buildLeadState is not a function" (e as outras novas).
 
-- [ ] **Step 3: Implementar (acrescentar a `columns.ts`)**
+- [x] **Step 3: Implementar (acrescentar a `columns.ts`)**
 
 Troque o import do topo por:
 
@@ -621,12 +621,12 @@ export function canonicalValue(kind: ColumnKind, options: string[], input: unkno
 }
 ```
 
-- [ ] **Step 4: Rodar e ver passar**
+- [x] **Step 4: Rodar e ver passar**
 
 Run: `npx vitest run src/lib/prospecting/columns.test.ts && npx tsc --noEmit`
 Expected: PASS; sem erros de tipo.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/prospecting/columns.ts src/lib/prospecting/columns.test.ts
