@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeLabel, parseColumnTitle } from './columns';
+import {
+  allowedValues, buildLeadState, canonicalValue, mapLayaAnswer, normalizeLabel, parseColumnTitle, toLayaQuestion,
+} from './columns';
 
 describe('normalizeLabel', () => {
   it('ignores accents, case and surrounding spaces', () => {
@@ -50,5 +52,102 @@ describe('parseColumnTitle', () => {
     expect(parseColumnTitle('N: a, b, c, d, e, f, g, h, i')).toEqual({ ok: false, error: 'No máximo 8 opções' });
     expect(parseColumnTitle('Nicho: saúde, Saude')).toEqual({ ok: false, error: 'Opção repetida: Saude' });
     expect(parseColumnTitle(`Nicho: a, ${'b'.repeat(41)}`)).toEqual({ ok: false, error: 'Cada opção com no máximo 40 caracteres' });
+  });
+});
+
+const baseLead = {
+  name: 'Barbearia Navalha', category: 'Barbearia', rating: 4.8, review_count: 320,
+  website: 'https://navalha.com.br', phone: '5513991234567', is_mobile: true,
+};
+
+describe('buildLeadState', () => {
+  it('writes one fact per line in Portuguese', () => {
+    expect(buildLeadState(baseLead)).toBe([
+      'Nome: Barbearia Navalha', 'Categoria: Barbearia', 'Nota no Google: 4.8 (320 avaliações)',
+      'Tem site', 'Tem celular',
+    ].join('\n'));
+  });
+  it('adds place, extra categories, description and enabled "Sobre" items from raw', () => {
+    const text = buildLeadState({
+      ...baseLead,
+      raw: {
+        categories: ['Barbearia', 'Salão de beleza'],
+        complete_address: { borough: 'Gonzaga', city: 'Santos' },
+        description: 'Cortes clássicos e barba.',
+        about: [
+          { name: 'Serviços', options: [{ name: 'Aceita cartão', enabled: true }, { name: 'Wi-Fi', enabled: false }] },
+          { name: 'Acessibilidade', options: [{ name: 'Entrada acessível', enabled: true }] },
+        ],
+      },
+    });
+    expect(text).toContain('Outras categorias: Salão de beleza');
+    expect(text).toContain('Local: Gonzaga, Santos');
+    expect(text).toContain('Descrição: Cortes clássicos e barba.');
+    expect(text).toContain('Sobre: Aceita cartão, Entrada acessível');
+    expect(text).not.toContain('Wi-Fi');
+  });
+  it('keeps an almost empty lead short and clean', () => {
+    const text = buildLeadState({
+      name: 'Loja X', category: null, rating: null, review_count: null, website: null, phone: null, is_mobile: false, raw: null,
+    });
+    expect(text).toBe('Nome: Loja X\nSem site');
+    expect(text).not.toMatch(/undefined|null/);
+  });
+  it('says "Só telefone fixo" for landlines and caps the text at 1500 characters', () => {
+    expect(buildLeadState({ ...baseLead, is_mobile: false })).toContain('Só telefone fixo');
+    expect(buildLeadState({ ...baseLead, raw: { description: 'x'.repeat(3000) } }).length).toBe(1500);
+  });
+});
+
+describe('toLayaQuestion', () => {
+  it('builds the question each Laya type expects', () => {
+    expect(toLayaQuestion({ kind: 'noul', options: [], instructions: 'Tem site?' }))
+      .toEqual({ type: 'noul', instructions: 'Tem site?' });
+    expect(toLayaQuestion({ kind: 'choice', options: ['saúde', 'beleza'], instructions: 'Nicho' }))
+      .toEqual({ type: 'choice', instructions: 'Nicho', criteria: { saúde: 'saúde', beleza: 'beleza' } });
+    expect(toLayaQuestion({ kind: 'score', options: ['baixo', 'médio', 'alto'], instructions: 'Dinheiro' }))
+      .toEqual({ type: 'score', instructions: 'Dinheiro', criteria: ['baixo', 'médio', 'alto'] });
+  });
+});
+
+describe('mapLayaAnswer', () => {
+  it('noul: sim at 0.5 or more, confidence of the chosen side', () => {
+    expect(mapLayaAnswer('noul', [], { noul: 0.88 })).toEqual({ value: 'sim', confidence: 0.88 });
+    expect(mapLayaAnswer('noul', [], { noul: 0.2 })).toEqual({ value: 'não', confidence: 0.8 });
+    expect(mapLayaAnswer('noul', [], { noul: 0.5 })).toEqual({ value: 'sim', confidence: 0.5 });
+  });
+  it('choice: the chosen option and its probability', () => {
+    expect(mapLayaAnswer('choice', ['saúde', 'beleza'], {
+      choice: 'beleza', probabilities: { saúde: 0.3, beleza: 0.7 }, answer_confidence: 0.7,
+    })).toEqual({ value: 'beleza', confidence: 0.7 });
+  });
+  it('choice: an option outside the list is an error', () => {
+    expect(() => mapLayaAnswer('choice', ['saúde'], { choice: 'esporte' }))
+      .toThrow('Laya respondeu uma opção fora da lista: esporte');
+  });
+  it('score: the most probable level, not the rounded expected index', () => {
+    expect(mapLayaAnswer('score', ['baixo', 'médio', 'alto'], {
+      score: 1.345, probabilities: { 0: 0.1043, 1: 0.4464, 2: 0.4493 },
+    })).toEqual({ value: 'alto', confidence: 0.449 });
+  });
+  it('missing answer or missing fields are errors', () => {
+    expect(() => mapLayaAnswer('noul', [], undefined)).toThrow('Resposta do Laya sem a coluna');
+    expect(() => mapLayaAnswer('noul', [], {})).toThrow('Resposta do Laya sem probabilidade de sim');
+    expect(() => mapLayaAnswer('score', ['baixo'], {})).toThrow('Resposta do Laya sem probabilidades da nota');
+  });
+});
+
+describe('allowedValues / canonicalValue', () => {
+  it('lists valid values per kind', () => {
+    expect(allowedValues('noul', [])).toEqual(['sim', 'não']);
+    expect(allowedValues('score', [])).toEqual(['baixo', 'médio', 'alto']);
+    expect(allowedValues('choice', ['a', 'b'])).toEqual(['a', 'b']);
+  });
+  it('maps any case/accent spelling to the canonical value, or null', () => {
+    expect(canonicalValue('noul', [], 'NAO')).toBe('não');
+    expect(canonicalValue('choice', ['saúde', 'beleza'], ' Beleza ')).toBe('beleza');
+    expect(canonicalValue('score', [], 'medio')).toBe('médio');
+    expect(canonicalValue('choice', ['saúde'], 'esporte')).toBeNull();
+    expect(canonicalValue('noul', [], 42)).toBeNull();
   });
 });
