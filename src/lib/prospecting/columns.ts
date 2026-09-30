@@ -1,4 +1,4 @@
-import type { ColumnKind, Lead } from '@/types';
+import type { ColumnKind, Lead, LeadColumnValue } from '@/types';
 
 export const SCORE_LEVELS = ['baixo', 'médio', 'alto'] as const;
 export const NOUL_VALUES = ['sim', 'não'] as const;
@@ -160,4 +160,28 @@ export function canonicalValue(kind: ColumnKind, options: string[], input: unkno
   if (typeof input !== 'string') return null;
   const key = normalizeLabel(input);
   return allowedValues(kind, options).find((v) => normalizeLabel(v) === key) ?? null;
+}
+
+export const LOW_CONFIDENCE = 0.6;
+
+export type CellLike = Pick<LeadColumnValue, 'value' | 'confidence' | 'corrected_value'>;
+
+export function displayedCell(
+  cell: CellLike | undefined,
+): { value: string; confidence: number; corrected: boolean } | null {
+  if (!cell) return null;
+  if (cell.corrected_value) return { value: cell.corrected_value, confidence: 1, corrected: true };
+  if (cell.value) return { value: cell.value, confidence: Number(cell.confidence ?? 0), corrected: false };
+  return null;
+}
+
+// Bigger = higher in the table. Levels/options dominate, confidence breaks ties.
+export function sortScore(kind: ColumnKind, options: string[], cell: CellLike | undefined): number {
+  const shown = displayedCell(cell);
+  if (!shown) return -1;
+  if (kind === 'noul') return shown.value === 'sim' ? shown.confidence : 1 - shown.confidence;
+  const values = allowedValues(kind, options);
+  const index = values.indexOf(shown.value);
+  const rank = kind === 'score' ? index : values.length - 1 - index;
+  return rank * 2 + shown.confidence;
 }

@@ -8,7 +8,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
 import { hasStalePending } from '@/lib/jobs/stale';
 import { safeHttpUrl } from '@/lib/prospecting/url';
-import type { Lead, LeadSearch, LeadStatus } from '@/types';
+import type { Lead, LeadColumn, LeadColumnValue, LeadSearch, LeadStatus } from '@/types';
+import { displayedCell, sortScore } from '@/lib/prospecting/columns';
+import { AiCell, AiColumnHeader, NewColumnInput, TitleHelp, fetchAllColumnValues } from '@/components/prospecting/ai-columns';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,13 +34,24 @@ export default function ProspeccaoPage() {
   const [text, setText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [columns, setColumns] = useState<LeadColumn[]>([]);
+  const [values, setValues] = useState<LeadColumnValue[]>([]);
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [valueFilter, setValueFilter] = useState<{ columnId: string; value: string } | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [s, l] = await Promise.all([
+    const [s, l, c, v] = await Promise.all([
       supabase.from('lead_searches').select('*').order('created_at', { ascending: false }).limit(20),
       supabase.from('leads').select('*').order('score', { ascending: false }).limit(500),
+      supabase.from('lead_columns').select('*').order('created_at', { ascending: true }),
+      fetchAllColumnValues(supabase),
     ]);
-    return { searches: (s.data ?? []) as LeadSearch[], leads: (l.data ?? []) as Lead[] };
+    return {
+      searches: (s.data ?? []) as LeadSearch[],
+      leads: (l.data ?? []) as Lead[],
+      columns: (c.data ?? []) as LeadColumn[],
+      values: v,
+    };
   }, [supabase]);
 
   const load = useCallback(() => {
@@ -46,6 +59,8 @@ export default function ProspeccaoPage() {
     fetchData().then((d) => {
       setSearches(d.searches);
       setLeads(d.leads);
+      setColumns(d.columns);
+      setValues(d.values);
       setNow(Date.now());
     });
   }, [fetchData, accountId]);
@@ -57,6 +72,8 @@ export default function ProspeccaoPage() {
       if (!active) return;
       setSearches(d.searches);
       setLeads(d.leads);
+      setColumns(d.columns);
+      setValues(d.values);
       setNow(Date.now());
     });
     return () => {
@@ -64,7 +81,8 @@ export default function ProspeccaoPage() {
     };
   }, [fetchData, accountId]);
 
-  const busy = searches.some((s) => s.status === 'pending' || s.status === 'running');
+  const busy = searches.some((s) => s.status === 'pending' || s.status === 'running')
+    || columns.some((c) => c.status === 'pending' || c.status === 'running');
   useEffect(() => {
     if (!busy) return;
     const t = setInterval(load, 5000);
@@ -110,10 +128,73 @@ export default function ProspeccaoPage() {
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, status } : l)));
   }
 
-  const visible = leads.filter((l) =>
-    (statusFilter === 'todos' || l.status === statusFilter) &&
-    (!text || `${l.name} ${l.address ?? ''} ${l.category ?? ''}`.toLowerCase().includes(text.toLowerCase())),
+  async function createColumn(title: string): Promise<boolean> {
+    const res = await fetch('/api/prospecting/columns', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(json.error ?? 'Não foi possível criar a coluna');
+      return false;
+    }
+    toast.success('Coluna na fila. O Laya preenche com o worker e o npm run laya rodando.');
+    load();
+    return true;
+  }
+
+  async function retryColumn(id: string) {
+    const res = await fetch(`/api/prospecting/columns/${id}/retry`, { method: 'POST' });
+    if (!res.ok) return toast.error('Não foi possível tentar de novo');
+    load();
+  }
+
+  async function deleteColumn(column: LeadColumn) {
+    if (!window.confirm(`Excluir a coluna "${column.title}"? As correções dela também somem.`)) return;
+    const res = await fetch(`/api/prospecting/columns/${column.id}`, { method: 'DELETE' });
+    if (!res.ok) return toast.error('Não foi possível excluir a coluna');
+    if (sortBy === column.id) setSortBy(null);
+    if (valueFilter?.columnId === column.id) setValueFilter(null);
+    load();
+  }
+
+  async function correct(column: LeadColumn, lead: Lead, value: string) {
+    const res = await fetch(`/api/prospecting/columns/${column.id}/values/${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return toast.error(json.error ?? 'Não foi possível corrigir');
+    const row = json.value as LeadColumnValue;
+    setValues((prev) => [
+      ...prev.filter((v) => !(v.column_id === row.column_id && v.lead_id === row.lead_id)),
+      row,
+    ]);
+  }
+
+  const cells = useMemo(
+    () => new Map(values.map((v) => [`${v.column_id}:${v.lead_id}`, v])),
+    [values],
   );
+  const cellOf = (columnId: string, leadId: string) => cells.get(`${columnId}:${leadId}`);
+
+  const filtered = leads.filter((l) =>
+    (statusFilter === 'todos' || l.status === statusFilter) &&
+    (!text || `${l.name} ${l.address ?? ''} ${l.category ?? ''}`.toLowerCase().includes(text.toLowerCase())) &&
+    (!valueFilter || displayedCell(cellOf(valueFilter.columnId, l.id))?.value === valueFilter.value),
+  );
+  const sortColumn = columns.find((c) => c.id === sortBy);
+  const visible = sortColumn
+    ? [...filtered].sort((a, b) =>
+        sortScore(sortColumn.kind, sortColumn.options, cellOf(sortColumn.id, b.id))
+        - sortScore(sortColumn.kind, sortColumn.options, cellOf(sortColumn.id, a.id)))
+    : filtered;
+
+  const lastDone = columns
+    .filter((c) => c.status === 'done' && c.finished_at)
+    .sort((a, b) => ((a.finished_at ?? '') < (b.finished_at ?? '') ? 1 : -1))[0];
 
   return (
     <div className="space-y-6 p-6">
@@ -175,6 +256,16 @@ export default function ProspeccaoPage() {
         <span className="text-sm text-muted-foreground">{visible.length} leads</span>
       </div>
 
+      <div className="flex flex-wrap items-start gap-4">
+        <TitleHelp />
+        {lastDone && (
+          <p className="text-sm text-muted-foreground">
+            “{lastDone.title}”: {lastDone.filled_count ?? 0} linhas preenchidas em{' '}
+            {((lastDone.duration_ms ?? 0) / 1000).toFixed(1).replace('.', ',')} s
+          </p>
+        )}
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow>
@@ -183,6 +274,23 @@ export default function ProspeccaoPage() {
             <TableHead>Contato</TableHead>
             <TableHead>Status</TableHead>
             <TableHead />
+            {columns.map((c) => (
+              <TableHead key={c.id} className="align-top">
+                <AiColumnHeader
+                  column={c}
+                  sorted={sortBy === c.id}
+                  filterValue={valueFilter?.columnId === c.id ? valueFilter.value : null}
+                  canEdit={canEdit}
+                  onSort={() => setSortBy((cur) => (cur === c.id ? null : c.id))}
+                  onFilter={(value) => setValueFilter(value ? { columnId: c.id, value } : null)}
+                  onRetry={() => retryColumn(c.id)}
+                  onDelete={() => deleteColumn(c)}
+                />
+              </TableHead>
+            ))}
+            <TableHead className="align-top">
+              <NewColumnInput disabled={!canEdit} onCreate={createColumn} />
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -234,6 +342,17 @@ export default function ProspeccaoPage() {
                   <UserPlus className="mr-1 h-4 w-4" /> {l.contact_id ? 'Contato' : 'Promover'}
                 </Button>
               </TableCell>
+              {columns.map((c) => (
+                <TableCell key={c.id}>
+                  <AiCell
+                    column={c}
+                    cell={cellOf(c.id, l.id)}
+                    disabled={!canEdit}
+                    onCorrect={(value) => correct(c, l, value)}
+                  />
+                </TableCell>
+              ))}
+              <TableCell />
             </TableRow>
           ))}
         </TableBody>

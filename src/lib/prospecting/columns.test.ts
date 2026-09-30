@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allowedValues, buildLeadState, canonicalValue, mapLayaAnswer, normalizeLabel, parseColumnTitle, toLayaQuestion,
+  allowedValues, buildLeadState, canonicalValue, displayedCell, mapLayaAnswer, normalizeLabel, parseColumnTitle, sortScore, toLayaQuestion,
 } from './columns';
 
 describe('normalizeLabel', () => {
@@ -149,5 +149,36 @@ describe('allowedValues / canonicalValue', () => {
     expect(canonicalValue('score', [], 'medio')).toBe('médio');
     expect(canonicalValue('choice', ['saúde'], 'esporte')).toBeNull();
     expect(canonicalValue('noul', [], 42)).toBeNull();
+  });
+});
+
+describe('displayedCell', () => {
+  it('prefers the correction, shown as 100%', () => {
+    expect(displayedCell({ value: 'sim', confidence: 0.7, corrected_value: 'não' }))
+      .toEqual({ value: 'não', confidence: 1, corrected: true });
+  });
+  it('shows the model value with its confidence, or null when empty', () => {
+    expect(displayedCell({ value: 'sim', confidence: 0.7, corrected_value: null }))
+      .toEqual({ value: 'sim', confidence: 0.7, corrected: false });
+    expect(displayedCell({ value: null, confidence: null, corrected_value: null })).toBeNull();
+    expect(displayedCell(undefined)).toBeNull();
+  });
+});
+
+describe('sortScore', () => {
+  const cell = (value: string, confidence: number) => ({ value, confidence, corrected_value: null });
+  it('yes/no: most likely "sim" first', () => {
+    const scores = [cell('sim', 0.9), cell('não', 0.9), cell('sim', 0.6)].map((c) => sortScore('noul', [], c));
+    expect(scores[0]).toBeGreaterThan(scores[2]);
+    expect(scores[2]).toBeGreaterThan(scores[1]);
+  });
+  it('score: higher level first, then confidence', () => {
+    const opts = ['baixo', 'médio', 'alto'];
+    expect(sortScore('score', opts, cell('alto', 0.4))).toBeGreaterThan(sortScore('score', opts, cell('médio', 0.99)));
+  });
+  it('choice: list order first; empty cells last', () => {
+    const opts = ['saúde', 'beleza'];
+    expect(sortScore('choice', opts, cell('saúde', 0.3))).toBeGreaterThan(sortScore('choice', opts, cell('beleza', 0.99)));
+    expect(sortScore('choice', opts, undefined)).toBe(-1);
   });
 });
