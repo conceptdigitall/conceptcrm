@@ -795,7 +795,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `requeueColumnsForAccount(db: SupabaseClient, accountId: string): Promise<void>`
   - `JobTable` passa a incluir `'lead_columns'`.
 
-- [ ] **Step 1: Estender o tipo da fila**
+- [x] **Step 1: Estender o tipo da fila**
 
 Em `worker/queue.ts`, troque a linha 3 por:
 
@@ -803,7 +803,7 @@ Em `worker/queue.ts`, troque a linha 3 por:
 export type JobTable = 'lead_searches' | 'marketing_videos' | 'lead_columns';
 ```
 
-- [ ] **Step 2: Escrever os testes**
+- [x] **Step 2: Escrever os testes**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -946,12 +946,12 @@ describe('requeueColumnsForAccount', () => {
 });
 ```
 
-- [ ] **Step 3: Rodar e ver falhar**
+- [x] **Step 3: Rodar e ver falhar**
 
 Run: `npx vitest run worker/columns.test.ts`
 Expected: FAIL com "Cannot find module './columns'".
 
-- [ ] **Step 4: Implementar**
+- [x] **Step 4: Implementar**
 
 ```ts
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -1041,12 +1041,12 @@ export async function requeueColumnsForAccount(db: SupabaseClient, accountId: st
 }
 ```
 
-- [ ] **Step 5: Rodar e ver passar**
+- [x] **Step 5: Rodar e ver passar**
 
 Run: `npx vitest run worker && npx tsc --noEmit`
 Expected: PASS em todos os testes de `worker/`; sem erros de tipo.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add worker/columns.ts worker/columns.test.ts worker/queue.ts
