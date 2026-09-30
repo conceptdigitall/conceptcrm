@@ -1067,7 +1067,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `runColumnJob`, `requeueColumnsForAccount` (Task 5); `layaBatch` (Task 4); `claimNext`, `requeueOrphaned` de `worker/queue.ts`.
 - Produces: comando `npm run laya`; worker que processa `lead_columns` entre buscas e vídeos quando `LAYA_URL` existe.
 
-- [x] **Step 1: Ambiente Python do Laya**
+- [ ] **Step 1: Ambiente Python do Laya**
 
 `worker/laya/requirements.txt`:
 
@@ -1092,7 +1092,7 @@ worker/laya/.venv/bin/python -c "import laya; print(laya.__version__)"
 
 Expected: `0.3.22`.
 
-- [x] **Step 2: Script `npm run laya`**
+- [ ] **Step 2: Script `npm run laya`**
 
 Em `package.json`, dentro de `"scripts"`, logo depois da linha do `"worker"`:
 
@@ -1111,7 +1111,7 @@ curl -s -X POST http://127.0.0.1:8765/v1/systemone/batch -H 'Content-Type: appli
 
 Expected: `/health` responde JSON; o batch devolve `{"results":[{"answers":{"col":{"type":"noul","noul":...}}}], ...}`. Confirme que `curl http://<IP da rede do Mac>:8765/health` **não** responde (servidor preso em 127.0.0.1).
 
-- [x] **Step 3: Ligar as colunas no worker**
+- [ ] **Step 3: Ligar as colunas no worker**
 
 Substitua `worker/index.ts` inteiro por:
 
@@ -1196,7 +1196,7 @@ async function main() {
 void main();
 ```
 
-- [x] **Step 4: Variável e documentação**
+- [ ] **Step 4: Variável e documentação**
 
 Acrescente ao `.env.local.example`:
 
@@ -1235,7 +1235,7 @@ em "Tentar de novo". Quando uma busca nova termina, as colunas prontas voltam pa
 só os leads novos são preenchidos. Correções feitas à mão nunca são sobrescritas.
 ```
 
-- [x] **Step 5: Verificar o worker de ponta a ponta com o Supabase real**
+- [ ] **Step 5: Verificar o worker de ponta a ponta com o Supabase real**
 
 Com `npm run laya` rodando e sem nenhum lead ainda, rode `npm run worker` por ~15 s e pare com Ctrl+C.
 Expected: "Worker rodando. Ctrl+C para parar." sem o aviso de `LAYA_URL` e sem erros.
@@ -1243,7 +1243,7 @@ Expected: "Worker rodando. Ctrl+C para parar." sem o aviso de `LAYA_URL` e sem e
 Rode `npx tsc --noEmit` e `npm run lint`.
 Expected: 0 erros (os avisos antigos continuam).
 
-- [x] **Step 6: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add worker/laya/requirements.txt worker/index.ts package.json .gitignore .env.local.example docs/worker.md
@@ -1271,7 +1271,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `DELETE /api/prospecting/columns/:id` → 200 `{ ok: true }` | 404
   - `PATCH /api/prospecting/columns/:id/values/:leadId` `{ value: string | null }` → 200 `{ value: LeadColumnValue }` | 400 | 404
 
-- [x] **Step 1: Testes de criar**
+- [ ] **Step 1: Testes de criar**
 
 `src/app/api/prospecting/columns/route.test.ts`:
 
@@ -1347,7 +1347,7 @@ describe('POST /api/prospecting/columns', () => {
 
 Run: `npx vitest run src/app/api/prospecting/columns/route.test.ts` → FAIL ("Cannot find module './route'").
 
-- [x] **Step 2: Implementar criar**
+- [ ] **Step 2: Implementar criar**
 
 `src/app/api/prospecting/columns/route.ts`:
 
@@ -1400,7 +1400,7 @@ export async function POST(request: Request) {
 
 Run: `npx vitest run src/app/api/prospecting/columns/route.test.ts` → PASS (4).
 
-- [x] **Step 3: Testes de tentar de novo e excluir**
+- [ ] **Step 3: Testes de tentar de novo e excluir**
 
 `src/app/api/prospecting/columns/[id]/route.test.ts`:
 
@@ -1482,7 +1482,7 @@ describe('DELETE /api/prospecting/columns/:id', () => {
 
 Run: `npx vitest run "src/app/api/prospecting/columns/[id]/route.test.ts"` → FAIL.
 
-- [x] **Step 4: Implementar tentar de novo e excluir**
+- [ ] **Step 4: Implementar tentar de novo e excluir**
 
 `src/app/api/prospecting/columns/[id]/retry/route.ts`:
 
@@ -1552,7 +1552,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
 Run: `npx vitest run "src/app/api/prospecting/columns/[id]/route.test.ts"` → PASS (6).
 
-- [x] **Step 5: Testes de correção**
+- [ ] **Step 5: Testes de correção**
 
 `src/app/api/prospecting/columns/[id]/values/[leadId]/route.test.ts`:
 
@@ -1634,7 +1634,7 @@ describe('PATCH /api/prospecting/columns/:id/values/:leadId', () => {
 
 Run: `npx vitest run "src/app/api/prospecting/columns/[id]/values"` → FAIL.
 
-- [x] **Step 6: Implementar correção**
+- [ ] **Step 6: Implementar correção**
 
 `src/app/api/prospecting/columns/[id]/values/[leadId]/route.ts`:
 
@@ -1698,7 +1698,7 @@ export async function PATCH(
 
 Run: `npx vitest run src/app/api/prospecting/columns` → PASS (15).
 
-- [x] **Step 7: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/app/api/prospecting/columns
@@ -1725,7 +1725,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
   - `sortScore(kind: ColumnKind, options: string[], cell: CellLike | undefined): number` (maior = mais para cima; célula vazia = -1)
   - Componentes `AiColumnHeader`, `AiCell`, `NewColumnInput`, `TitleHelp`, função `fetchAllColumnValues(supabase)`
 
-- [x] **Step 1: Testes de exibição e ordenação (acrescentar a `columns.test.ts`)**
+- [ ] **Step 1: Testes de exibição e ordenação (acrescentar a `columns.test.ts`)**
 
 Acrescente `displayedCell, sortScore` ao import e:
 
@@ -1764,7 +1764,7 @@ describe('sortScore', () => {
 
 Run: `npx vitest run src/lib/prospecting/columns.test.ts` → FAIL ("displayedCell is not a function").
 
-- [x] **Step 2: Implementar (acrescentar a `columns.ts`)**
+- [ ] **Step 2: Implementar (acrescentar a `columns.ts`)**
 
 Troque o import do topo por `import type { ColumnKind, Lead, LeadColumnValue } from '@/types';` e acrescente:
 
@@ -1796,7 +1796,7 @@ export function sortScore(kind: ColumnKind, options: string[], cell: CellLike | 
 
 Run: `npx vitest run src/lib/prospecting/columns.test.ts` → PASS.
 
-- [x] **Step 3: Componentes**
+- [ ] **Step 3: Componentes**
 
 `src/components/prospecting/ai-columns.tsx`:
 
@@ -1949,7 +1949,7 @@ export function AiCell({ column, cell, disabled, onCorrect }: {
 }
 ```
 
-- [x] **Step 4: Integrar na página**
+- [ ] **Step 4: Integrar na página**
 
 Em `src/app/(dashboard)/prospeccao/page.tsx`:
 
@@ -2130,16 +2130,16 @@ import { AiCell, AiColumnHeader, NewColumnInput, TitleHelp, fetchAllColumnValues
               <TableCell />
 ```
 
-- [x] **Step 5: Tipos, lint e testes**
+- [ ] **Step 5: Tipos, lint e testes**
 
 Run: `npx tsc --noEmit && npx eslint "src/app/(dashboard)/prospeccao" src/components/prospecting src/lib/prospecting && npx vitest run src/lib/prospecting`
 Expected: sem erros; testes PASS.
 
-- [x] **Step 6: Ver no navegador**
+- [ ] **Step 6: Ver no navegador**
 
 Suba o app (preview do projeto ou `npm run dev`), faça login com a conta da Concept e abra `/prospeccao`. Confira: quadro "Como escrever o título"; campo "Nova coluna IA…" como último cabeçalho; criar `Tem site?` mostra "processando…". Sem leads ainda, a tabela fica vazia; o preenchimento real é na Task 9. Leia o console do navegador: sem erros.
 
-- [x] **Step 7: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/lib/prospecting/columns.ts src/lib/prospecting/columns.test.ts src/components/prospecting/ai-columns.tsx "src/app/(dashboard)/prospeccao/page.tsx"
@@ -2160,15 +2160,15 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: tudo acima; `buildLeadState`, `canonicalValue`, `allowedValues`, `displayedCell`, `parseColumnTitle` (Tasks 2, 3, 8).
 - Produces: números de tempo e concordância Laya × Claude, que a parte B precisa superar.
 
-- [ ] **Step 1: Leads reais**
+- [x] **Step 1: Leads reais**
 
 Pré-requisitos: Docker aberto, ≥ 5 GB livres. Com `npm run worker` rodando, crie na aba Prospecção uma busca real (ex.: `barbearia` em `Santos, SP`, 100 resultados) e espere ficar "Concluída". Confira no Supabase: `select count(*) from leads;` > 0. Confira também que `raw` tem `web_site`, `description` ou `about` em pelo menos alguns leads.
 
-- [ ] **Step 2: Três colunas reais e o tempo**
+- [x] **Step 2: Três colunas reais e o tempo**
 
 Com `npm run laya` e `npm run worker` rodando, crie: `Tem site?`, `Nicho: beleza, saúde, alimentação, serviços, outros` e `Parece ter dinheiro`. Anote o `duration_ms` e o `filled_count` de cada uma (`select title, filled_count, duration_ms from lead_columns;`) e o tempo total entre criar e ver "pronta" na tela. Critério: menos de 30 s para até 500 leads. Corrija 2 células à mão e confirme que, depois de "Tentar de novo"/nova busca, elas continuam corrigidas.
 
-- [ ] **Step 3: Script de comparação**
+- [x] **Step 3: Script de comparação**
 
 `worker/scripts/compare-column.ts`:
 
@@ -2234,16 +2234,16 @@ main().catch((err) => {
 });
 ```
 
-- [ ] **Step 4: Medir as três colunas**
+- [x] **Step 4: Medir as três colunas**
 
 Para cada coluna do Step 2: `node --env-file=.env.local --import tsx worker/scripts/compare-column.ts <id> 50`.
 Custo: ~150 chamadas curtas à Claude (centavos).
 
-- [ ] **Step 5: Registrar**
+- [x] **Step 5: Registrar**
 
 `docs/planilha-preditiva/medicao-inicial.md` com: data, número de leads, para cada coluna o título, `filled_count`, `duration_ms`, tempo até "pronta" na tela e a concordância Laya × Claude (`x/50`, `%`), mais 2–3 exemplos de erro do Laya copiados da saída. Esse é o ponto de partida da parte B.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add worker/scripts/compare-column.ts docs/planilha-preditiva/medicao-inicial.md
