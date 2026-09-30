@@ -42,3 +42,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Laya (Planilha Preditiva) — ambiente Python local
+worker/laya/.venv/

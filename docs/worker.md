@@ -30,3 +30,24 @@ Rode só um worker por vez.
 
 ## Mover para um servidor
 Rodar o mesmo `npm run worker` num VPS com Docker, Node 22+ e FFmpeg, com as mesmas variáveis.
+
+## Planilha Preditiva (Laya)
+
+As colunas de IA da aba Prospecção são preenchidas pelo Laya, um modelo que roda no Mac.
+
+Uma vez só:
+
+    brew install uv
+    uv venv --python 3.12 worker/laya/.venv
+    uv pip install --python worker/laya/.venv/bin/python -r worker/laya/requirements.txt
+
+No `.env.local`: `LAYA_URL=http://127.0.0.1:8765`.
+
+Para usar, dois terminais na pasta do CRM:
+
+    npm run laya     # carrega o modelo (~1–2 GB de memória) e fica ouvindo só no próprio Mac
+    npm run worker
+
+Sem o `npm run laya`, a coluna falha com "Laya desligado: rode npm run laya"; ligue e clique
+em "Tentar de novo". Quando uma busca nova termina, as colunas prontas voltam para a fila e
+só os leads novos são preenchidos. Correções feitas à mão nunca são sobrescritas.
