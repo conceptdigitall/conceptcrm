@@ -753,6 +753,8 @@ export interface Lead {
   rating: number | null;
   review_count: number | null;
   maps_url: string | null;
+  /** Full Google Maps entry from the scraper (description, about, complete_address…). */
+  raw?: Record<string, unknown> | null;
   score: number;
   score_reasons: string[];
   status: LeadStatus;
@@ -776,4 +778,36 @@ export interface MarketingVideo {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+}
+
+export type ColumnKind = 'noul' | 'choice' | 'score';
+
+export interface LeadColumn {
+  id: string;
+  account_id: string;
+  created_by: string | null;
+  title: string;
+  kind: ColumnKind;
+  options: string[];
+  instructions: string;
+  status: JobStatus;
+  error: string | null;
+  model: string | null;
+  filled_count: number | null;
+  duration_ms: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export interface LeadColumnValue {
+  column_id: string;
+  lead_id: string;
+  account_id: string;
+  value: string | null;
+  confidence: number | null;
+  corrected_value: string | null;
+  corrected_by: string | null;
+  corrected_at: string | null;
+  updated_at: string;
 }
