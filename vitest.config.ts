@@ -15,6 +15,8 @@ export default defineConfig({
       ENCRYPTION_KEY:
         "0000000000000000000000000000000000000000000000000000000000000000",
       META_APP_SECRET: "test-meta-app-secret",
+      NEXT_PUBLIC_SUPABASE_URL: "https://test.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "test-service-role-key",
       // Test accounts allowed into Prospecção/Marketing routes.
       NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS: "acc-1",
     },

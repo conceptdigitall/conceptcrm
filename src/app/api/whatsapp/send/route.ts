@@ -3,19 +3,23 @@ import { createClient } from '@supabase/supabase-js';
 
 export const maxDuration = 60;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) {
+    throw new Error('Supabase URL ou Service Role Key não configurada');
+  }
+  return createClient(url, key);
+}
 
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
-const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY || 'concept_master_evolution_2026';
+const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
 
 /**
  * Resolve o account_id e user_id ativos no CRM
  */
-async function getAccountAndUser(): Promise<{ accountId: string; userId: string }> {
+async function getAccountAndUser(supabase: ReturnType<typeof getAdminClient>): Promise<{ accountId: string; userId: string }> {
   const { data: config } = await supabase
     .from('whatsapp_config')
     .select('account_id, user_id')
@@ -50,7 +54,8 @@ export async function POST(req: Request) {
     const messageType = body.message_type || body.messageType || 'text';
     const mediaUrl = body.media_url || body.mediaUrl || '';
 
-    const { accountId, userId } = await getAccountAndUser();
+    const supabase = getAdminClient();
+    const { accountId, userId } = await getAccountAndUser(supabase);
 
     let resolvedPhone = phoneInput;
     let conversationId: string | null = conversationIdInput || null;
@@ -170,6 +175,13 @@ export async function POST(req: Request) {
     const cleanNumber = resolvedPhone.replace(/\D/g, '');
 
     // 5. Dispara a mensagem via Evolution API (WhatsApp conectado)
+    if (!EVOLUTION_URL || !EVOLUTION_KEY || !INSTANCE) {
+      return NextResponse.json(
+        { error: 'Evolution API não configurada (EVOLUTION_API_KEY ausente)' },
+        { status: 500 }
+      );
+    }
+
     const evoRes = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
       method: 'POST',
       headers: {
