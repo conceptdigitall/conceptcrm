@@ -1067,7 +1067,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `runColumnJob`, `requeueColumnsForAccount` (Task 5); `layaBatch` (Task 4); `claimNext`, `requeueOrphaned` de `worker/queue.ts`.
 - Produces: comando `npm run laya`; worker que processa `lead_columns` entre buscas e vídeos quando `LAYA_URL` existe.
 
-- [ ] **Step 1: Ambiente Python do Laya**
+- [x] **Step 1: Ambiente Python do Laya**
 
 `worker/laya/requirements.txt`:
 
@@ -1092,7 +1092,7 @@ worker/laya/.venv/bin/python -c "import laya; print(laya.__version__)"
 
 Expected: `0.3.22`.
 
-- [ ] **Step 2: Script `npm run laya`**
+- [x] **Step 2: Script `npm run laya`**
 
 Em `package.json`, dentro de `"scripts"`, logo depois da linha do `"worker"`:
 
@@ -1111,7 +1111,7 @@ curl -s -X POST http://127.0.0.1:8765/v1/systemone/batch -H 'Content-Type: appli
 
 Expected: `/health` responde JSON; o batch devolve `{"results":[{"answers":{"col":{"type":"noul","noul":...}}}], ...}`. Confirme que `curl http://<IP da rede do Mac>:8765/health` **não** responde (servidor preso em 127.0.0.1).
 
-- [ ] **Step 3: Ligar as colunas no worker**
+- [x] **Step 3: Ligar as colunas no worker**
 
 Substitua `worker/index.ts` inteiro por:
 
@@ -1196,7 +1196,7 @@ async function main() {
 void main();
 ```
 
-- [ ] **Step 4: Variável e documentação**
+- [x] **Step 4: Variável e documentação**
 
 Acrescente ao `.env.local.example`:
 
@@ -1235,7 +1235,7 @@ em "Tentar de novo". Quando uma busca nova termina, as colunas prontas voltam pa
 só os leads novos são preenchidos. Correções feitas à mão nunca são sobrescritas.
 ```
 
-- [ ] **Step 5: Verificar o worker de ponta a ponta com o Supabase real**
+- [x] **Step 5: Verificar o worker de ponta a ponta com o Supabase real**
 
 Com `npm run laya` rodando e sem nenhum lead ainda, rode `npm run worker` por ~15 s e pare com Ctrl+C.
 Expected: "Worker rodando. Ctrl+C para parar." sem o aviso de `LAYA_URL` e sem erros.
@@ -1243,7 +1243,7 @@ Expected: "Worker rodando. Ctrl+C para parar." sem o aviso de `LAYA_URL` e sem e
 Rode `npx tsc --noEmit` e `npm run lint`.
 Expected: 0 erros (os avisos antigos continuam).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add worker/laya/requirements.txt worker/index.ts package.json .gitignore .env.local.example docs/worker.md
