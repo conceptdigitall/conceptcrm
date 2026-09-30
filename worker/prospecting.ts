@@ -22,7 +22,7 @@ export async function scrapeWithDocker(queryLine: string, depth: number): Promis
     await writeFile(join(dir, 'queries.txt'), `${queryLine}\n`);
     const { code, stderr } = await runCommand('docker', [
       'run', '--rm',
-      '-v', 'gmaps-playwright-cache:/opt',
+      '--platform', 'linux/amd64',
       '-v', `${dir}:/work`,
       SCRAPER_IMAGE,
       '-input', '/work/queries.txt',
