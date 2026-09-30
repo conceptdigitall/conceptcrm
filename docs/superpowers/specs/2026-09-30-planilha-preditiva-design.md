@@ -126,6 +126,21 @@ colunas `done` da conta; o passo 2 faz com que só os leads novos sejam preenchi
 
 Ordem na fila: buscas, depois colunas, depois vídeos (colunas são rápidas e interativas).
 
+## Contrato do Laya (confirmado no código do `laya` 0.3.22)
+
+- `POST /v1/systemone/batch` com `{ states: string[], questions, model }` → `{ results: [...], total_usage }`,
+  um resultado por estado, na mesma ordem. Cada resultado traz `answers[col]`.
+- Limites do servidor: até 64 estados por lote (usamos 32), 50.000 caracteres por estado,
+  corpo até 2 MB. Acima disso: 413. Ocupado: 503 com `Retry-After: 1`.
+- Formato de cada tipo:
+  - `noul`: sem `criteria`; resposta `{ noul: p(sim), confidence }`.
+  - `choice`: `criteria` é um objeto `{ opção: descrição }` (mandamos `{ opção: opção }`);
+    resposta `{ choice, probabilities, confidence }`.
+  - `score`: `criteria` é a lista de níveis; resposta `{ score, probabilities, confidence }`,
+    onde `score` é o **índice esperado** (float, ex.: 1,37). `mapLayaAnswer` usa o nível de
+    maior probabilidade, não o arredondamento de `score`.
+- Sem `LAYA_API_KEY` não há autenticação; por isso o servidor fica preso em `127.0.0.1`.
+
 ## Laya no Mac
 
 - `npm run laya`: sobe `laya-serve` do ambiente Python do projeto com
