@@ -13,10 +13,17 @@ export function buildUserPrompt(input: {
   const images = input.imageFiles.length
     ? input.imageFiles.map((f) => `- ${f}`).join('\n')
     : 'Nenhuma foto enviada: use tipografia, formas e cor.';
+  const brief = input.prompt
+    ? `Briefing do cliente: ${input.prompt}`
+    : [
+        'Sem briefing em texto: o vídeo é montado só com as fotos.',
+        'Mostre as fotos como protagonistas, com textos curtos e genéricos (ex.: "Venha conhecer").',
+        'Não invente preços, nomes, endereços ou promoções que não aparecem nas fotos.',
+      ].join('\n');
   return [
     'Crie um vídeo promocional curto para um negócio local brasileiro.',
     '',
-    `Briefing do cliente: ${input.prompt}`,
+    brief,
     `Tela: ${width}x${height}. Duração total: entre 15 e 25 segundos.`,
     `Tom: ${input.tone} (veja as definições de tom).`,
     'Fotos disponíveis (caminhos relativos ao projeto; use todas pelo menos uma vez):',

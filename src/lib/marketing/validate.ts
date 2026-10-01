@@ -12,10 +12,13 @@ export function validateVideoInput(body: unknown, accountId: string): Result {
   const b = body as Record<string, unknown>;
 
   const prompt = typeof b.prompt === 'string' ? b.prompt.trim() : '';
-  if (!prompt) return { ok: false, error: 'Descreva o vídeo' };
   if (prompt.length > 1000) return { ok: false, error: 'Descrição muito longa (máx. 1000)' };
 
   const imagePaths = Array.isArray(b.imagePaths) ? b.imagePaths : [];
+  // The owner may just upload photos; the description becomes optional then.
+  if (!prompt && imagePaths.length === 0) {
+    return { ok: false, error: 'Escreva uma descrição ou envie pelo menos 1 foto' };
+  }
   if (imagePaths.length > 4) return { ok: false, error: 'No máximo 4 fotos' };
   const prefix = `account-${accountId}/uploads/`;
   for (const p of imagePaths) {

@@ -17,6 +17,12 @@ describe('buildUserPrompt', () => {
     expect(buildUserPrompt({ prompt: 'a', format: 'square', tone: 'default', imageFiles: [] }))
       .toContain('Nenhuma foto');
   });
+  it('without a description, builds the video from the photos and forbids invented facts', () => {
+    const p = buildUserPrompt({ prompt: '', format: 'vertical', tone: 'default', imageFiles: ['assets/img-1.jpg'] });
+    expect(p).toContain('Sem briefing em texto: o vídeo é montado só com as fotos.');
+    expect(p).toContain('Não invente preços, nomes, endereços ou promoções');
+    expect(p).not.toContain('Briefing do cliente:');
+  });
 });
 
 describe('FORMAT_SIZE', () => {

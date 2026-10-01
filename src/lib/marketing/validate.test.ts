@@ -14,8 +14,18 @@ describe('validateVideoInput', () => {
   it('accepts no images', () => {
     expect(validateVideoInput({ prompt: 'Abertura', imagePaths: [] }, acc).ok).toBe(true);
   });
-  it('rejects empty or too long prompts', () => {
-    expect(validateVideoInput({ prompt: '  ' }, acc).ok).toBe(false);
+  it('rejects an empty prompt when there are no photos', () => {
+    expect(validateVideoInput({ prompt: '  ' }, acc)).toEqual({
+      ok: false, error: 'Escreva uma descrição ou envie pelo menos 1 foto',
+    });
+  });
+  it('accepts photos without a description (video made only from the photos)', () => {
+    expect(validateVideoInput({ imagePaths: [img(1), img(2)] }, acc)).toEqual({
+      ok: true,
+      value: { prompt: '', imagePaths: [img(1), img(2)], format: 'vertical', tone: 'default' },
+    });
+  });
+  it('rejects too long prompts', () => {
     expect(validateVideoInput({ prompt: 'x'.repeat(1001) }, acc).ok).toBe(false);
   });
   it('rejects more than 4 images', () => {
