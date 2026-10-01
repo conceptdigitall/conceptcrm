@@ -54,6 +54,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
+import { GoogleCalendarStatusCard } from '@/components/appointments/google-calendar-status-card';
 
 type ViewMode = 'table' | 'cards';
 type TimeFilter = 'all' | 'this_week' | 'upcoming' | 'past';
@@ -108,6 +109,9 @@ export default function AppointmentsPage() {
           status,
           meeting_url,
           notes,
+          google_event_id,
+          google_calendar_id,
+          synced_at,
           created_at,
           updated_at,
           contact:contacts(id, name, phone, email, avatar_url)
@@ -206,29 +210,43 @@ export default function AppointmentsPage() {
     setSaving(true);
     try {
       const scheduledIso = new Date(formScheduledAt).toISOString();
-      const payload: Record<string, unknown> = {
-        contact_id: formContactId,
-        title: formTitle.trim() || 'Sessão de Diagnóstico & Demonstração',
-        scheduled_at: scheduledIso,
-        duration_minutes: parseInt(formDuration, 10) || 30,
-        status: formStatus,
-        meeting_url: formMeetingUrl.trim() || 'https://meet.google.com/new',
-        notes: formNotes.trim() || null,
-      };
+      const res = await fetch('/api/calendar/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: formContactId,
+          account_id: account?.id,
+          title: formTitle.trim() || 'Sessão de Diagnóstico & Demonstração',
+          scheduled_at: scheduledIso,
+          duration_minutes: parseInt(formDuration, 10) || 30,
+          notes: formNotes.trim() || null,
+        }),
+      });
 
-      if (account?.id) {
-        payload.account_id = account.id;
-      }
-
-      const { error } = await supabase.from('appointments').insert(payload);
-
-      if (error) {
-        console.error('[insert appointment error]:', error);
-        toast.error(`Erro ao criar agendamento: ${error.message}`);
-      } else {
-        toast.success('Agendamento criado com sucesso!');
+      if (res.ok) {
+        toast.success('Agendamento criado e sincronizado com Google Calendar!');
         setCreateOpen(false);
         fetchAppointments();
+      } else {
+        // Fallback direto no Supabase caso a API encontre restrição
+        const payload: Record<string, unknown> = {
+          contact_id: formContactId,
+          title: formTitle.trim() || 'Sessão de Diagnóstico & Demonstração',
+          scheduled_at: scheduledIso,
+          duration_minutes: parseInt(formDuration, 10) || 30,
+          status: formStatus,
+          meeting_url: formMeetingUrl.trim() || 'https://meet.google.com/new',
+          notes: formNotes.trim() || null,
+        };
+        if (account?.id) payload.account_id = account.id;
+        const { error } = await supabase.from('appointments').insert(payload);
+        if (error) {
+          toast.error(`Erro ao criar agendamento: ${error.message}`);
+        } else {
+          toast.success('Agendamento salvo com sucesso!');
+          setCreateOpen(false);
+          fetchAppointments();
+        }
       }
     } catch (err) {
       console.error('[save appointment catch]:', err);
@@ -482,6 +500,9 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
         </div>
       </div>
 
+      {/* Google Calendar & AI Integration Hub */}
+      <GoogleCalendarStatusCard onRefresh={fetchAppointments} />
+
       {/* Filter and search toolbar */}
       <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
@@ -669,7 +690,15 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                     {/* Title & Notes cell */}
                     <TableCell>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">{appt.title}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-foreground">{appt.title}</p>
+                          {appt.google_event_id && (
+                            <span className="inline-flex items-center gap-1 rounded bg-[#0624C7]/10 text-[#0624C7] dark:text-blue-400 px-1.5 py-0.5 text-[10px] font-medium border border-[#0624C7]/20" title="Sincronizado com Google Calendar">
+                              <CalendarCheck className="size-2.5" />
+                              Google Agenda
+                            </span>
+                          )}
+                        </div>
                         {appt.notes ? (
                           <p className="mt-0.5 truncate text-xs text-muted-foreground" title={appt.notes}>
                             {appt.notes}
@@ -852,7 +881,15 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                   </div>
 
                   <div className="mt-4 border-t border-border pt-3">
-                    <h4 className="text-sm font-medium text-foreground">{appt.title}</h4>
+                    <div className="flex items-center justify-between gap-2">
+                      <h4 className="text-sm font-medium text-foreground">{appt.title}</h4>
+                      {appt.google_event_id && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded bg-[#0624C7]/10 text-[#0624C7] dark:text-blue-400 px-1.5 py-0.5 text-[10px] font-medium border border-[#0624C7]/20" title="Sincronizado com Google Calendar">
+                          <CalendarCheck className="size-2.5" />
+                          Google Agenda
+                        </span>
+                      )}
+                    </div>
                     {appt.notes ? (
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{appt.notes}</p>
                     ) : null}
