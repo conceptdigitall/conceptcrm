@@ -223,6 +223,10 @@ export function DealForm({
       toast.error(t("toastFailedStatus"));
       return;
     }
+    if (status !== "open") {
+      // Fire-and-forget: a webhook failure must never block closing a deal.
+      void fetch(`/api/deals/${deal.id}/outcome`, { method: "POST" }).catch(() => {});
+    }
     toast.success(
       status === "won" ? t("toastMarkedWon") : status === "lost" ? t("toastMarkedLost") : t("toastReopened"),
     );
