@@ -34,6 +34,9 @@ import { ConversationsChart } from '@/components/dashboard/conversations-chart'
 import { PipelineDonut } from '@/components/dashboard/pipeline-donut'
 import { ResponseTimeChart } from '@/components/dashboard/response-time-chart'
 import { ActivityFeed } from '@/components/dashboard/activity-feed'
+import { PortfolioAnalytics } from '@/components/dashboard/portfolio-analytics'
+import { loadPortfolioMetrics } from '@/lib/dashboard/portfolio-queries'
+import type { PortfolioMetricsBundle } from '@/lib/dashboard/portfolio-queries'
 
 import { useTranslations } from 'next-intl'
 
@@ -64,6 +67,9 @@ export default function DashboardPage() {
 
   const [activity, setActivity] = useState<ActivityItem[] | null>(null)
   const [activityLoading, setActivityLoading] = useState(true)
+
+  const [portfolioMetrics, setPortfolioMetrics] = useState<PortfolioMetricsBundle | null>(null)
+  const [portfolioMetricsLoading, setPortfolioMetricsLoading] = useState(true)
 
   const loadAll = useCallback(() => {
     const db = createClient()
@@ -98,6 +104,11 @@ export default function DashboardPage() {
       .then((a) => setActivity(a))
       .catch((err) => console.error('[dashboard] activity failed:', err))
       .finally(() => setActivityLoading(false))
+
+    void loadPortfolioMetrics(db)
+      .then((pm) => setPortfolioMetrics(pm))
+      .catch((err) => console.error('[dashboard] portfolio metrics failed:', err))
+      .finally(() => setPortfolioMetricsLoading(false))
   }, [])
 
   useEffect(() => {
@@ -197,6 +208,9 @@ export default function DashboardPage() {
 
       {/* Quick actions */}
       <QuickActions />
+
+      {/* Portfolio & Models Analytics */}
+      <PortfolioAnalytics data={portfolioMetrics} loading={portfolioMetricsLoading} />
 
       {/* Charts row */}
       {/* items-stretch (the grid default) stretches the two columns to
