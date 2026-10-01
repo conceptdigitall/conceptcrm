@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, ChevronDown, ExternalLink, LayoutGrid, MessageCircle, Plus, RotateCcw, Sheet, Star, UserPlus, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
@@ -13,18 +13,22 @@ import { displayedCell, sortScore } from '@/lib/prospecting/columns';
 import { AiCell, AiColumnHeader, NewColumnInput, TitleHelp, fetchAllColumnValues } from '@/components/prospecting/ai-columns';
 import { SATISFACTION_LABEL, buildOutreachMessage, satisfactionLevel, whatsappUrl, type SatisfactionLevel } from '@/lib/prospecting/outreach';
 import { SearchForm, type SearchInput } from '@/components/prospecting/search-form';
-import { NaturalSearchBar } from '@/components/prospecting/natural-search-bar';
+import { NaturalSearchBar, type LayaStatus } from '@/components/prospecting/natural-search-bar';
 import { LeadCard, STATUS_LABEL } from '@/components/prospecting/lead-card';
 import {
   extractDistinctRegions,
   extractAudienceList,
   getLeadAudience,
+  normalizeText,
+  rankLeads,
+  compareRanked,
   type LeadRankingResult,
 } from '@/lib/prospecting/dynamic-search';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+const LAYA_TOP_N = 12;
 
 const STATUS_TABS: { value: LeadStatus | 'todos'; label: string }[] = [
   { value: 'novo', label: 'Novos' },
@@ -55,15 +59,15 @@ export default function ProspeccaoPage() {
   const [searches, setSearches] = useState<LeadSearch[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'todos'>('novo');
-  const [text, setText] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const [columns, setColumns] = useState<LeadColumn[]>([]);
   const [values, setValues] = useState<LeadColumnValue[]>([]);
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [valueFilter, setValueFilter] = useState<{ columnId: string; value: string } | null>(null);
-  const [activeNaturalQuery, setActiveNaturalQuery] = useState<string | null>(null);
-  const [rankingResults, setRankingResults] = useState<Map<string, LeadRankingResult>>(new Map());
-  const [rankingLoading, setRankingLoading] = useState(false);
+  const [query, setQuery] = useState('');
+  const [laya, setLaya] = useState<{ key: string; map: Map<string, LeadRankingResult> } | null>(null);
+  const [layaStatus, setLayaStatus] = useState<LayaStatus>('idle');
+  const layaCache = useRef(new Map<string, Map<string, LeadRankingResult> | null>());
   const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
   const [selectedAudience, setSelectedAudience] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -230,42 +234,8 @@ export default function ProspeccaoPage() {
   const regions = useMemo(() => extractDistinctRegions(leads), [leads]);
   const audiences = useMemo(() => extractAudienceList(leads), [leads]);
 
-  async function handleNaturalSearch(query: string) {
-    setRankingLoading(true);
-    try {
-      const res = await fetch('/api/prospecting/rank', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast.error(json.error ?? 'Falha ao analisar com Laya');
-        return;
-      }
-      const map = new Map<string, LeadRankingResult>();
-      for (const r of (json.results ?? []) as LeadRankingResult[]) {
-        map.set(r.leadId, r);
-      }
-      setRankingResults(map);
-      setActiveNaturalQuery(query);
-      if (sortBy) setSortBy(null);
-      toast.success('Leads priorizados pelo Laya!');
-    } catch {
-      toast.error('Erro ao conectar ao serviço de busca');
-    } finally {
-      setRankingLoading(false);
-    }
-  }
-
-  function handleClearNaturalSearch() {
-    setActiveNaturalQuery(null);
-    setRankingResults(new Map());
-  }
-
   const filtered = leads.filter((l) => {
     if (statusFilter !== 'todos' && l.status !== statusFilter) return false;
-    if (text && !`${l.name} ${l.address ?? ''} ${l.category ?? ''}`.toLowerCase().includes(text.toLowerCase())) return false;
     if (valueFilter && displayedCell(cellOf(valueFilter.columnId, l.id))?.value !== valueFilter.value) return false;
     if (selectedRegion) {
       const regNorm = selectedRegion.toLowerCase();
@@ -278,17 +248,107 @@ export default function ProspeccaoPage() {
     return true;
   });
 
+  const valuesByLead = useMemo(() => {
+    const m = new Map<string, LeadColumnValue[]>();
+    for (const v of values) m.set(v.lead_id, [...(m.get(v.lead_id) ?? []), v]);
+    return m;
+  }, [values]);
+
+  const queryKey = normalizeText(query);
+  const searching = queryKey.length >= 2;
+  // Laya costs ~65 ms per lead, so it only refines the top of the instant ranking (what's on screen).
+  const candidateIds = useMemo(() => {
+    if (!searching) return '';
+    const instant = rankLeads(filtered, query, valuesByLead);
+    return [...filtered]
+      .sort((a, b) => compareRanked(instant.get(a.id), instant.get(b.id)))
+      .slice(0, LAYA_TOP_N)
+      .map((l) => l.id)
+      .join(',');
+    // `filtered` is rebuilt every render; its ids are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searching, query, valuesByLead, filtered.map((l) => l.id).join(',')]);
+  const layaKey = `${queryKey}|${candidateIds}`;
+
+  // Laya runs on one Mac and can't cancel a call already started, so at most one request
+  // is in flight; while it runs, only the newest pending search is kept and sent next.
+  const currentKey = useRef('');
+  const inFlight = useRef(false);
+  const queued = useRef<{ key: string; query: string; ids: string[] } | null>(null);
+
+  const lastWarm = useRef(0);
+  const warmLaya = useCallback(() => {
+    if (Date.now() - lastWarm.current < 60_000) return;
+    lastWarm.current = Date.now();
+    void fetch('/api/prospecting/rank', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ warm: true }),
+    }).catch(() => {});
+  }, []);
+
+  const runLaya = useCallback(async (job: { key: string; query: string; ids: string[] }) => {
+    inFlight.current = true;
+    let map: Map<string, LeadRankingResult> | null = null;
+    try {
+      const res = await fetch('/api/prospecting/rank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: job.query, leadIds: job.ids }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.laya) {
+        map = new Map(((json.results ?? []) as LeadRankingResult[]).map((r) => [r.leadId, r]));
+      }
+    } catch {
+      // Rede caiu: segue com a ordem instantânea.
+    }
+    layaCache.current.set(job.key, map);
+    if (currentKey.current === job.key) {
+      setLaya(map ? { key: job.key, map } : null);
+      setLayaStatus(map ? 'refined' : 'unavailable');
+    }
+    inFlight.current = false;
+    const next = queued.current;
+    queued.current = null;
+    if (next && next.key === currentKey.current && !layaCache.current.has(next.key)) void runLaya(next);
+  }, []);
+
+  useEffect(() => {
+    currentKey.current = layaKey;
+    if (!searching || queryKey.length < 4) {
+      setLayaStatus('idle');
+      return;
+    }
+    if (layaCache.current.has(layaKey)) {
+      const cached = layaCache.current.get(layaKey) ?? null;
+      setLaya(cached ? { key: layaKey, map: cached } : null);
+      setLayaStatus(cached ? 'refined' : 'unavailable');
+      return;
+    }
+    const timer = setTimeout(() => {
+      const job = { key: layaKey, query: query.trim(), ids: candidateIds.split(',').filter(Boolean) };
+      setLayaStatus('refining');
+      if (inFlight.current) queued.current = job;
+      else void runLaya(job);
+    }, 700);
+    return () => clearTimeout(timer);
+    // `query` and `candidateIds` are part of `layaKey`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [layaKey, searching]);
+
+  const ranked = useMemo(
+    () => (searching ? rankLeads(filtered, query, valuesByLead, laya?.key === layaKey ? laya.map : null) : null),
+    [searching, filtered, query, valuesByLead, laya, layaKey],
+  );
+
   const sortColumn = columns.find((c) => c.id === sortBy);
   const visible = sortColumn
     ? [...filtered].sort((a, b) =>
         sortScore(sortColumn.kind, sortColumn.options, cellOf(sortColumn.id, b.id))
         - sortScore(sortColumn.kind, sortColumn.options, cellOf(sortColumn.id, a.id)))
-    : activeNaturalQuery && rankingResults.size > 0
-    ? [...filtered].sort((a, b) => {
-        const pB = rankingResults.get(b.id)?.probability ?? 0;
-        const pA = rankingResults.get(a.id)?.probability ?? 0;
-        return pB - pA;
-      })
+    : ranked
+    ? [...filtered].sort((a, b) => compareRanked(ranked.get(a.id), ranked.get(b.id)))
     : filtered;
 
   const lastDone = columns
@@ -299,7 +359,7 @@ export default function ProspeccaoPage() {
   const activeJobs = searches.filter((x) => x.status !== 'done');
   const doneJobs = searches.filter((x) => x.status === 'done');
   const countByStatus = (st: LeadStatus | 'todos') => (st === 'todos' ? leads.length : leads.filter((l) => l.status === st).length);
-  const hasFilters = Boolean(selectedRegion || selectedAudience || text);
+  const hasFilters = Boolean(selectedRegion || selectedAudience);
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -361,10 +421,10 @@ export default function ProspeccaoPage() {
 
       <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
         <NaturalSearchBar
-          onSearch={handleNaturalSearch}
-          onClear={handleClearNaturalSearch}
-          activeQuery={activeNaturalQuery}
-          loading={rankingLoading}
+          value={query}
+          onChange={setQuery}
+          layaStatus={searching ? layaStatus : 'idle'}
+          onFocus={warmLaya}
         />
 
         <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist" aria-label="Status dos leads">
@@ -385,8 +445,7 @@ export default function ProspeccaoPage() {
           ))}
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
-          <Input placeholder="Procurar pelo nome ou bairro…" value={text} onChange={(e) => setText(e.target.value)} />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
           <select
             aria-label="Região"
             className="h-9 rounded-md border bg-background px-2 text-sm"
@@ -405,7 +464,7 @@ export default function ProspeccaoPage() {
             <option value="">Todos os negócios</option>
             {audiences.map((a) => <option key={a} value={a}>{a}</option>)}
           </select>
-          <div className="inline-flex rounded-md border p-0.5" role="group" aria-label="Modo de visualização">
+          <div className="col-span-2 inline-flex rounded-md border p-0.5 sm:col-span-1 sm:ml-auto" role="group" aria-label="Modo de visualização">
             {([['cards', LayoutGrid, 'Cartões'], ['planilha', Sheet, 'Planilha']] as const).map(([v, Icon, label]) => (
               <button
                 key={v}
@@ -421,13 +480,12 @@ export default function ProspeccaoPage() {
         </div>
 
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{visible.length} {visible.length === 1 ? 'lead' : 'leads'}</span>
+          <span>{loaded ? `${visible.length} ${visible.length === 1 ? 'lead' : 'leads'}${ranked ? ', do mais provável ao menos provável' : ''}` : 'Carregando…'}</span>
           {hasFilters && (
             <button
               type="button"
               className="underline hover:text-foreground"
               onClick={() => {
-                setText('');
                 setSelectedRegion(null);
                 setSelectedAudience(null);
               }}
@@ -437,7 +495,11 @@ export default function ProspeccaoPage() {
           )}
         </div>
 
-        {visible.length === 0 ? (
+        {!loaded ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-busy="true">
+            {[0, 1, 2].map((i) => <div key={i} className="h-48 animate-pulse rounded-xl border bg-muted/50" />)}
+          </div>
+        ) : visible.length === 0 ? (
           <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
             {leads.length === 0 ? 'Nenhum lead ainda. Clique em "Nova busca" para começar.' : 'Nenhum lead com esses filtros.'}
           </div>
@@ -447,7 +509,7 @@ export default function ProspeccaoPage() {
               <LeadCard
                 key={l.id}
                 lead={l}
-                rank={activeNaturalQuery ? rankingResults.get(l.id) : undefined}
+                rank={ranked?.get(l.id)?.result}
                 canEdit={canEdit}
                 onApproach={onApproach}
                 onPromote={promote}
@@ -471,7 +533,7 @@ export default function ProspeccaoPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Oportunidade</TableHead>
-                    {activeNaturalQuery && <TableHead className="min-w-[140px]">Chance de fechar</TableHead>}
+                    {ranked && <TableHead className="min-w-[140px]">Chance de fechar</TableHead>}
                     <TableHead>Negócio</TableHead>
                     <TableHead>Satisfação</TableHead>
                     <TableHead>Contato</TableHead>
@@ -498,14 +560,14 @@ export default function ProspeccaoPage() {
                 </TableHeader>
                 <TableBody>
                   {visible.map((l) => {
-                    const rank = rankingResults.get(l.id);
+                    const rank = ranked?.get(l.id)?.result;
                     const level = satisfactionLevel(l.rating, l.review_count);
                     return (
                       <TableRow key={l.id}>
                         <TableCell>
                           <span className={cn('inline-flex rounded-md px-2 py-0.5 text-sm font-semibold', scoreTone(l.score))}>{l.score}</span>
                         </TableCell>
-                        {activeNaturalQuery && (
+                        {ranked && (
                           <TableCell className="text-xs">{rank ? `${rank.probability}%` : '—'}</TableCell>
                         )}
                         <TableCell>
