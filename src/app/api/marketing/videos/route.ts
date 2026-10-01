@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { isInternalAccount } from '@/lib/internal-accounts';
 import { validateVideoInput } from '@/lib/marketing/validate';
+import { DAILY_VIDEO_LIMIT, getStartOfTodayIso, isDailyLimitReached } from '@/lib/marketing/limits';
 
 export async function POST(request: Request) {
   let ctx;
@@ -17,6 +18,18 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = validateVideoInput(body, ctx.accountId);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  const { count } = await ctx.supabase
+    .from('marketing_videos')
+    .select('*', { count: 'exact', head: true })
+    .eq('account_id', ctx.accountId)
+    .gte('created_at', getStartOfTodayIso());
+
+  if (isDailyLimitReached(count ?? 0)) {
+    return NextResponse.json({
+      error: `Limite diário de ${DAILY_VIDEO_LIMIT} vídeos atingido hoje. Tente novamente amanhã.`,
+    }, { status: 429 });
+  }
 
   const { data, error } = await ctx.supabase
     .from('marketing_videos')

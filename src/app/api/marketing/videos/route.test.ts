@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ requireRole: vi.fn(), insert: vi.fn() }));
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn(), insert: vi.fn(), count: vi.fn() }));
 
 vi.mock('@/lib/auth/account', () => ({
   requireRole: mocks.requireRole,
@@ -11,6 +11,11 @@ import { POST } from './route';
 
 const supabase = {
   from: () => ({
+    select: () => ({
+      eq: () => ({
+        gte: async () => ({ count: mocks.count(), error: null }),
+      }),
+    }),
     insert: (row: unknown) => {
       mocks.insert(row);
       return { select: () => ({ single: async () => ({ data: { id: 'v-1', ...(row as object) }, error: null }) }) };
@@ -26,6 +31,7 @@ const req = (body: unknown) =>
   });
 
 beforeEach(() => {
+  mocks.count.mockReturnValue(0);
   mocks.requireRole.mockResolvedValue({ accountId: 'acc-1', userId: 'user-1', supabase });
 });
 
@@ -39,8 +45,19 @@ describe('POST /api/marketing/videos', () => {
       image_paths: ['account-acc-1/uploads/1-a.jpg'], format: 'vertical', tone: 'polished', status: 'pending',
     });
   });
+
   it('400s on invalid input', async () => {
     expect((await POST(req({ prompt: '' }))).status).toBe(400);
     expect(mocks.insert).not.toHaveBeenCalled();
   });
+
+  it('429s when daily limit is reached', async () => {
+    mocks.count.mockReturnValue(10);
+    const res = await POST(req({ prompt: 'Promo', imagePaths: ['account-acc-1/uploads/1-a.jpg'] }));
+    expect(res.status).toBe(429);
+    const json = await res.json();
+    expect(json.error).toContain('Limite diário');
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
 });
+
