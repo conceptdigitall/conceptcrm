@@ -38,7 +38,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "worker": "tsx --env-file=.env.local worker/index.ts"
+    "worker": "tsx --env-file=.env.local worker/index.ts",
+    "laya": "LAYA_HOST=127.0.0.1 LAYA_PORT=8765 LAYA_MODELS=multilingual LAYA_PRELOAD=1 worker/laya/.venv/bin/laya-serve"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",
