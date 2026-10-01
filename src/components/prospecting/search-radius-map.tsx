@@ -1,157 +1,124 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { getCityCoordinates, calculateCenterCoordinates } from '@/lib/prospecting/cities';
+import { useEffect, useRef, useState } from 'react';
+import type { Map as LeafletMap, LayerGroup, TileLayer } from 'leaflet';
+import { findCityCoordinates } from '@/lib/prospecting/cities';
+
+const TILES = {
+  light: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  dark: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+};
+
+function isDarkTheme(): boolean {
+  return document.documentElement.classList.contains('dark');
+}
 
 interface SearchRadiusMapProps {
   cities: string[];
-  radiusKm: number;
 }
 
-export function SearchRadiusMap({ cities, radiusKm }: SearchRadiusMapProps) {
+/** Mostra no mapa as cidades escolhidas para a busca. */
+export function SearchRadiusMap({ cities }: SearchRadiusMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapInstanceRef = useRef<any>(null);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const layerGroupRef = useRef<any>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const layerRef = useRef<LayerGroup | null>(null);
+  const tilesRef = useRef<TileLayer | null>(null);
+  const leafletRef = useRef<typeof import('leaflet') | null>(null);
+  const [ready, setReady] = useState(false);
 
+  // Cria o mapa uma única vez; Leaflet quebra se inicializar duas vezes no mesmo div.
   useEffect(() => {
-    let isMounted = true;
+    let cancelled = false;
+    let observer: ResizeObserver | null = null;
+    let themeObserver: MutationObserver | null = null;
 
-    async function initMap() {
-      if (!containerRef.current || typeof window === 'undefined') return;
-
-      // Import dinâmico do Leaflet apenas no cliente
+    (async () => {
       const L = await import('leaflet');
       await import('leaflet/dist/leaflet.css');
+      if (cancelled || !containerRef.current || mapRef.current) return;
 
-      if (!isMounted || !containerRef.current) return;
+      leafletRef.current = L;
+      const map = L.map(containerRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        scrollWheelZoom: false,
+        dragging: !L.Browser.mobile,
+        tap: false,
+      } as L.MapOptions);
+      L.control.zoom({ position: 'bottomright' }).addTo(map);
+      tilesRef.current = L.tileLayer(isDarkTheme() ? TILES.dark : TILES.light, {
+        maxZoom: 18,
+        subdomains: 'abcd',
+      }).addTo(map);
+      layerRef.current = L.layerGroup().addTo(map);
+      mapRef.current = map;
 
-      const center = calculateCenterCoordinates(cities);
+      // O container muda de largura (menu, rotação do celular): o Leaflet precisa saber.
+      observer = new ResizeObserver(() => map.invalidateSize());
+      observer.observe(containerRef.current);
 
-      if (!mapInstanceRef.current) {
-        const map = L.map(containerRef.current, {
-          center,
-          zoom: cities.length > 2 ? 11 : 12,
-          zoomControl: false,
-          attributionControl: false,
-          scrollWheelZoom: false, // não captura o scroll da página acidentalmente
-        });
-
-        // Adiciona zoom control discreto no canto inferior direito
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-        // Tiles CartoDB Dark Matter (tema escuro do Concept CRM)
-        L.tileLayer(
-          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-          {
-            maxZoom: 18,
-            subdomains: 'abcd',
-          },
-        ).addTo(map);
-
-        const layerGroup = L.layerGroup().addTo(map);
-        mapInstanceRef.current = map;
-        layerGroupRef.current = layerGroup;
-      }
-
-      const map = mapInstanceRef.current;
-      const layerGroup = layerGroupRef.current;
-
-      if (!layerGroup || !map) return;
-
-      // Limpa marcadores e círculos anteriores
-      layerGroup.clearLayers();
-
-      const bounds = L.latLngBounds([]);
-
-      // Desenha o círculo de raio para cada cidade selecionada ou para o centro
-      cities.forEach((cityName) => {
-        const coords = getCityCoordinates(cityName);
-        bounds.extend(coords);
-
-        // Círculo de raio em tempo real
-        const circle = L.circle(coords, {
-          radius: radiusKm * 1000,
-          color: '#0624C7',
-          weight: 2,
-          fillColor: '#0624C7',
-          fillOpacity: 0.18,
-          dashArray: '4, 6',
-        });
-        circle.addTo(layerGroup);
-
-        // Marcador customizado estilo Concept CRM
-        const pulseIcon = L.divIcon({
-          className: 'custom-map-marker',
-          html: `
-            <div style="
-              width: 14px;
-              height: 14px;
-              background-color: #FCE026;
-              border: 2px solid #04081E;
-              border-radius: 50%;
-              box-shadow: 0 0 10px rgba(252, 224, 38, 0.8);
-            "></div>
-          `,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
-        });
-
-        const marker = L.marker(coords, { icon: pulseIcon });
-        marker.bindTooltip(cityName, {
-          permanent: true,
-          direction: 'top',
-          className: 'bg-card text-foreground text-xs font-semibold px-2 py-0.5 rounded shadow border border-border',
-        });
-        marker.addTo(layerGroup);
+      themeObserver = new MutationObserver(() => {
+        tilesRef.current?.setUrl(isDarkTheme() ? TILES.dark : TILES.light);
       });
+      themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-      if (cities.length > 0) {
-        if (cities.length === 1) {
-          const coords = getCityCoordinates(cities[0]);
-          map.setView(coords, radiusKm > 20 ? 11 : 12);
-        } else {
-          map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 });
-        }
-      }
-    }
-
-    initMap();
+      setReady(true);
+    })();
 
     return () => {
-      isMounted = false;
-    };
-  }, [cities, radiusKm]);
-
-  // Cleanup na desmontagem
-  useEffect(() => {
-    return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
-      }
+      cancelled = true;
+      observer?.disconnect();
+      themeObserver?.disconnect();
+      mapRef.current?.remove();
+      mapRef.current = null;
     };
   }, []);
 
-  return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-card">
-      <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-border/80 bg-background/90 px-3 py-1.5 text-xs font-medium text-foreground backdrop-blur-sm">
-        <span className="relative flex h-2 w-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FCE026] opacity-75" />
-          <span className="relative inline-flex h-2 w-2 rounded-full bg-[#FCE026]" />
-        </span>
-        <span>
-          Raio de busca: <strong className="text-primary-foreground">{radiusKm} km</strong> ({cities.length}{' '}
-          {cities.length === 1 ? 'cidade' : 'cidades'})
-        </span>
-      </div>
+  const located = cities
+    .map((name) => ({ name, coords: findCityCoordinates(name) }))
+    .filter((c): c is { name: string; coords: [number, number] } => c.coords !== null);
+  const unlocated = cities.filter((name) => !findCityCoordinates(name));
+  const locatedKey = located.map((c) => c.name).join('|');
 
-      <div
-        ref={containerRef}
-        className="h-56 w-full sm:h-72"
-        style={{ background: '#04081E' }}
-      />
+  useEffect(() => {
+    const L = leafletRef.current;
+    const map = mapRef.current;
+    const layer = layerRef.current;
+    if (!ready || !L || !map || !layer) return;
+
+    layer.clearLayers();
+    const points = locatedKey ? locatedKey.split('|') : [];
+    const bounds = L.latLngBounds([]);
+    for (const name of points) {
+      const coords = findCityCoordinates(name);
+      if (!coords) continue;
+      bounds.extend(coords);
+      L.circleMarker(coords, {
+        radius: 7,
+        color: '#04081E',
+        weight: 2,
+        fillColor: '#FCE026',
+        fillOpacity: 1,
+      })
+        .bindTooltip(name.replace(/, [A-Z]{2}$/, ''), { permanent: true, direction: 'top', offset: [0, -6] })
+        .addTo(layer);
+    }
+
+    if (points.length === 1) map.setView(bounds.getCenter(), 12);
+    else if (points.length > 1) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 12 });
+    else map.setView([-23.9608, -46.3336], 10);
+  }, [ready, locatedKey]);
+
+  return (
+    // `isolate` prende os z-index internos do Leaflet (400+) dentro do mapa,
+    // senão ele passa por cima do cabeçalho e dos menus abertos.
+    <div className="relative isolate overflow-hidden rounded-xl border border-border bg-muted">
+      <div ref={containerRef} className="h-48 w-full sm:h-60" aria-label="Mapa das cidades escolhidas" role="img" />
+      {unlocated.length > 0 && (
+        <p className="absolute inset-x-2 bottom-2 z-[1000] rounded-md bg-background/90 px-2 py-1 text-xs text-muted-foreground backdrop-blur-sm">
+          Fora do mapa (a busca funciona igual): {unlocated.join(' · ')}
+        </p>
+      )}
     </div>
   );
 }

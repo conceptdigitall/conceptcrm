@@ -45,7 +45,8 @@ export const BAIXADA_SANTISTA_CITIES = [
   'Cubatão, SP',
 ];
 
-export function getCityCoordinates(cityName: string): [number, number] {
+/** Coordenadas conhecidas da cidade, ou null quando ela não está na lista. */
+export function findCityCoordinates(cityName: string): [number, number] | null {
   const trimmed = cityName.trim();
   if (KNOWN_CITIES[trimmed]) return KNOWN_CITIES[trimmed];
 
@@ -55,9 +56,12 @@ export function getCityCoordinates(cityName: string): [number, number] {
       return coords;
     }
   }
+  return null;
+}
 
-  // Fallback para Baixada Santista / Santos (região base do Concept CRM)
-  return [-23.9608, -46.3336];
+export function getCityCoordinates(cityName: string): [number, number] {
+  // Fallback para Santos (região base do Concept CRM)
+  return findCityCoordinates(cityName) ?? [-23.9608, -46.3336];
 }
 
 export function calculateCenterCoordinates(cities: string[]): [number, number] {
