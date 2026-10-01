@@ -23,9 +23,22 @@ REVOKE EXECUTE ON FUNCTION public._bcast_bump(uuid, text, integer)        FROM P
 -- ── 2. Código morto: referenciam tabelas/colunas que não existem ───
 -- (memberships, pipeline_stages.organization_id, deals.organization_id;
 -- nenhuma trigger ligada). Candidatas a DROP numa migração futura.
-REVOKE EXECUTE ON FUNCTION public.check_deal_stage_same_org() FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.seed_default_pipeline()     FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.has_role_in(uuid, text[])   FROM PUBLIC, anon, authenticated;
+-- Só existem no banco de produção (criadas fora das migrações); num banco limpo
+-- não há o que revogar, então cada REVOKE roda apenas se a função existir.
+DO $$
+DECLARE
+  sig text;
+BEGIN
+  FOREACH sig IN ARRAY ARRAY[
+    'public.check_deal_stage_same_org()',
+    'public.seed_default_pipeline()',
+    'public.has_role_in(uuid, text[])'
+  ] LOOP
+    IF to_regprocedure(sig) IS NOT NULL THEN
+      EXECUTE format('REVOKE EXECUTE ON FUNCTION %s FROM PUBLIC, anon, authenticated', sig);
+    END IF;
+  END LOOP;
+END $$;
 
 -- ── 3. Só servidor (supabaseAdmin / manutenção) ────────────────────
 REVOKE EXECUTE ON FUNCTION public.claim_ai_reply_slot(uuid, integer)    FROM PUBLIC, anon, authenticated;
