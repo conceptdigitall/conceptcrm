@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
+import { Bell, LogOut, Settings as SettingsIcon, User } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Avatar,
   AvatarFallback,
@@ -40,17 +42,15 @@ function getPageTitleKey(pathname: string): string {
   return match ? match[1] : "dashboard";
 }
 
-interface HeaderProps {
-  /** Wired to the shell's drawer state. Used only on mobile — the
-   *  hamburger button is hidden on lg+. */
-  onOpenSidebar?: () => void;
-}
 
 import { useTranslations } from "next-intl";
 
-export function Header({ onOpenSidebar }: HeaderProps) {
+export function Header() {
   const t = useTranslations("Header");
+  const tSidebar = useTranslations("Sidebar");
   const pathname = usePathname();
+  const unreadNotifications = useUnreadNotifications();
+  const onNotifications = pathname.startsWith("/notifications");
   const { profile, signOut } = useAuth();
   const titleKey = getPageTitleKey(pathname);
 
@@ -60,24 +60,38 @@ export function Header({ onOpenSidebar }: HeaderProps) {
     "U";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-6">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-5 sm:h-14 lg:px-6">
       <div className="flex min-w-0 items-center gap-2">
-        {/* Hamburger — mobile only. 44×44 hit target per Apple HIG. */}
-        <button
-          type="button"
-          onClick={onOpenSidebar}
-          aria-label={t("openMenu")}
-          className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
+        <h1 className="truncate text-xl font-bold text-foreground sm:text-lg sm:font-semibold">
           {t(titleKey as string)}
         </h1>
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
-        <ModeToggle />
+        <div className="hidden sm:block">
+          <ModeToggle />
+        </div>
+
+        <Link
+          href="/notifications"
+          aria-label={
+            unreadNotifications > 0
+              ? tSidebar("unreadNotifications", { count: unreadNotifications })
+              : t("notifications")
+          }
+          aria-current={onNotifications ? "page" : undefined}
+          className={cn(
+            "relative flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+            onNotifications && "bg-muted text-foreground",
+          )}
+        >
+          <Bell className="h-5 w-5" />
+          {unreadNotifications > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+              {unreadNotifications > 9 ? "9+" : unreadNotifications}
+            </span>
+          )}
+        </Link>
 
         <DropdownMenu>
         <DropdownMenuTrigger

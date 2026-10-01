@@ -38,11 +38,14 @@
     "roleAgent": "Agente",
     "roleViewer": "Observador",
     "closeMenu": "Cerrar menú",
+    "more": "Más",
     "defaultUser": "Usuario",
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "groupGrow": "Crecer",
+    "groupAutomate": "Automatizar"
   },
   "Header": {
     "dashboard": "Panel",
