@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   if (body?.warm === true) {
     const layaUrl = process.env.LAYA_URL;
     if (layaUrl) {
-      void layaBatch(layaUrl, ['Nome: aquecimento'], { type: 'noul', instructions: 'ok?' }, { maxAttempts: 1 }).catch(() => {});
+      void layaBatch(layaUrl, ['Nome: aquecimento'], { type: 'noul', instructions: 'ok?' }, { maxAttempts: 1, timeoutMs: 5000 }).catch(() => {});
     }
     return NextResponse.json({ ok: true });
   }
@@ -100,7 +100,8 @@ export async function POST(request: Request) {
       };
       // Nome, categoria, local, nota, site e celular cabem no começo; o resto só deixa a Laya mais lenta.
       const states = leads.map((lead) => buildLeadState(lead).slice(0, RANK_STATE_CHARS));
-      const answers = await layaBatch(layaUrl, states, question, { maxAttempts: 1 });
+      // Mac desligado ou túnel lento: desiste e a página fica com a ordem instantânea.
+      const answers = await layaBatch(layaUrl, states, question, { maxAttempts: 1, timeoutMs: 6000 });
 
       layaScores = new Map();
       for (let i = 0; i < leads.length; i++) {

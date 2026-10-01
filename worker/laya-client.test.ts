@@ -45,4 +45,17 @@ describe('layaBatch', () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: [{ answers: {} }] })));
     await expect(layaBatch('http://x', ['a'], question, { fetchImpl })).rejects.toThrow('Resposta do Laya sem a coluna');
   });
+  it('sends the API key as a Bearer token', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(ok([{ noul: 0.5 }]));
+    await layaBatch('http://x', ['a'], question, { fetchImpl, apiKey: 'segredo' });
+    expect(fetchImpl.mock.calls[0][1].headers.Authorization).toBe('Bearer segredo');
+  });
+  it('explains a rejected key', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('no', { status: 401 }));
+    await expect(layaBatch('http://x', ['a'], question, { fetchImpl, apiKey: 'errada' })).rejects.toThrow('Laya recusou a chave');
+  });
+  it('reports a timeout instead of hanging', async () => {
+    const fetchImpl = vi.fn().mockRejectedValue(Object.assign(new Error('t'), { name: 'TimeoutError' }));
+    await expect(layaBatch('http://x', ['a'], question, { fetchImpl, timeoutMs: 10 })).rejects.toThrow('Laya não respondeu a tempo');
+  });
 });
