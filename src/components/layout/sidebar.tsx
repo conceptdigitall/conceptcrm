@@ -284,11 +284,13 @@ export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps
       <aside
         className={cn(
           // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-border bg-card",
-          "transition-transform duration-200 ease-out will-change-transform",
-          open ? "translate-x-0" : "-translate-x-full",
+          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-border bg-card overflow-hidden",
+          "transition-all duration-200 ease-out will-change-transform",
+          open
+            ? "translate-x-0 opacity-100 visible pointer-events-auto"
+            : "-translate-x-full opacity-0 invisible pointer-events-none",
           // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:opacity-100 lg:visible lg:pointer-events-auto lg:transition-none",
         )}
         aria-label={t("primaryNav")}
       >
