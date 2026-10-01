@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin } from '@/lib/ai/admin-client';
 import Anthropic from '@anthropic-ai/sdk';
 import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting';
 
 export const maxDuration = 60;
-
-// Inicializa Supabase com as variáveis de ambiente já existentes no seu projeto
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
@@ -68,7 +62,7 @@ async function sendEvolutionMessage(number: string, text: string) {
  * Busca primeiro no whatsapp_config, com fallback para o primeiro account ativo.
  */
 async function getAccountAndUser(): Promise<{ accountId: string; userId: string }> {
-  const { data: config } = await supabase
+  const { data: config } = await supabaseAdmin()
     .from('whatsapp_config')
     .select('account_id, user_id')
     .limit(1)
@@ -78,7 +72,7 @@ async function getAccountAndUser(): Promise<{ accountId: string; userId: string 
     return { accountId: config.account_id, userId: config.user_id };
   }
 
-  const { data: acc } = await supabase
+  const { data: acc } = await supabaseAdmin()
     .from('accounts')
     .select('id, owner_user_id')
     .limit(1)
@@ -153,7 +147,7 @@ export async function POST(req: Request) {
 
     // 2. Localizar ou criar o contato de forma segura
     let contact: { id: string } | null = null;
-    const { data: initialContact, error: contactErr } = await supabase
+    const { data: initialContact, error: contactErr } = await supabaseAdmin()
       .from('contacts')
       .select('id')
       .eq('account_id', accountId)
@@ -163,7 +157,7 @@ export async function POST(req: Request) {
 
     if (contactErr) {
       console.warn('[Evolution Webhook] Aviso ao consultar contato:', contactErr.message);
-      const { data: fallbackContact } = await supabase
+      const { data: fallbackContact } = await supabaseAdmin()
         .from('contacts')
         .select('id')
         .eq('phone', senderNumber)
@@ -172,7 +166,7 @@ export async function POST(req: Request) {
     }
 
     if (!contact) {
-      const { data: createdContact, error: insertContactErr } = await supabase
+      const { data: createdContact, error: insertContactErr } = await supabaseAdmin()
         .from('contacts')
         .insert({
           account_id: accountId,
@@ -186,7 +180,7 @@ export async function POST(req: Request) {
       if (insertContactErr) {
         console.error('[Evolution Webhook] Erro ao criar contato novo:', insertContactErr);
         // Em caso de concorrência simultânea, recupera o contato inserido
-        const { data: retryContact } = await supabase
+        const { data: retryContact } = await supabaseAdmin()
           .from('contacts')
           .select('id')
           .eq('phone', senderNumber)
@@ -200,7 +194,7 @@ export async function POST(req: Request) {
     // 3. Localizar ou criar a conversa (conversation) para aparecer na Inbox
     let conversationId: string | null = null;
     if (contact?.id) {
-      const { data: conv, error: convFetchErr } = await supabase
+      const { data: conv, error: convFetchErr } = await supabaseAdmin()
         .from('conversations')
         .select('id, unread_count')
         .eq('account_id', accountId)
@@ -216,7 +210,7 @@ export async function POST(req: Request) {
       const nowIso = new Date().toISOString();
 
       if (!conv) {
-        const { data: newConv, error: convErr } = await supabase
+        const { data: newConv, error: convErr } = await supabaseAdmin()
           .from('conversations')
           .insert({
             account_id: accountId,
@@ -232,7 +226,7 @@ export async function POST(req: Request) {
 
         if (convErr) {
           console.error('[Evolution Webhook] Erro ao criar conversation:', convErr);
-          const { data: retryConv } = await supabase
+          const { data: retryConv } = await supabaseAdmin()
             .from('conversations')
             .select('id')
             .eq('contact_id', contact.id)
@@ -245,7 +239,7 @@ export async function POST(req: Request) {
         }
       } else {
         conversationId = conv.id;
-        await supabase
+        await supabaseAdmin()
           .from('conversations')
           .update({
             status: 'open',
@@ -261,7 +255,7 @@ export async function POST(req: Request) {
       if (conversationId) {
         const messageId = key?.id || null;
 
-        const { data: insertedRows, error: msgErr } = await supabase
+        const { data: insertedRows, error: msgErr } = await supabaseAdmin()
           .from('messages')
           .upsert(
             {
@@ -316,7 +310,7 @@ export async function POST(req: Request) {
 
         // Salva a resposta da IA no CRM também
         if (conversationId) {
-          const { error: botMsgErr } = await supabase.from('messages').insert({
+          const { error: botMsgErr } = await supabaseAdmin().from('messages').insert({
             conversation_id: conversationId,
             content_text: sanitizedReply,
             content_type: 'text',
@@ -328,7 +322,7 @@ export async function POST(req: Request) {
             console.error('[Evolution Webhook] Erro ao salvar mensagem do bot:', botMsgErr);
           }
 
-          await supabase
+          await supabaseAdmin()
             .from('conversations')
             .update({
               last_message_text: sanitizedReply,
@@ -541,7 +535,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
   const chatMessages: Anthropic.MessageParam[] = [];
   if (conversationId) {
     try {
-      const { data: history } = await supabase
+      const { data: history } = await supabaseAdmin()
         .from('messages')
         .select('sender_type, content_text')
         .eq('conversation_id', conversationId)
@@ -618,7 +612,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
           contactUpdates.email = input.client_email.trim();
         }
 
-        await supabase.from('contacts').update(contactUpdates).eq('id', contactId);
+        await supabaseAdmin().from('contacts').update(contactUpdates).eq('id', contactId);
 
         // 2. Inserir anotação de diagnóstico e contexto no histórico do contato
         if (userId && (input.notes || input.client_company || input.client_email)) {
@@ -632,7 +626,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
             .filter(Boolean)
             .join('\n');
 
-          await supabase.from('contact_notes').insert({
+          await supabaseAdmin().from('contact_notes').insert({
             contact_id: contactId,
             user_id: userId,
             note_text: noteLines,
@@ -652,7 +646,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
         if (accountId) appointmentPayload.account_id = accountId;
         if (userId) appointmentPayload.user_id = userId;
 
-        const { error: insErr } = await supabase.from('appointments').insert(appointmentPayload);
+        const { error: insErr } = await supabaseAdmin().from('appointments').insert(appointmentPayload);
         if (insErr) {
           console.warn('[Evolution Webhook] Aviso ao salvar agendamento:', insErr.message);
         } else {
