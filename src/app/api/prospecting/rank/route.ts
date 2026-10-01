@@ -6,6 +6,10 @@ import { calculateClosingProbability, type LeadRankingResult } from '@/lib/prosp
 import { layaBatch } from '@/../worker/laya-client';
 import type { Lead, LeadColumnValue } from '@/types';
 
+// Laya leva ~65 ms por lead; a página manda só os primeiros da ordem instantânea.
+const MAX_RANK_LEADS = 60;
+const RANK_STATE_CHARS = 400;
+
 export async function POST(request: Request) {
   let ctx;
   try {
@@ -18,7 +22,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Recurso interno da Concept Digital' }, { status: 403 });
   }
 
-  const body = (await request.json().catch(() => null)) as { query?: unknown; leadIds?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as { query?: unknown; leadIds?: unknown; warm?: unknown } | null;
+
+  // Acorda a GPU da Laya enquanto o usuário ainda digita (a 1ª chamada após um tempo parada leva segundos).
+  if (body?.warm === true) {
+    const layaUrl = process.env.LAYA_URL;
+    if (layaUrl) {
+      void layaBatch(layaUrl, ['Nome: aquecimento'], { type: 'noul', instructions: 'ok?' }, { maxAttempts: 1, timeoutMs: 5000 }).catch(() => {});
+    }
+    return NextResponse.json({ ok: true });
+  }
   const rawQuery = typeof body?.query === 'string' ? body.query.trim() : '';
 
   if (!rawQuery) {
@@ -29,42 +42,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Busca muito longa (máximo 200 caracteres)' }, { status: 400 });
   }
 
-  // 1. Busca os leads da conta
-  let leadsQuery = ctx.supabase
-    .from('leads')
-    .select('*')
-    .eq('account_id', ctx.accountId)
-    .order('score', { ascending: false })
-    .limit(500);
+  // Só os trechos do `raw` que a Laya lê (buildLeadState): o JSON inteiro do Google é pesado.
+  const LEAD_FIELDS =
+    'id, account_id, name, category, address, rating, review_count, website, phone, is_mobile, score, score_reasons, status, contact_id, '
+    + 'raw_categories:raw->categories, raw_address:raw->complete_address, raw_description:raw->description, raw_about:raw->about';
 
-  if (Array.isArray(body?.leadIds) && body.leadIds.length > 0) {
-    const validIds = body.leadIds.filter((id): id is string => typeof id === 'string');
-    if (validIds.length > 0) {
-      leadsQuery = ctx.supabase
-        .from('leads')
-        .select('*')
-        .eq('account_id', ctx.accountId)
-        .in('id', validIds);
-    }
+  const requestedIds = Array.isArray(body?.leadIds)
+    ? body.leadIds.filter((id): id is string => typeof id === 'string').slice(0, MAX_RANK_LEADS)
+    : [];
+
+  const leadsQuery = requestedIds.length > 0
+    ? ctx.supabase.from('leads').select(LEAD_FIELDS).eq('account_id', ctx.accountId).in('id', requestedIds)
+    : ctx.supabase.from('leads').select(LEAD_FIELDS).eq('account_id', ctx.accountId).order('score', { ascending: false }).limit(MAX_RANK_LEADS);
+
+  const valuesQuery = (ids: string[]) =>
+    ctx.supabase.from('lead_column_values').select('*').eq('account_id', ctx.accountId).in('lead_id', ids);
+
+  // Com os ids em mãos, as duas consultas saem juntas.
+  const [leadsRes, earlyValues] = await Promise.all([
+    leadsQuery,
+    requestedIds.length > 0 ? valuesQuery(requestedIds) : Promise.resolve(null),
+  ]);
+  if (leadsRes.error) {
+    return NextResponse.json({ error: leadsRes.error.message }, { status: 500 });
   }
 
-  const { data: leadsData, error: leadsError } = await leadsQuery;
-  if (leadsError) {
-    return NextResponse.json({ error: leadsError.message }, { status: 500 });
-  }
-
-  const leads = (leadsData ?? []) as Lead[];
+  const leads = ((leadsRes.data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => {
+    const { raw_categories, raw_address, raw_description, raw_about, ...rest } = row;
+    return {
+      ...rest,
+      raw: { categories: raw_categories, complete_address: raw_address, description: raw_description, about: raw_about },
+    } as unknown as Lead;
+  });
   if (leads.length === 0) {
-    return NextResponse.json({ results: [] });
+    return NextResponse.json({ results: [], laya: false });
   }
 
-  // 2. Busca valores de colunas de IA existentes para enriquecer o contexto (PR #9)
-  const leadIds = leads.map((l) => l.id);
-  const { data: valuesData } = await ctx.supabase
-    .from('lead_column_values')
-    .select('*')
-    .eq('account_id', ctx.accountId)
-    .in('lead_id', leadIds);
+  const { data: valuesData } = earlyValues ?? (await valuesQuery(leads.map((l) => l.id)));
 
   const valuesByLead = new Map<string, LeadColumnValue[]>();
   for (const val of (valuesData ?? []) as LeadColumnValue[]) {
@@ -84,8 +98,10 @@ export async function POST(request: Request) {
         instructions: rawQuery,
         criteria: [...SCORE_LEVELS],
       };
-      const states = leads.map((lead) => buildLeadState(lead));
-      const answers = await layaBatch(layaUrl, states, question, { maxAttempts: 1 });
+      // Nome, categoria, local, nota, site e celular cabem no começo; o resto só deixa a Laya mais lenta.
+      const states = leads.map((lead) => buildLeadState(lead).slice(0, RANK_STATE_CHARS));
+      // Mac desligado ou túnel lento: desiste e a página fica com a ordem instantânea.
+      const answers = await layaBatch(layaUrl, states, question, { maxAttempts: 1, timeoutMs: 6000 });
 
       layaScores = new Map();
       for (let i = 0; i < leads.length; i++) {
@@ -120,5 +136,5 @@ export async function POST(request: Request) {
   // 5. Ordena do maior para o menor potencial de fechar
   results.sort((a, b) => b.probability - a.probability);
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ results, laya: layaScores !== null });
 }

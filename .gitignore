@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Laya (Planilha Preditiva) — ambiente Python local
 worker/laya/.venv/
+
+# logs do npm run servicos
+.servicos-logs/

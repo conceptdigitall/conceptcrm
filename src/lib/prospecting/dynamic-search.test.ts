@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Lead, LeadColumnValue } from '@/types';
 import {
+  compareRanked,
+  rankLeads,
   extractDistinctRegions,
   getLeadAudience,
   extractAudienceList,
@@ -129,5 +131,36 @@ describe('dynamic-search', () => {
       expect(res.probabilityLevel).toBe('baixa');
       expect(res.reasons).toContain('Sem telefone de contato');
     });
+  });
+});
+
+describe('rankLeads + compareRanked', () => {
+  const mk = (id: string, over: Partial<Lead> = {}): Lead =>
+    ({
+      id, name: `Negócio ${id}`, category: 'Barbearia', address: 'Gonzaga, Santos', phone: '5513991234567',
+      is_mobile: true, website: null, rating: 4.8, review_count: 120, score: 50, score_reasons: [], status: 'novo',
+      raw: null, ...over,
+    }) as Lead;
+
+  it('puts leads whose name matches the query first', () => {
+    const leads = [mk('a'), mk('b', { name: 'Barbearia Rodrigues' }), mk('c')];
+    const ranked = rankLeads(leads, 'rodrigues', new Map());
+    const order = [...leads].sort((x, y) => compareRanked(ranked.get(x.id), ranked.get(y.id))).map((l) => l.id);
+    expect(order[0]).toBe('b');
+    expect(ranked.get('b')?.textMatch).toBe(true);
+  });
+
+  it('orders by probability when nothing matches by name', () => {
+    const leads = [mk('a', { phone: null }), mk('b')];
+    const ranked = rankLeads(leads, 'recepcionista de IA', new Map());
+    const order = [...leads].sort((x, y) => compareRanked(ranked.get(x.id), ranked.get(y.id))).map((l) => l.id);
+    expect(order).toEqual(['b', 'a']);
+  });
+
+  it('uses the Laya answer when there is one for the lead', () => {
+    const laya = new Map([['a', { leadId: 'a', probability: 91, probabilityLevel: 'alta' as const, reasons: ['Laya'] }]]);
+    const ranked = rankLeads([mk('a'), mk('b')], 'recepcionista', new Map(), laya);
+    expect(ranked.get('a')?.result.probability).toBe(91);
+    expect(ranked.get('b')?.result.reasons).not.toContain('Laya');
   });
 });

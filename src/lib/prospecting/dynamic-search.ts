@@ -201,3 +201,44 @@ export function calculateClosingProbability(
 
   return { probability, probabilityLevel, reasons: cleanReasons };
 }
+
+/** True when the query reads like a name/place lookup that hits this lead's own text. */
+export function matchesLeadText(lead: Pick<Lead, 'name' | 'address' | 'category'>, query: string): boolean {
+  const q = normalizeText(query);
+  if (q.length < 2) return false;
+  return normalizeText(`${lead.name} ${lead.address ?? ''} ${lead.category ?? ''}`).includes(q);
+}
+
+export interface RankedLead {
+  result: LeadRankingResult;
+  /** The query matched the lead's name/address/category: shown before everything else. */
+  textMatch: boolean;
+}
+
+/**
+ * Instant, in-browser ranking used while the user types. `laya` (when it has
+ * answered for this exact query) replaces the rule-based estimate per lead.
+ */
+export function rankLeads(
+  leads: Lead[],
+  query: string,
+  valuesByLead: Map<string, LeadColumnValue[]>,
+  laya?: Map<string, LeadRankingResult> | null,
+): Map<string, RankedLead> {
+  const ranked = new Map<string, RankedLead>();
+  for (const lead of leads) {
+    const result =
+      laya?.get(lead.id) ?? {
+        leadId: lead.id,
+        ...calculateClosingProbability(lead, { query, columnValues: valuesByLead.get(lead.id) }),
+      };
+    ranked.set(lead.id, { result, textMatch: matchesLeadText(lead, query) });
+  }
+  return ranked;
+}
+
+export function compareRanked(a: RankedLead | undefined, b: RankedLead | undefined): number {
+  if (!a || !b) return 0;
+  if (a.textMatch !== b.textMatch) return a.textMatch ? -1 : 1;
+  return b.result.probability - a.result.probability;
+}

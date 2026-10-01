@@ -41,7 +41,13 @@ Uma vez só:
     uv venv --python 3.12 worker/laya/.venv
     uv pip install --python worker/laya/.venv/bin/python -r worker/laya/requirements.txt
 
-No `.env.local`: `LAYA_URL=http://127.0.0.1:8765`.
+No `.env.local`: `LAYA_URL=http://127.0.0.1:8765` e `LAYA_API_KEY=` (gere com `openssl rand -hex 32`). O `npm run laya` recusa iniciar sem a chave, e a Laya responde 401 a quem não a envia.
+
+A Laya roda na **CPU** (4 threads) de propósito: no Mac a GPU "esfria" segundos depois de parada e a primeira busca levava de 1 a 8 s; na CPU fica em ~0,8 s para 12 leads mesmo depois de pausas (medido em 2026-10-01). Lotes grandes do worker ficam um pouco mais lentos (58 leads: 3,0 s contra 2,3 s na GPU).
+
+**Comando único:** `npm run servicos` liga Laya + túnel ngrok (`NGROK_URL` no `.env.local`) + worker, pula o que já estiver rodando, avisa se o Docker estiver parado e desliga os três no Ctrl+C. Logs em `.servicos-logs/`.
+
+**Produção (Vercel):** a Laya continua no Mac. Para a Vercel alcançá-la, exponha a porta 8765 por um túnel com endereço fixo e cadastre na Vercel `LAYA_URL` (o endereço público do túnel) e `LAYA_API_KEY` (a mesma do `.env.local`). Se o Mac estiver desligado, a busca desiste em 6 s e usa só a ordem instantânea.
 
 Para usar, dois terminais na pasta do CRM:
 
