@@ -717,3 +717,63 @@ export interface QuickReply {
   created_at: string;
   updated_at: string;
 }
+
+export type JobStatus = 'pending' | 'running' | 'done' | 'failed';
+export type LeadStatus = 'novo' | 'contatado' | 'qualificado' | 'descartado';
+export type VideoFormat = 'vertical' | 'square' | 'landscape';
+export type VideoTone = 'default' | 'polished' | 'app-store' | 'cinematic';
+
+export interface LeadSearch {
+  id: string;
+  account_id: string;
+  created_by: string | null;
+  query: string;
+  location: string;
+  max_results: number;
+  status: JobStatus;
+  error: string | null;
+  result_count: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}
+
+export interface Lead {
+  id: string;
+  account_id: string;
+  search_id: string | null;
+  place_id: string | null;
+  name: string;
+  category: string | null;
+  address: string | null;
+  phone: string | null;
+  is_mobile: boolean;
+  website: string | null;
+  email: string | null;
+  rating: number | null;
+  review_count: number | null;
+  maps_url: string | null;
+  score: number;
+  score_reasons: string[];
+  status: LeadStatus;
+  contact_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketingVideo {
+  id: string;
+  account_id: string;
+  created_by: string | null;
+  prompt: string;
+  image_paths: string[];
+  format: VideoFormat;
+  tone: VideoTone;
+  status: JobStatus;
+  error: string | null;
+  video_path: string | null;
+  poster_path: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_at: string;
+}

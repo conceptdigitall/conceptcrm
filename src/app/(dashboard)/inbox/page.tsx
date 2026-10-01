@@ -562,7 +562,10 @@ function InboxPageInner() {
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    // Fill <main> exactly: 100% of its content box plus the padding the
+    // negative margins cancel (p-4 / sm:p-6). Sized from the parent, not
+    // 100vh, so it stays correct with the mobile tab bar below <main>.
+    <div className="-m-4 flex h-[calc(100%+2rem)] flex-col overflow-hidden sm:-m-6 sm:h-[calc(100%+3rem)]">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (

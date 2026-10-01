@@ -5,18 +5,19 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
   Bot,
   Calendar,
+  Clapperboard,
   Crown,
   GitBranch,
   LayoutDashboard,
   LogOut,
   MessageSquare,
   Radio,
+  Search,
   Settings,
   Shield,
   User,
@@ -29,6 +30,9 @@ import {
 } from "lucide-react";
 import { ConceptLogo } from "@/components/brand/concept-logo";
 import type { AccountRole } from "@/lib/auth/roles";
+import { isInternalAccount } from "@/lib/internal-accounts";
+import { ModeToggle } from "@/components/layout/mode-toggle";
+import { MOBILE_PRIMARY_HREFS } from "@/components/layout/mobile-bottom-nav";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -89,6 +93,8 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /** Concept Digital's own tools; hidden unless the account is internal. */
+  internalOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -98,6 +104,8 @@ const navItems: NavItem[] = [
   { href: "/contacts", labelKey: "contacts", icon: Users },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
   { href: "/appointments", labelKey: "appointments", icon: Calendar },
+  { href: "/prospeccao", labelKey: "prospecting", icon: Search, internalOnly: true },
+  { href: "/marketing", labelKey: "marketing", icon: Clapperboard, internalOnly: true },
   { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
   { href: "/automations", labelKey: "automations", icon: Zap },
   { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
@@ -112,15 +120,16 @@ interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
   onClose?: () => void;
+  /** Passed down from the shell — see `useTotalUnread` there. */
+  totalUnread?: number;
 }
 
 import { useTranslations } from "next-intl";
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
-  const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
@@ -193,20 +202,25 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <Link href="/dashboard" className="flex items-center gap-2 group transition-opacity hover:opacity-90">
             <ConceptLogo variant="full" size="sm" />
           </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("closeMenu")}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          {/* Mobile only: the header drops the theme toggle on small
+              screens, so it lives here instead of disappearing. */}
+          <div className="flex items-center gap-1 lg:hidden">
+            <ModeToggle />
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t("closeMenu")}
+              className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {navItems.filter((item) => !item.internalOnly || isInternalAccount(account?.id)).map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -222,7 +236,12 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 item.href === "/notifications" && unreadNotifications > 0;
 
               return (
-                <li key={item.href}>
+                // Already one tap away in the mobile bottom bar — hide it
+                // from the drawer so "Mais" only offers what's left.
+                <li
+                  key={item.href}
+                  className={cn(MOBILE_PRIMARY_HREFS.has(item.href) && "hidden lg:block")}
+                >
                   <Link
                     href={item.href}
                     className={cn(
