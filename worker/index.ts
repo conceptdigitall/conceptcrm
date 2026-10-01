@@ -6,6 +6,7 @@ import { runProspectingJob } from './prospecting';
 import { runVideoJob } from './video';
 import { requeueColumnsForAccount, runColumnJob } from './columns';
 import { layaBatch } from './laya-client';
+import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator';
 
 const POLL_MS = 5000;
 
@@ -45,7 +46,10 @@ async function tick(): Promise<boolean> {
     const column = await claimNext<LeadColumn>(db, 'lead_columns', accountIds);
     if (column) {
       console.log(`[planilha] ${column.title}`);
-      await runColumnJob(db, column, { laya: (states, question) => layaBatch(layaUrl, states, question) });
+      await runColumnJob(db, column, {
+        laya: (states, question) => layaBatch(layaUrl, states, question),
+        arbitrateWithClaude,
+      });
       return true;
     }
   }

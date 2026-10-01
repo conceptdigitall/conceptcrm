@@ -122,6 +122,18 @@ describe('runColumnJob', () => {
     expect(calls.updates.at(-1)).toMatchObject({ status: 'failed', error: 'Escreva o título da coluna' });
   });
 
+  it('escalates to arbitrateWithClaude when Laya confidence margin is narrow', async () => {
+    const { db, calls } = fakeDb({ leads: [lead(0)] });
+    const choiceCol = { ...column, title: 'Nicho: saúde, beleza', kind: 'choice', options: ['saúde', 'beleza'] } as LeadColumn;
+    const laya = vi.fn().mockResolvedValue([{ choice: 'saúde', probabilities: { saúde: 0.51, beleza: 0.49 } }]);
+    const arbitrateWithClaude = vi.fn().mockResolvedValue('beleza');
+
+    await runColumnJob(db, choiceCol, { laya, arbitrateWithClaude });
+
+    expect(arbitrateWithClaude).toHaveBeenCalledTimes(1);
+    expect(calls.upserts[0][0]).toMatchObject({ value: 'beleza', confidence: 0.99 });
+  });
+
   it('stops quietly when the column was deleted while filling', async () => {
     const { db, calls } = fakeDb({ leads: [lead(0)], upsertError: () => ({ code: '23503', message: 'fk' }) });
     await runColumnJob(db, column, { laya: yes() });

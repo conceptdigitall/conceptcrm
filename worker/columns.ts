@@ -3,6 +3,7 @@ import {
   buildLeadState, mapLayaAnswer, parseColumnTitle, toLayaQuestion,
   type LayaAnswer, type LayaQuestion,
 } from '@/lib/prospecting/columns';
+import { resolveEnsemblePrediction, sanitizeLeadContext } from '@/lib/laya/reliable-inference';
 import type { Lead, LeadColumn } from '@/types';
 import { LAYA_MODEL } from './laya-client';
 import { failJob, finishJob } from './queue';
@@ -13,8 +14,14 @@ const FK_VIOLATION = '23503';
 
 export type LayaFn = (states: string[], question: LayaQuestion) => Promise<LayaAnswer[]>;
 
+export interface ColumnJobDeps {
+  laya: LayaFn;
+  now?: () => number;
+  arbitrateWithClaude?: (leadText: string, question: LayaQuestion, options: string[]) => Promise<string>;
+}
+
 export async function runColumnJob(
-  db: SupabaseClient, column: LeadColumn, deps: { laya: LayaFn; now?: () => number },
+  db: SupabaseClient, column: LeadColumn, deps: ColumnJobDeps,
 ): Promise<void> {
   const now = deps.now ?? Date.now;
   const started = now();
@@ -47,15 +54,37 @@ export async function runColumnJob(
     let written = 0;
     for (let i = 0; i < missing.length; i += BATCH_SIZE) {
       const chunk = missing.slice(i, i + BATCH_SIZE);
-      const answers = await deps.laya(chunk.map(buildLeadState), question);
+      const leadStates = chunk.map((lead) => sanitizeLeadContext(buildLeadState(lead)));
+      const answers = await deps.laya(leadStates, question);
       const updatedAt = new Date(now()).toISOString();
-      const batch = chunk.map((lead, j) => ({
-        column_id: column.id,
-        lead_id: lead.id,
-        account_id: column.account_id,
-        ...mapLayaAnswer(kind, options, answers[j]),
-        updated_at: updatedAt,
-      }));
+
+      const batch = await Promise.all(
+        chunk.map(async (lead, j) => {
+          const rawAnswer = answers[j];
+          let mapped = mapLayaAnswer(kind, options, rawAnswer);
+
+          if (deps.arbitrateWithClaude) {
+            const ensemble = await resolveEnsemblePrediction(
+              kind,
+              options,
+              rawAnswer,
+              leadStates[j],
+              question,
+              { arbitrateWithClaude: deps.arbitrateWithClaude },
+            );
+            mapped = { value: ensemble.value, confidence: ensemble.confidence };
+          }
+
+          return {
+            column_id: column.id,
+            lead_id: lead.id,
+            account_id: column.account_id,
+            ...mapped,
+            updated_at: updatedAt,
+          };
+        }),
+      );
+
       const { error } = await db.from('lead_column_values').upsert(batch, { onConflict: 'column_id,lead_id' });
       if (error) {
         // Column (or lead) deleted while we were filling: nothing left to report on.
