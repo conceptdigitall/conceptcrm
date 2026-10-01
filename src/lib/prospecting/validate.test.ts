@@ -21,6 +21,8 @@ describe('validateSearchInput', () => {
     expect(validateSearchInput({ query: '', location: 'Santos' }).ok).toBe(false);
     expect(validateSearchInput({ query: 'a', location: '' }).ok).toBe(false);
     expect(validateSearchInput({ query: 'x'.repeat(121), location: 'Santos' }).ok).toBe(false);
+    expect(validateSearchInput({ query: 'barbearia', location: 'Santos, SP, São Vicente, SP, Praia Grande, SP' }).ok).toBe(true);
+    expect(validateSearchInput({ query: 'barbearia', location: 'x'.repeat(301) }).ok).toBe(false);
     // One query per line in the scraper input file — a newline would inject a second search.
     expect(validateSearchInput({ query: 'a\nb', location: 'Santos' }).ok).toBe(false);
   });
