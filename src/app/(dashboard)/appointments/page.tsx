@@ -119,10 +119,16 @@ export default function AppointmentsPage() {
         .order('scheduled_at', { ascending: true });
 
       if (error) {
-        if (error.code === 'PGRST205' || error.message.includes('schema cache')) {
+        const errorMsg = error.message || '';
+        if (error.code === 'PGRST205' || errorMsg.includes('schema cache') || error.code === '42P01') {
           setTableMissing(true);
         } else {
-          console.error('[appointments fetch error]:', error);
+          console.warn('[appointments fetch error]:', {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+          });
           toast.error('Erro ao carregar agendamentos.');
         }
         setAppointments([]);
