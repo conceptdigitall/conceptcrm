@@ -13,6 +13,13 @@ import { displayedCell, sortScore } from '@/lib/prospecting/columns';
 import { AiCell, AiColumnHeader, NewColumnInput, TitleHelp, fetchAllColumnValues } from '@/components/prospecting/ai-columns';
 import { SATISFACTION_LABEL, buildOutreachMessage, satisfactionLevel, whatsappUrl, type SatisfactionLevel } from '@/lib/prospecting/outreach';
 import { SearchForm, type SearchInput } from '@/components/prospecting/search-form';
+import { NaturalSearchBar } from '@/components/prospecting/natural-search-bar';
+import {
+  extractDistinctRegions,
+  extractAudienceList,
+  getLeadAudience,
+  type LeadRankingResult,
+} from '@/lib/prospecting/dynamic-search';
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +57,11 @@ export default function ProspeccaoPage() {
   const [values, setValues] = useState<LeadColumnValue[]>([]);
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [valueFilter, setValueFilter] = useState<{ columnId: string; value: string } | null>(null);
+  const [activeNaturalQuery, setActiveNaturalQuery] = useState<string | null>(null);
+  const [rankingResults, setRankingResults] = useState<Map<string, LeadRankingResult>>(new Map());
+  const [rankingLoading, setRankingLoading] = useState(false);
+  const [selectedRegion, setSelectedRegion] = useState<string | null>(null);
+  const [selectedAudience, setSelectedAudience] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     const [s, l, c, v] = await Promise.all([
@@ -202,16 +214,68 @@ export default function ProspeccaoPage() {
 
   const cellOf = (columnId: string, leadId: string) => cells.get(`${columnId}:${leadId}`);
 
-  const filtered = leads.filter((l) =>
-    (statusFilter === 'todos' || l.status === statusFilter) &&
-    (!text || `${l.name} ${l.address ?? ''} ${l.category ?? ''}`.toLowerCase().includes(text.toLowerCase())) &&
-    (!valueFilter || displayedCell(cellOf(valueFilter.columnId, l.id))?.value === valueFilter.value),
-  );
+  const regions = useMemo(() => extractDistinctRegions(leads), [leads]);
+  const audiences = useMemo(() => extractAudienceList(leads), [leads]);
+
+  async function handleNaturalSearch(query: string) {
+    setRankingLoading(true);
+    try {
+      const res = await fetch('/api/prospecting/rank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error ?? 'Falha ao analisar com Laya');
+        return;
+      }
+      const map = new Map<string, LeadRankingResult>();
+      for (const r of (json.results ?? []) as LeadRankingResult[]) {
+        map.set(r.leadId, r);
+      }
+      setRankingResults(map);
+      setActiveNaturalQuery(query);
+      if (sortBy) setSortBy(null);
+      toast.success('Leads priorizados pelo Laya!');
+    } catch {
+      toast.error('Erro ao conectar ao serviço de busca');
+    } finally {
+      setRankingLoading(false);
+    }
+  }
+
+  function handleClearNaturalSearch() {
+    setActiveNaturalQuery(null);
+    setRankingResults(new Map());
+  }
+
+  const filtered = leads.filter((l) => {
+    if (statusFilter !== 'todos' && l.status !== statusFilter) return false;
+    if (text && !`${l.name} ${l.address ?? ''} ${l.category ?? ''}`.toLowerCase().includes(text.toLowerCase())) return false;
+    if (valueFilter && displayedCell(cellOf(valueFilter.columnId, l.id))?.value !== valueFilter.value) return false;
+    if (selectedRegion) {
+      const regNorm = selectedRegion.toLowerCase();
+      const raw = (l.raw ?? {}) as Record<string, unknown>;
+      const comp = (raw.complete_address ?? {}) as Record<string, unknown>;
+      const full = `${comp.borough ?? ''} ${comp.city ?? ''} ${l.address ?? ''}`.toLowerCase();
+      if (!full.includes(regNorm)) return false;
+    }
+    if (selectedAudience && getLeadAudience(l) !== selectedAudience) return false;
+    return true;
+  });
+
   const sortColumn = columns.find((c) => c.id === sortBy);
   const visible = sortColumn
     ? [...filtered].sort((a, b) =>
         sortScore(sortColumn.kind, sortColumn.options, cellOf(sortColumn.id, b.id))
         - sortScore(sortColumn.kind, sortColumn.options, cellOf(sortColumn.id, a.id)))
+    : activeNaturalQuery && rankingResults.size > 0
+    ? [...filtered].sort((a, b) => {
+        const pB = rankingResults.get(b.id)?.probability ?? 0;
+        const pA = rankingResults.get(a.id)?.probability ?? 0;
+        return pB - pA;
+      })
     : filtered;
 
   const lastDone = columns
@@ -235,6 +299,19 @@ export default function ProspeccaoPage() {
       )}
 
       <SearchForm disabled={!canEdit} onSubmit={createSearch} />
+
+      <NaturalSearchBar
+        onSearch={handleNaturalSearch}
+        onClear={handleClearNaturalSearch}
+        activeQuery={activeNaturalQuery}
+        loading={rankingLoading}
+        regions={regions}
+        selectedRegion={selectedRegion}
+        onSelectRegion={setSelectedRegion}
+        audiences={audiences}
+        selectedAudience={selectedAudience}
+        onSelectAudience={setSelectedAudience}
+      />
 
       {searches.length > 0 && (
         <div className="flex flex-wrap gap-2 text-sm">
@@ -279,6 +356,7 @@ export default function ProspeccaoPage() {
         <TableHeader>
           <TableRow>
             <TableHead>Oportunidade</TableHead>
+            {activeNaturalQuery && <TableHead className="min-w-[140px]">Probabilidade de Fechar</TableHead>}
             <TableHead>Negócio</TableHead>
             <TableHead>Satisfação dos clientes</TableHead>
             <TableHead>Contato</TableHead>
@@ -310,6 +388,32 @@ export default function ProspeccaoPage() {
                 <span className={cn('inline-flex rounded-md px-2 py-0.5 text-sm font-semibold', scoreTone(l.score))}>{l.score}</span>
                 <div className="mt-1 text-xs text-muted-foreground">{l.score_reasons.join(' · ')}</div>
               </TableCell>
+              {activeNaturalQuery && (
+                <TableCell>
+                  {(() => {
+                    const rank = rankingResults.get(l.id);
+                    if (!rank) return <span className="text-xs text-muted-foreground">—</span>;
+                    const tone =
+                      rank.probabilityLevel === 'alta'
+                        ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                        : rank.probabilityLevel === 'media'
+                        ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                        : 'bg-muted text-muted-foreground';
+                    return (
+                      <div className="space-y-1">
+                        <span className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold', tone)}>
+                          {rank.probability}% · {rank.probabilityLevel === 'alta' ? 'Alta' : rank.probabilityLevel === 'media' ? 'Média' : 'Baixa'}
+                        </span>
+                        {rank.reasons.length > 0 && (
+                          <div className="text-[11px] text-muted-foreground leading-tight max-w-[160px]">
+                            {rank.reasons[0]}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </TableCell>
+              )}
               <TableCell>
                 <div className="font-medium">{l.name}</div>
                 <div className="text-xs text-muted-foreground">{l.category}</div>
