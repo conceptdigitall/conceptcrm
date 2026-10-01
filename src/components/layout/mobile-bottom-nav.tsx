@@ -61,6 +61,13 @@ export function MobileBottomNav({ onOpenMore, totalUnread }: MobileBottomNavProp
       className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       <ul className="flex">
+        {/* "Mais" first: the thumb reaches the drawer without crossing the bar. */}
+        <li className="flex flex-1">
+          <button type="button" onClick={onOpenMore} className={tabClass(moreActive)}>
+            <Menu className="h-5 w-5" />
+            {t("more")}
+          </button>
+        </li>
         {MOBILE_PRIMARY_NAV.map((item) => {
           const active = isNavItemActive(pathname, item.href);
           const showUnread = item.href === "/inbox" && totalUnread > 0;
@@ -87,12 +94,6 @@ export function MobileBottomNav({ onOpenMore, totalUnread }: MobileBottomNavProp
             </li>
           );
         })}
-        <li className="flex flex-1">
-          <button type="button" onClick={onOpenMore} className={tabClass(moreActive)}>
-            <Menu className="h-5 w-5" />
-            {t("more")}
-          </button>
-        </li>
       </ul>
     </nav>
   );
