@@ -43,7 +43,9 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configurações",
-    "menuSignOut": "Sair"
+    "menuSignOut": "Sair",
+    "groupGrow": "Crescer",
+    "groupAutomate": "Automatizar"
   },
   "Header": {
     "dashboard": "Painel",

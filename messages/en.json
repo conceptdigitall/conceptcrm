@@ -43,7 +43,9 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Profile",
     "menuSettings": "Settings",
-    "menuSignOut": "Sign out"
+    "menuSignOut": "Sign out",
+    "groupGrow": "Grow",
+    "groupAutomate": "Automate"
   },
   "Header": {
     "dashboard": "Dashboard",

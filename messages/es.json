@@ -43,7 +43,9 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "groupGrow": "Crecer",
+    "groupAutomate": "Automatizar"
   },
   "Header": {
     "dashboard": "Panel",
