@@ -904,7 +904,7 @@ export function MessageThread({
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-4 py-3">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. Hidden on lg+ where the
               conversation list is always visible next to the thread. */}
@@ -913,7 +913,7 @@ export function MessageThread({
               type="button"
               onClick={onBack}
               aria-label={t("backToConversations")}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+              className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted/60 text-foreground hover:bg-muted lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>

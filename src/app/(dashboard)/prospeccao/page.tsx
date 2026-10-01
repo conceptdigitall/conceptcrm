@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ExternalLink, MessageCircle, RotateCcw, Search, UserPlus, AlertTriangle } from 'lucide-react';
+import { ExternalLink, MessageCircle, RotateCcw, Star, UserPlus, AlertTriangle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useCan } from '@/hooks/use-can';
 import { hasStalePending } from '@/lib/jobs/stale';
 import { safeHttpUrl } from '@/lib/prospecting/url';
+import { SATISFACTION_LABEL, buildOutreachMessage, satisfactionLevel, whatsappUrl, type SatisfactionLevel } from '@/lib/prospecting/outreach';
+import { SearchForm, type SearchInput } from '@/components/prospecting/search-form';
+import { cn } from '@/lib/utils';
 import type { Lead, LeadSearch, LeadStatus } from '@/types';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +20,19 @@ const STATUS_LABEL: Record<LeadStatus, string> = {
   novo: 'Novo', contatado: 'Contatado', qualificado: 'Qualificado', descartado: 'Descartado',
 };
 const JOB_LABEL = { pending: 'Na fila', running: 'Buscando…', done: 'Concluída', failed: 'Erro' } as const;
+const SATISFACTION_TONE: Record<SatisfactionLevel, string> = {
+  'muito-alta': 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  alta: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  media: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  baixa: 'bg-red-500/10 text-red-700 dark:text-red-300',
+  'sem-dados': 'bg-muted text-muted-foreground',
+};
+
+function scoreTone(score: number): string {
+  if (score >= 60) return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+  if (score >= 40) return 'bg-amber-500/15 text-amber-700 dark:text-amber-300';
+  return 'bg-muted text-muted-foreground';
+}
 
 export default function ProspeccaoPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -25,12 +41,8 @@ export default function ProspeccaoPage() {
 
   const [searches, setSearches] = useState<LeadSearch[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [query, setQuery] = useState('');
-  const [location, setLocation] = useState('Santos, SP');
-  const [maxResults, setMaxResults] = useState(50);
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'todos'>('novo');
   const [text, setText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
   const fetchData = useCallback(async () => {
@@ -71,20 +83,20 @@ export default function ProspeccaoPage() {
     return () => clearInterval(t);
   }, [busy, load]);
 
-  async function createSearch(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
+  async function createSearch(input: SearchInput): Promise<boolean> {
     const res = await fetch('/api/prospecting/searches', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, location, maxResults }),
+      body: JSON.stringify(input),
     });
-    setSubmitting(false);
     const json = await res.json().catch(() => ({}));
-    if (!res.ok) return toast.error(json.error ?? 'Não foi possível criar a busca');
+    if (!res.ok) {
+      toast.error(json.error ?? 'Não foi possível criar a busca');
+      return false;
+    }
     toast.success('Busca na fila. O worker processa quando estiver rodando.');
-    setQuery('');
     load();
+    return true;
   }
 
   async function retry(id: string) {
@@ -110,6 +122,15 @@ export default function ProspeccaoPage() {
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, status } : l)));
   }
 
+  // Opening WhatsApp doesn't prove a message was sent, so the status change is undoable.
+  function onApproach(lead: Lead) {
+    if (!canEdit || lead.status !== 'novo') return;
+    void setStatus(lead, 'contatado');
+    toast.success(`${lead.name} marcado como contatado`, {
+      action: { label: 'Desfazer', onClick: () => void setStatus({ ...lead, status: 'contatado' }, 'novo') },
+    });
+  }
+
   const visible = leads.filter((l) =>
     (statusFilter === 'todos' || l.status === statusFilter) &&
     (!text || `${l.name} ${l.address ?? ''} ${l.category ?? ''}`.toLowerCase().includes(text.toLowerCase())),
@@ -131,20 +152,7 @@ export default function ProspeccaoPage() {
         </div>
       )}
 
-      <form onSubmit={createSearch} className="flex flex-wrap items-end gap-3 rounded-lg border p-4">
-        <label className="flex flex-col gap-1 text-sm">O que buscar
-          <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="barbearia, imobiliária…" required maxLength={120} />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">Cidade
-          <Input value={location} onChange={(e) => setLocation(e.target.value)} required maxLength={120} />
-        </label>
-        <label className="flex w-28 flex-col gap-1 text-sm">Quantidade
-          <Input type="number" min={1} max={200} value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value))} />
-        </label>
-        <Button type="submit" disabled={!canEdit || submitting}>
-          <Search className="mr-2 h-4 w-4" /> Buscar
-        </Button>
-      </form>
+      <SearchForm disabled={!canEdit} onSubmit={createSearch} />
 
       {searches.length > 0 && (
         <div className="flex flex-wrap gap-2 text-sm">
@@ -178,8 +186,9 @@ export default function ProspeccaoPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Score</TableHead>
+            <TableHead>Oportunidade</TableHead>
             <TableHead>Negócio</TableHead>
+            <TableHead>Satisfação dos clientes</TableHead>
             <TableHead>Contato</TableHead>
             <TableHead>Status</TableHead>
             <TableHead />
@@ -189,15 +198,30 @@ export default function ProspeccaoPage() {
           {visible.map((l) => (
             <TableRow key={l.id}>
               <TableCell>
-                <div className="font-semibold">{l.score}</div>
-                <div className="text-xs text-muted-foreground">{l.score_reasons.join(' · ')}</div>
+                <span className={cn('inline-flex rounded-md px-2 py-0.5 text-sm font-semibold', scoreTone(l.score))}>{l.score}</span>
+                <div className="mt-1 text-xs text-muted-foreground">{l.score_reasons.join(' · ')}</div>
               </TableCell>
               <TableCell>
                 <div className="font-medium">{l.name}</div>
-                <div className="text-xs text-muted-foreground">
-                  {l.category} {l.rating ? `· ${l.rating}★ (${l.review_count ?? 0})` : ''}
-                </div>
+                <div className="text-xs text-muted-foreground">{l.category}</div>
                 <div className="text-xs text-muted-foreground">{l.address}</div>
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  const level = satisfactionLevel(l.rating, l.review_count);
+                  return (
+                    <div className="space-y-1">
+                      <span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-medium', SATISFACTION_TONE[level])}>
+                        {SATISFACTION_LABEL[level]}
+                      </span>
+                      {l.rating != null && (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Star className="h-3 w-3 fill-current text-amber-500" /> {l.rating} · {l.review_count ?? 0} avaliações
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </TableCell>
               <TableCell className="text-sm">
                 <div>{l.phone ?? '—'}</div>
@@ -215,14 +239,22 @@ export default function ProspeccaoPage() {
                 </select>
               </TableCell>
               <TableCell className="space-x-1 whitespace-nowrap">
+                {l.phone && l.is_mobile ? (
+                  <a
+                    className={cn(buttonVariants({ size: 'sm' }), 'bg-[#25D366] text-white hover:bg-[#1ebe5a]')}
+                    href={whatsappUrl(l.phone, buildOutreachMessage(l))}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => onApproach(l)}
+                  >
+                    <MessageCircle className="mr-1 h-4 w-4" /> Abordar no WhatsApp
+                  </a>
+                ) : (
+                  <span className="text-xs text-muted-foreground" title="Telefone fixo ou ausente">Sem WhatsApp</span>
+                )}
                 {safeHttpUrl(l.maps_url) && (
                   <a className={buttonVariants({ variant: 'ghost', size: 'icon' })} title="Abrir no Maps" href={safeHttpUrl(l.maps_url) ?? undefined} target="_blank" rel="noreferrer">
                     <ExternalLink className="h-4 w-4" />
-                  </a>
-                )}
-                {l.phone && l.is_mobile && (
-                  <a className={buttonVariants({ variant: 'ghost', size: 'icon' })} title="Abrir WhatsApp (manual)" href={`https://wa.me/${l.phone}`} target="_blank" rel="noreferrer">
-                    <MessageCircle className="h-4 w-4" />
                   </a>
                 )}
                 <Button

@@ -2,14 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
-  Bell,
   Bot,
   Calendar,
+  ChevronDown,
   Clapperboard,
   Crown,
   GitBranch,
@@ -97,20 +96,48 @@ interface NavItem {
   internalOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+interface NavGroup {
+  id: string;
+  labelKey: string;
+  items: NavItem[];
+}
+
+// Hick's law: few always-visible choices; the rest live in groups that
+// start collapsed on desktop. Notifications moved to the header bell.
+const primaryItems: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
-  { href: "/notifications", labelKey: "notifications", icon: Bell },
   { href: "/contacts", labelKey: "contacts", icon: Users },
   { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
   { href: "/appointments", labelKey: "appointments", icon: Calendar },
-  { href: "/prospeccao", labelKey: "prospecting", icon: Search, internalOnly: true },
-  { href: "/marketing", labelKey: "marketing", icon: Clapperboard, internalOnly: true },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
-  { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
-  { href: "/agents", labelKey: "aiAgents", icon: Bot },
 ];
+
+const navGroups: NavGroup[] = [
+  {
+    id: "grow",
+    labelKey: "groupGrow",
+    items: [
+      { href: "/prospeccao", labelKey: "prospecting", icon: Search, internalOnly: true },
+      { href: "/marketing", labelKey: "marketing", icon: Clapperboard, internalOnly: true },
+      { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
+    ],
+  },
+  {
+    id: "automate",
+    labelKey: "groupAutomate",
+    items: [
+      { href: "/automations", labelKey: "automations", icon: Zap },
+      { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
+      { href: "/agents", labelKey: "aiAgents", icon: Bot },
+    ],
+  },
+];
+
+const GROUPS_STORAGE_KEY = "sidebar.openGroups";
+
+function isActiveHref(pathname: string, href: string): boolean {
+  return pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+}
 
 const bottomNavItems = [
   { href: "/settings", labelKey: "settings", icon: Settings },
@@ -130,7 +157,76 @@ export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
-  const unreadNotifications = useUnreadNotifications();
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+
+  const visible = (item: NavItem) => !item.internalOnly || isInternalAccount(account?.id);
+  const groups = navGroups
+    .map((g) => ({ ...g, items: g.items.filter(visible) }))
+    .filter((g) => g.items.length > 0);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GROUPS_STORAGE_KEY) ?? "{}");
+      if (saved && typeof saved === "object") setOpenGroups(saved);
+    } catch {
+      // Private mode or corrupted value: start with every group collapsed.
+    }
+  }, []);
+
+  const toggleGroup = (id: string) => {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const renderItem = (item: NavItem) => {
+    const isActive = isActiveHref(pathname, item.href);
+    const showUnreadDot = item.href === "/inbox" && totalUnread > 0 && !isActive;
+    return (
+      // Already one tap away in the mobile bottom bar — hide it
+      // from the drawer so "Mais" only offers what's left.
+      <li
+        key={item.href}
+        className={cn(MOBILE_PRIMARY_HREFS.has(item.href) && "hidden lg:block")}
+      >
+        <Link
+          href={item.href}
+          aria-current={isActive ? "page" : undefined}
+          className={cn(
+            // Taller on mobile so fingers can hit the row reliably (≥44px).
+            "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 lg:py-2",
+            isActive
+              ? "bg-[#0624C7] text-white shadow-sm font-semibold"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <item.icon className="h-4 w-4" />
+          <span className="flex-1">{t(item.labelKey as string)}</span>
+          {item.beta && (
+            <span
+              aria-label={t("beta")}
+              className="rounded-full border border-[#FCE026]/40 bg-[#FCE026]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#FCE026]"
+            >
+              {t("beta")}
+            </span>
+          )}
+          {showUnreadDot && (
+            <span
+              aria-label={t("unreadConversations", { count: totalUnread })}
+              className="relative flex h-2 w-2"
+            >
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+            </span>
+          )}
+        </Link>
+      </li>
+    );
+  };
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -219,71 +315,34 @@ export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps
 
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <ul className="flex flex-col gap-1">
-            {navItems.filter((item) => !item.internalOnly || isInternalAccount(account?.id)).map((item) => {
-              const isActive =
-                pathname === item.href ||
-                (item.href !== "/dashboard" && pathname.startsWith(item.href));
+          <ul className="flex flex-col gap-1">{primaryItems.map(renderItem)}</ul>
 
-              const showUnreadDot =
-                item.href === "/inbox" && totalUnread > 0 && !isActive;
-
-              // Unlike the inbox dot, the notifications count stays visible
-              // even while the page is active — it reflects unread state
-              // (cleared by marking notifications read), not "currently
-              // viewing this section".
-              const showNotificationBadge =
-                item.href === "/notifications" && unreadNotifications > 0;
-
-              return (
-                // Already one tap away in the mobile bottom bar — hide it
-                // from the drawer so "Mais" only offers what's left.
-                <li
-                  key={item.href}
-                  className={cn(MOBILE_PRIMARY_HREFS.has(item.href) && "hidden lg:block")}
+          {groups.map((group) => {
+            // A group holding the current page never hides it.
+            const open = openGroups[group.id] || group.items.some((i) => isActiveHref(pathname, i.href));
+            const listId = `nav-group-${group.id}`;
+            return (
+              <div key={group.id} className="mt-4">
+                {/* Mobile drawer is already the "Mais" overflow: groups stay open there. */}
+                <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground lg:hidden">
+                  {t(group.labelKey)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.id)}
+                  aria-expanded={open}
+                  aria-controls={listId}
+                  className="hidden w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground lg:flex"
                 >
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      // Taller on mobile so fingers can hit the row reliably (≥44px).
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 lg:py-2",
-                      isActive
-                        ? "bg-[#0624C7] text-white shadow-sm font-semibold"
-                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                    )}
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{t(item.labelKey as string)}</span>
-                    {item.beta && (
-                      <span
-                        aria-label={t("beta")}
-                        className="rounded-full border border-[#FCE026]/40 bg-[#FCE026]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-[#FCE026]"
-                      >
-                        {t("beta")}
-                      </span>
-                    )}
-                    {showUnreadDot && (
-                      <span
-                        aria-label={t("unreadConversations", { count: totalUnread })}
-                        className="relative flex h-2 w-2"
-                      >
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-                      </span>
-                    )}
-                    {showNotificationBadge && (
-                      <span
-                        aria-label={t("unreadNotifications", { count: unreadNotifications })}
-                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
-                      >
-                        {unreadNotifications > 9 ? "9+" : unreadNotifications}
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+                  {t(group.labelKey)}
+                  <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+                </button>
+                <ul id={listId} className={cn("mt-1 flex flex-col gap-1", !open && "lg:hidden")}>
+                  {group.items.map(renderItem)}
+                </ul>
+              </div>
+            );
+          })}
 
           <div className="my-4 border-t border-border" />
 
