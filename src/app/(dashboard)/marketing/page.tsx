@@ -30,6 +30,12 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { PhotoPicker } from './photo-picker';
 import { VideoProgress } from './video-progress';
 import { SocialModal } from './social-modal';
+import { TemplatePicker } from '@/components/marketing/template-picker';
+import {
+  composeTemplatePrompt,
+  type MarketingTemplateId,
+  type TemplateFieldValues,
+} from '@/lib/marketing/templates';
 
 const BUCKET = 'marketing';
 const FORMAT_OPTIONS: { value: VideoFormat; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -54,12 +60,22 @@ export default function MarketingPage() {
 
   const [videos, setVideos] = useState<MarketingVideo[]>([]);
   const [urls, setUrls] = useState<Record<string, { video?: string; poster?: string }>>({});
-  const [prompt, setPrompt] = useState('');
+  const [templateMode, setTemplateMode] = useState<'templates' | 'custom'>('templates');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<MarketingTemplateId>('discount');
+  const [templateFields, setTemplateFields] = useState<TemplateFieldValues>({});
+  const [customPrompt, setCustomPrompt] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [format, setFormat] = useState<VideoFormat>('vertical');
   const [tone, setTone] = useState<VideoTone>('default');
   const [submitting, setSubmitting] = useState(false);
   const [publishVideo, setPublishVideo] = useState<MarketingVideo | null>(null);
+
+  const effectivePrompt = useMemo(() => {
+    if (templateMode === 'templates') {
+      return composeTemplatePrompt(selectedTemplateId, templateFields);
+    }
+    return customPrompt.trim();
+  }, [templateMode, selectedTemplateId, templateFields, customPrompt]);
 
   const [now, setNow] = useState(() => Date.now());
 
@@ -136,12 +152,13 @@ export default function MarketingPage() {
       const res = await fetch('/api/marketing/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, imagePaths, format, tone }),
+        body: JSON.stringify({ prompt: effectivePrompt, imagePaths, format, tone }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? 'Não foi possível criar o vídeo');
       toast.success('Vídeo na fila. Leva alguns minutos com o worker rodando.');
-      setPrompt('');
+      setCustomPrompt('');
+      setTemplateFields({});
       setFiles([]);
       load();
     } catch (err) {
@@ -183,22 +200,19 @@ export default function MarketingPage() {
       )}
 
       <form onSubmit={submit} className="space-y-5 rounded-2xl border border-border/70 bg-card/50 p-5 shadow-xs backdrop-blur-xs transition-all">
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <label htmlFor="video-prompt" className="font-medium text-foreground">
-              Briefing e copy do vídeo <span className="text-muted-foreground font-normal">(opcional ao usar fotos)</span>:
-            </label>
-            <span className="font-mono text-muted-foreground">{prompt.length}/1000</span>
-          </div>
-          <textarea
-            id="video-prompt"
-            className="min-h-24 w-full rounded-xl border border-border/80 bg-background/80 p-3 text-sm transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
-            placeholder="Descreva a oferta ou o objetivo do vídeo. Ex: Promoção de corte + barba por R$ 50 nesta sexta na Barbearia do Alemão, Santos. Vagas limitadas no WhatsApp."
-            value={prompt}
-            maxLength={1000}
-            onChange={(e) => setPrompt(e.target.value)}
-          />
-        </div>
+        <TemplatePicker
+          mode={templateMode}
+          onModeChange={setTemplateMode}
+          selectedTemplateId={selectedTemplateId}
+          onTemplateChange={setSelectedTemplateId}
+          fieldValues={templateFields}
+          onFieldChange={(fieldId, val) =>
+            setTemplateFields((prev) => ({ ...prev, [fieldId]: val }))
+          }
+          customPrompt={customPrompt}
+          onCustomPromptChange={setCustomPrompt}
+          disabled={!canEdit || submitting}
+        />
 
         <PhotoPicker files={files} onChange={setFiles} disabled={!canEdit || submitting} />
 
@@ -257,8 +271,8 @@ export default function MarketingPage() {
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-4">
           <Button
             type="submit"
-            disabled={!canEdit || submitting || limitReached || (!prompt.trim() && files.length === 0)}
-            className="cursor-pointer gap-2 font-medium shadow-xs transition-all"
+            disabled={!canEdit || submitting || limitReached || (!effectivePrompt.trim() && files.length === 0)}
+            className="cursor-pointer gap-2 font-medium shadow-xs transition-all bg-[#0624C7] hover:bg-[#0624C7]/90 text-white"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
             Gerar vídeo com IA
