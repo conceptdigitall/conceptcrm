@@ -1,4 +1,4 @@
-import type { ColumnKind, Lead, LeadColumnValue } from '@/types';
+import type { ColumnKind, Lead, LeadColumn, LeadColumnValue } from '@/types';
 
 export const SCORE_LEVELS = ['baixo', 'médio', 'alto'] as const;
 export const NOUL_VALUES = ['sim', 'não'] as const;
@@ -184,4 +184,34 @@ export function sortScore(kind: ColumnKind, options: string[], cell: CellLike | 
   const index = values.indexOf(shown.value);
   const rank = kind === 'score' ? index : values.length - 1 - index;
   return rank * 2 + shown.confidence;
+}
+
+// Parte B: how the column is learning, in one short line for its header.
+export type LearningInfo = Pick<
+  LeadColumn,
+  'status' | 'teach_requested_at' | 'taught_at' | 'examples_count' | 'head_accuracy' | 'base_accuracy'
+  | 'claude_calls' | 'head_decisions'
+>;
+
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+export function learningLabel(c: LearningInfo): string | null {
+  if (c.teach_requested_at && !c.taught_at) return 'Claude ensinando…';
+  if (c.head_accuracy != null) {
+    return `treinada · acerta ${pct(c.head_accuracy)}${c.base_accuracy != null ? ` (base ${pct(c.base_accuracy)})` : ''}`;
+  }
+  if (c.examples_count) return `aprendendo · ${c.examples_count} exemplo${c.examples_count === 1 ? '' : 's'}`;
+  return null;
+}
+
+/** What the last run cost: how many cells Claude and the trained head decided. */
+export function runCostLabel(c: LearningInfo): string | null {
+  if (c.status !== 'done' || c.claude_calls == null) return null;
+  const parts = [`Claude ${c.claude_calls}×`];
+  if (c.head_decisions) parts.push(`cabeça ${c.head_decisions}`);
+  return parts.join(' · ');
+}
+
+export function canTeach(c: LearningInfo): boolean {
+  return !c.teach_requested_at && !c.taught_at && c.status !== 'failed';
 }

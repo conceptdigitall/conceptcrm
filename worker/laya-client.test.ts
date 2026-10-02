@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { layaBatch } from './laya-client';
+import { EMBED_BATCH, layaBatch, layaEmbed } from './laya-client';
 
 const question = { type: 'noul' as const, instructions: 'Tem site?' };
 const ok = (answers: unknown[]) =>
@@ -57,5 +57,28 @@ describe('layaBatch', () => {
   it('reports a timeout instead of hanging', async () => {
     const fetchImpl = vi.fn().mockRejectedValue(Object.assign(new Error('t'), { name: 'TimeoutError' }));
     await expect(layaBatch('http://x', ['a'], question, { fetchImpl, timeoutMs: 10 })).rejects.toThrow('Laya não respondeu a tempo');
+  });
+});
+
+describe('layaEmbed', () => {
+  const vectors = (n: number) => new Response(JSON.stringify({ vectors: Array.from({ length: n }, (_, i) => [i, 1]) }), { status: 200 });
+
+  it('posts texts to /v1/embed in batches and keeps the order', async () => {
+    const fetchImpl = vi.fn().mockImplementation(async (_url: string, init: { body: string }) =>
+      vectors(JSON.parse(init.body).texts.length));
+    const texts = Array.from({ length: EMBED_BATCH + 3 }, (_, i) => `t${i}`);
+    const out = await layaEmbed('http://x/', texts, { fetchImpl });
+    expect(out).toHaveLength(EMBED_BATCH + 3);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://x/v1/embed');
+    expect(JSON.parse(fetchImpl.mock.calls[1][1].body).texts).toEqual(['t32', 't33', 't34']);
+  });
+  it('fails when the count does not match', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(vectors(1));
+    await expect(layaEmbed('http://x', ['a', 'b'], { fetchImpl })).rejects.toThrow('1 vetores para 2 textos');
+  });
+  it('explains a server without the embed route', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('not found', { status: 404 }));
+    await expect(layaEmbed('http://x', ['a'], { fetchImpl })).rejects.toThrow('sem a rota /v1/embed');
   });
 });

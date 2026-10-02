@@ -5,7 +5,8 @@ import { claimNext, requeueOrphaned } from './queue';
 import { runProspectingJob } from './prospecting';
 import { runVideoJob } from './video';
 import { requeueColumnsForAccount, runColumnJob } from './columns';
-import { layaBatch } from './laya-client';
+import { layaBatch, layaEmbed } from './laya-client';
+import { headPredictor, learnAfterRun } from './learning';
 import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator';
 
 const POLL_MS = 5000;
@@ -46,10 +47,13 @@ async function tick(): Promise<boolean> {
     const column = await claimNext<LeadColumn>(db, 'lead_columns', accountIds);
     if (column) {
       console.log(`[planilha] ${column.title}`);
-      await runColumnJob(db, column, {
+      const embed = (texts: string[]) => layaEmbed(layaUrl, texts);
+      const done = await runColumnJob(db, column, {
         laya: (states, question) => layaBatch(layaUrl, states, question),
         arbitrateWithClaude,
+        head: await headPredictor(db, column, embed),
       });
+      if (done) await learnAfterRun(db, column.id, { embed, arbitrate: arbitrateWithClaude });
       return true;
     }
   }

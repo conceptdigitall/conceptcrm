@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { ArrowDownWideNarrow, Loader2, Pencil, RotateCcw, Trash2 } from 'lucide-react';
-import { LOW_CONFIDENCE, allowedValues, displayedCell } from '@/lib/prospecting/columns';
+import { ArrowDownWideNarrow, Bot, GraduationCap, Loader2, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  LOW_CONFIDENCE, allowedValues, canTeach, displayedCell, learningLabel, runCostLabel,
+} from '@/lib/prospecting/columns';
 import type { ColumnKind, LeadColumn, LeadColumnValue } from '@/types';
 import { Input } from '@/components/ui/input';
 
@@ -63,7 +65,7 @@ export function NewColumnInput({ disabled, onCreate }: {
   );
 }
 
-export function AiColumnHeader({ column, sorted, filterValue, canEdit, onSort, onFilter, onRetry, onDelete }: {
+export function AiColumnHeader({ column, sorted, filterValue, canEdit, onSort, onFilter, onRetry, onDelete, onTeach }: {
   column: LeadColumn;
   sorted: boolean;
   filterValue: string | null;
@@ -72,9 +74,12 @@ export function AiColumnHeader({ column, sorted, filterValue, canEdit, onSort, o
   onFilter: (value: string | null) => void;
   onRetry: () => void;
   onDelete: () => void;
+  onTeach: () => void;
 }) {
   const working = column.status === 'pending' || column.status === 'running';
   const status = column.status === 'failed' ? 'falhou' : column.status === 'done' ? 'pronta' : 'processando…';
+  const learning = learningLabel(column);
+  const cost = runCostLabel(column);
   return (
     <div className="min-w-40 space-y-1 py-1">
       <div className="font-medium leading-tight">{column.title}</div>
@@ -82,6 +87,21 @@ export function AiColumnHeader({ column, sorted, filterValue, canEdit, onSort, o
         {KIND_LABEL[column.kind]} · {status}
         {working && <Loader2 className="h-3 w-3 animate-spin" />}
       </div>
+      {(learning || cost) && (
+        <div className="text-xs text-muted-foreground">
+          {[learning, cost].filter(Boolean).join(' · ')}
+        </div>
+      )}
+      {canEdit && canTeach(column) && (
+        <button
+          type="button"
+          onClick={onTeach}
+          title="O Claude rotula 30 leads uma vez (centavos) e a coluna aprende com eles"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          <GraduationCap className="h-3 w-3" /> Ensinar com Claude
+        </button>
+      )}
       {column.status === 'failed' && (
         <button type="button" title={column.error ?? ''} onClick={onRetry} disabled={!canEdit} className="text-xs underline">
           <RotateCcw className="inline h-3 w-3" /> Tentar de novo
@@ -141,6 +161,12 @@ export function AiCell({ column, cell, disabled, onCorrect }: {
       {shown && (shown.corrected
         ? <Pencil className="h-3 w-3" aria-label="corrigido à mão" />
         : <span className="text-xs tabular-nums text-muted-foreground">{Math.round(shown.confidence * 100)}%</span>)}
+      {shown && !shown.corrected && cell?.source === 'cabeca' && (
+        <GraduationCap className="h-3 w-3 text-muted-foreground" aria-label="decidido pela coluna treinada" />
+      )}
+      {shown && !shown.corrected && cell?.source === 'claude' && (
+        <Bot className="h-3 w-3 text-muted-foreground" aria-label="decidido pelo Claude" />
+      )}
     </div>
   );
 }

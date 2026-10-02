@@ -9,5 +9,11 @@ if [ -z "$KEY" ]; then
   echo "Falta LAYA_API_KEY no .env.local (gere com: openssl rand -hex 32)" >&2
   exit 1
 fi
-LAYA_API_KEY="$KEY" LAYA_HOST=127.0.0.1 LAYA_PORT=8765 LAYA_DEVICE=cpu LAYA_THREADS=4 \
-  LAYA_MODELS=multilingual LAYA_PRELOAD=1 exec worker/laya/.venv/bin/laya-serve
+export LAYA_API_KEY="$KEY" LAYA_HOST=127.0.0.1 LAYA_PORT=8765 LAYA_DEVICE=cpu LAYA_THREADS=4 \
+  LAYA_MODELS=multilingual LAYA_PRELOAD=1
+# laya-serve + /v1/embed (vetores para as colunas que aprendem, parte B), no mesmo processo.
+# Opcional: LAYA_PLUS no .env.local aponta para um plugin com mais rotas
+# (ex.: a dificuldade de tarefa do segundo cérebro). Ver serve_plus.py.
+LAYA_PLUS=$(grep -E '^LAYA_PLUS=' .env.local | cut -d= -f2- | tr -d '"')
+export LAYA_PLUS
+exec worker/laya/.venv/bin/python worker/laya/serve_plus.py

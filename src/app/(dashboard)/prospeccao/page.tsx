@@ -185,6 +185,14 @@ export default function ProspeccaoPage() {
     return true;
   }
 
+  async function teachColumn(id: string) {
+    const res = await fetch(`/api/prospecting/columns/${id}/teach`, { method: 'POST' });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) return toast.error(json.error ?? 'Não foi possível ensinar a coluna');
+    toast.success('O Claude vai rotular 30 leads; a coluna aprende em seguida');
+    load();
+  }
+
   async function retryColumn(id: string) {
     const res = await fetch(`/api/prospecting/columns/${id}/retry`, { method: 'POST' });
     if (!res.ok) return toast.error('Não foi possível tentar de novo');
@@ -549,6 +557,7 @@ export default function ProspeccaoPage() {
                           onSort={() => setSortBy((cur) => (cur === c.id ? null : c.id))}
                           onFilter={(value) => setValueFilter(value ? { columnId: c.id, value } : null)}
                           onRetry={() => retryColumn(c.id)}
+                          onTeach={() => teachColumn(c.id)}
                           onDelete={() => deleteColumn(c)}
                         />
                       </TableHead>

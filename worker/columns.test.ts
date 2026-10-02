@@ -141,6 +141,40 @@ describe('runColumnJob', () => {
   });
 });
 
+describe('runColumnJob with a trained head (parte B)', () => {
+  const choiceCol = { ...column, title: 'Nicho: saúde, beleza', kind: 'choice', options: ['saúde', 'beleza'] } as LeadColumn;
+  const unsure = () => vi.fn().mockResolvedValue([
+    { choice: 'saúde', probabilities: { saúde: 0.51, beleza: 0.49 } },
+    { choice: 'saúde', probabilities: { saúde: 0.52, beleza: 0.48 } },
+  ]);
+
+  it('lets a confident head decide before Laya and Claude, and keeps Laya guess in laya_value', async () => {
+    const { db, calls } = fakeDb({ leads: [lead(0), lead(1)] });
+    const head = vi.fn().mockResolvedValue([{ value: 'beleza', confidence: 0.93 }, null]);
+    const arbitrateWithClaude = vi.fn().mockResolvedValue('beleza');
+    const done = await runColumnJob(db, choiceCol, { laya: unsure(), head, arbitrateWithClaude });
+
+    expect(done).toBe(true);
+    expect(head).toHaveBeenCalledWith(['l0', 'l1'], expect.any(Array));
+    expect(arbitrateWithClaude).toHaveBeenCalledTimes(1); // only the lead the head was unsure about
+    expect(calls.upserts[0][0]).toMatchObject({ value: 'beleza', confidence: 0.93, source: 'cabeca', laya_value: 'saúde' });
+    expect(calls.upserts[0][1]).toMatchObject({ value: 'beleza', source: 'claude', laya_value: 'saúde' });
+    expect(calls.updates.at(-1)).toMatchObject({ status: 'done', claude_calls: 1, head_decisions: 1 });
+  });
+
+  it('marks cells Laya decided alone as source laya', async () => {
+    const { db, calls } = fakeDb({ leads: [lead(0)] });
+    await runColumnJob(db, column, { laya: yes() });
+    expect(calls.upserts[0][0]).toMatchObject({ value: 'sim', source: 'laya', laya_value: 'sim' });
+    expect(calls.updates.at(-1)).toMatchObject({ claude_calls: 0, head_decisions: 0 });
+  });
+
+  it('returns false when the column fails', async () => {
+    const { db } = fakeDb({ leads: [lead(0)] });
+    expect(await runColumnJob(db, column, { laya: vi.fn().mockRejectedValue(new Error('x')) })).toBe(false);
+  });
+});
+
 describe('requeueColumnsForAccount', () => {
   it('puts the account done columns back in the queue', async () => {
     const { db, calls } = fakeDb({ leads: [] });
