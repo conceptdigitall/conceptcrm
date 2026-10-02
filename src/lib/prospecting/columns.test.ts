@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allowedValues, buildLeadState, canonicalValue, displayedCell, mapLayaAnswer, normalizeLabel, parseColumnTitle, sortScore, toLayaQuestion,
+  allowedValues, buildLeadState, canTeach, canonicalValue, displayedCell, learningLabel, runCostLabel, mapLayaAnswer, normalizeLabel, parseColumnTitle, sortScore, toLayaQuestion,
 } from './columns';
 
 describe('normalizeLabel', () => {
@@ -180,5 +180,35 @@ describe('sortScore', () => {
     const opts = ['saúde', 'beleza'];
     expect(sortScore('choice', opts, cell('saúde', 0.3))).toBeGreaterThan(sortScore('choice', opts, cell('beleza', 0.99)));
     expect(sortScore('choice', opts, undefined)).toBe(-1);
+  });
+});
+
+describe('learning labels (parte B)', () => {
+  const base = {
+    status: 'done', teach_requested_at: null, taught_at: null, examples_count: null,
+    head_accuracy: null, base_accuracy: null, claude_calls: null, head_decisions: null,
+  } as const;
+
+  it('says when Claude is teaching, the head is trained, or the column is still learning', () => {
+    expect(learningLabel(base)).toBeNull();
+    expect(learningLabel({ ...base, teach_requested_at: '2026-10-01' })).toBe('Claude ensinando…');
+    expect(learningLabel({ ...base, examples_count: 1 })).toBe('aprendendo · 1 exemplo');
+    expect(learningLabel({ ...base, examples_count: 14 })).toBe('aprendendo · 14 exemplos');
+    expect(learningLabel({ ...base, examples_count: 30, head_accuracy: 0.914, base_accuracy: 0.48 }))
+      .toBe('treinada · acerta 91% (base 48%)');
+  });
+
+  it('summarises what the last run cost', () => {
+    expect(runCostLabel(base)).toBeNull();
+    expect(runCostLabel({ ...base, claude_calls: 4, head_decisions: 0 })).toBe('Claude 4×');
+    expect(runCostLabel({ ...base, claude_calls: 2, head_decisions: 20 })).toBe('Claude 2× · cabeça 20');
+    expect(runCostLabel({ ...base, status: 'running', claude_calls: 2 })).toBeNull();
+  });
+
+  it('offers teaching once, and not on a failed column', () => {
+    expect(canTeach(base)).toBe(true);
+    expect(canTeach({ ...base, taught_at: '2026-10-01' })).toBe(false);
+    expect(canTeach({ ...base, teach_requested_at: '2026-10-01' })).toBe(false);
+    expect(canTeach({ ...base, status: 'failed' })).toBe(false);
   });
 });

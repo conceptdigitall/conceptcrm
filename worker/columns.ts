@@ -4,8 +4,9 @@ import {
   type LayaAnswer, type LayaQuestion,
 } from '@/lib/prospecting/columns';
 import { resolveEnsemblePrediction, sanitizeLeadContext } from '@/lib/laya/reliable-inference';
-import type { Lead, LeadColumn } from '@/types';
+import type { CellSource, Lead, LeadColumn } from '@/types';
 import { LAYA_MODEL } from './laya-client';
+import type { HeadPredictor } from './learning';
 import { failJob, finishJob } from './queue';
 
 export const FILL_LIMIT = 500;
@@ -18,18 +19,24 @@ export interface ColumnJobDeps {
   laya: LayaFn;
   now?: () => number;
   arbitrateWithClaude?: (leadText: string, question: LayaQuestion, options: string[]) => Promise<string>;
+  /** The column's trained head (parte B): decides first when it is confident. */
+  head?: HeadPredictor;
 }
 
+// Per cell: João's correction is never touched; then the column head (when confident),
+// then Laya's base model (when its margin is wide), then Claude. `laya_value` always
+// keeps Laya's guess, so the head can be measured against it.
+// Returns true when the column finished (done), false when it failed or vanished.
 export async function runColumnJob(
   db: SupabaseClient, column: LeadColumn, deps: ColumnJobDeps,
-): Promise<void> {
+): Promise<boolean> {
   const now = deps.now ?? Date.now;
   const started = now();
   // RLS lets agents write rows directly: the title, not the stored kind/options, is the truth.
   const parsed = parseColumnTitle(column.title);
   if (!parsed.ok) {
     await failJob(db, 'lead_columns', column.id, parsed.error);
-    return;
+    return false;
   }
   const { kind, options } = parsed.value;
 
@@ -52,18 +59,26 @@ export async function runColumnJob(
     const question = toLayaQuestion(parsed.value);
 
     let written = 0;
+    let claudeCalls = 0;
+    let headDecisions = 0;
     for (let i = 0; i < missing.length; i += BATCH_SIZE) {
       const chunk = missing.slice(i, i + BATCH_SIZE);
       const leadStates = chunk.map((lead) => sanitizeLeadContext(buildLeadState(lead)));
       const answers = await deps.laya(leadStates, question);
+      const headAnswers = deps.head ? await deps.head(chunk.map((l) => l.id), leadStates) : [];
       const updatedAt = new Date(now()).toISOString();
 
       const batch = await Promise.all(
         chunk.map(async (lead, j) => {
           const rawAnswer = answers[j];
-          let mapped = mapLayaAnswer(kind, options, rawAnswer);
+          const base = mapLayaAnswer(kind, options, rawAnswer);
+          let decided: { value: string; confidence: number; source: CellSource } = { ...base, source: 'laya' };
 
-          if (deps.arbitrateWithClaude) {
+          const fromHead = headAnswers[j];
+          if (fromHead) {
+            decided = { ...fromHead, source: 'cabeca' };
+            headDecisions += 1;
+          } else if (deps.arbitrateWithClaude) {
             const ensemble = await resolveEnsemblePrediction(
               kind,
               options,
@@ -72,14 +87,20 @@ export async function runColumnJob(
               question,
               { arbitrateWithClaude: deps.arbitrateWithClaude },
             );
-            mapped = { value: ensemble.value, confidence: ensemble.confidence };
+            if (ensemble.escalated) claudeCalls += 1;
+            decided = {
+              value: ensemble.value,
+              confidence: ensemble.confidence,
+              source: ensemble.source === 'claude_arbitration' ? 'claude' : 'laya',
+            };
           }
 
           return {
             column_id: column.id,
             lead_id: lead.id,
             account_id: column.account_id,
-            ...mapped,
+            ...decided,
+            laya_value: base.value,
             updated_at: updatedAt,
           };
         }),
@@ -88,7 +109,7 @@ export async function runColumnJob(
       const { error } = await db.from('lead_column_values').upsert(batch, { onConflict: 'column_id,lead_id' });
       if (error) {
         // Column (or lead) deleted while we were filling: nothing left to report on.
-        if (error.code === FK_VIOLATION) return;
+        if (error.code === FK_VIOLATION) return false;
         throw new Error(`Falha ao salvar valores: ${error.message}`);
       }
       written += batch.length;
@@ -98,9 +119,13 @@ export async function runColumnJob(
       filled_count: rows.length - missing.length + written,
       duration_ms: now() - started,
       model: LAYA_MODEL,
+      claude_calls: claudeCalls,
+      head_decisions: headDecisions,
     });
+    return true;
   } catch (err) {
     await failJob(db, 'lead_columns', column.id, err instanceof Error ? err.message : String(err));
+    return false;
   }
 }
 

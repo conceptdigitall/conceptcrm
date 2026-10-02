@@ -798,7 +798,20 @@ export interface LeadColumn {
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
+  // Parte B: aprendizado da coluna (migration 047)
+  teach_requested_at?: string | null;
+  taught_at?: string | null;
+  examples_count?: number | null;
+  head_accuracy?: number | null;
+  base_accuracy?: number | null;
+  head_coverage?: number | null;
+  trained_at?: string | null;
+  claude_calls?: number | null;
+  head_decisions?: number | null;
 }
+
+/** Who decided a cell's `value`; null on rows filled before migration 047. */
+export type CellSource = 'laya' | 'cabeca' | 'claude';
 
 export interface LeadColumnValue {
   column_id: string;
@@ -810,4 +823,6 @@ export interface LeadColumnValue {
   corrected_by: string | null;
   corrected_at: string | null;
   updated_at: string;
+  source?: CellSource | null;
+  laya_value?: string | null;
 }

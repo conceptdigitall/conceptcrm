@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { LayaQuestion } from '@/lib/prospecting/columns';
 
-const DEFAULT_MODEL = 'claude-3-5-haiku-latest';
+// claude-3-5-haiku-latest was retired (404): every escalation failed silently until 2026-10-01.
+const DEFAULT_MODEL = 'claude-haiku-4-5';
 
 let anthropicClient: Anthropic | null = null;
 
@@ -15,7 +16,7 @@ function getAnthropicClient(): Anthropic | null {
 }
 
 /**
- * Árbitro inteligente em nuvem (Claude 3.5 Haiku) para casos onde
+ * Árbitro inteligente em nuvem (Claude Haiku 4.5) para casos onde
  * o modelo local Laya opera com margem de dúvida (< 70% de certeza).
  * Garante 100% de precisão operacional no resultado entregue ao usuário.
  */
