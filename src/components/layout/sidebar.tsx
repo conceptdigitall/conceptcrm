@@ -200,7 +200,7 @@ export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps
             // Taller on mobile so fingers can hit the row reliably (≥44px).
             "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 lg:py-2",
             isActive
-              ? "bg-[#0624C7] text-white shadow-sm font-semibold"
+              ? "bg-gradient-to-r from-[#C5A880] to-[#D4AF37] text-black shadow-md font-bold shadow-[#C5A880]/20"
               : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >

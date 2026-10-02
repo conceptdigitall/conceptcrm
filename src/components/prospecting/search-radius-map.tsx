@@ -97,7 +97,7 @@ export function SearchRadiusMap({ cities }: SearchRadiusMapProps) {
         radius: 7,
         color: '#04081E',
         weight: 2,
-        fillColor: '#FCE026',
+        fillColor: '#C5A880',
         fillOpacity: 1,
       })
         .bindTooltip(name.replace(/, [A-Z]{2}$/, ''), { permanent: true, direction: 'top', offset: [0, -6] })

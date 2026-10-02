@@ -394,10 +394,10 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
     <div className="space-y-6">
       {/* Top Banner if Database Table is not yet migrated */}
       {tableMissing && (
-        <div className="rounded-xl border border-[#FCE026]/40 bg-[#FCE026]/10 p-5 text-foreground shadow-sm">
+        <div className="rounded-xl border border-accent-gold/40 bg-accent-gold/10 p-5 text-foreground shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 size-5 shrink-0 text-[#FCE026]" />
+              <AlertCircle className="mt-0.5 size-5 shrink-0 text-accent-gold" />
               <div>
                 <h4 className="text-sm font-semibold">Tabela de Agendamentos Pendente no Supabase</h4>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -410,7 +410,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                 variant="outline"
                 size="sm"
                 onClick={copySqlCode}
-                className="gap-2 border-[#FCE026]/50 bg-background/80 hover:bg-[#FCE026]/20"
+                className="gap-2 border-accent-gold/50 bg-background/80 hover:bg-accent-gold/20"
               >
                 <Copy className="size-3.5" />
                 Copiar SQL
@@ -418,7 +418,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
               <Button
                 size="sm"
                 onClick={fetchAppointments}
-                className="bg-[#0624C7] text-white hover:bg-[#0624C7]/90"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 Verificar Novamente
               </Button>
@@ -431,7 +431,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-lg bg-[#0624C7]/10 text-[#0624C7]">
+            <div className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
               <CalendarIcon className="size-5" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Agendamentos</h1>
@@ -445,7 +445,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
           <Button
             onClick={handleOpenCreate}
             disabled={!canManage}
-            className="gap-2 bg-[#0624C7] font-medium text-white shadow-sm transition-all hover:bg-[#0624C7]/90 active:scale-98"
+            className="gap-2 bg-primary font-medium text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-98"
           >
             <Plus className="size-4" />
             Novo Agendamento
@@ -462,9 +462,9 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
         <div className="rounded-xl border border-border bg-card p-4 transition-colors">
           <div className="flex items-center justify-between">
             <p className="text-xs font-medium text-muted-foreground">Confirmadas</p>
-            <span className="size-2 rounded-full bg-[#0624C7]" />
+            <span className="size-2 rounded-full bg-primary" />
           </div>
-          <p className="mt-1 text-2xl font-bold text-[#0624C7]">{metricsSummary.confirmed}</p>
+          <p className="mt-1 text-2xl font-bold text-primary">{metricsSummary.confirmed}</p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4 transition-colors">
           <div className="flex items-center justify-between">
@@ -590,12 +590,12 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
       {/* Main Content Area */}
       {loading ? (
         <div className="flex h-64 flex-col items-center justify-center gap-3 rounded-xl border border-border bg-card">
-          <div className="size-8 animate-spin rounded-full border-2 border-[#0624C7] border-t-transparent" />
+          <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
           <p className="text-sm text-muted-foreground">Carregando agendamentos...</p>
         </div>
       ) : filteredAppointments.length === 0 ? (
         <div className="flex h-80 flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/60 p-8 text-center">
-          <div className="flex size-14 items-center justify-center rounded-2xl bg-[#0624C7]/10 text-[#0624C7]">
+          <div className="flex size-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <CalendarIcon className="size-7" />
           </div>
           <h3 className="mt-4 text-base font-semibold text-foreground">
@@ -611,7 +611,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
           <div className="mt-5">
             <Button
               onClick={handleOpenCreate}
-              className="gap-2 bg-[#0624C7] text-white hover:bg-[#0624C7]/90"
+              className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
             >
               <Plus className="size-4" />
               Criar Agendamento Manual
@@ -650,7 +650,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                           {contact?.avatar_url ? (
                             <AvatarImage src={contact.avatar_url} alt={contact.name || ''} />
                           ) : null}
-                          <AvatarFallback className="bg-[#0624C7]/10 text-xs font-semibold text-[#0624C7]">
+                          <AvatarFallback className="bg-primary/10 text-xs font-semibold text-primary">
                             {contactInitial}
                           </AvatarFallback>
                         </Avatar>
@@ -681,7 +681,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                     {/* Date/Time cell */}
                     <TableCell>
                       <div className="flex items-center gap-2 text-sm text-foreground">
-                        <CalendarIcon className="size-4 shrink-0 text-[#0624C7]" />
+                        <CalendarIcon className="size-4 shrink-0 text-primary" />
                         <span className="font-medium">
                           {formatDateTimeBR(scheduledDate)}
                         </span>
@@ -719,7 +719,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                           href={appt.meeting_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[#0624C7]/20 bg-[#0624C7] px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#0624C7]/90 active:scale-98"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-primary/20 bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 active:scale-98"
                         >
                           <Video className="size-3.5" />
                           <span>Entrar na Reunião</span>
@@ -785,7 +785,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                             <DropdownMenuItem
                               onClick={() => handleUpdateStatus(appt.id, 'confirmed')}
                             >
-                              <CalendarCheck className="size-4 text-[#0624C7]" />
+                              <CalendarCheck className="size-4 text-primary" />
                               Reativar / Confirmar
                             </DropdownMenuItem>
                           )}
@@ -825,7 +825,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
             return (
               <div
                 key={appt.id}
-                className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-[#0624C7]/40 hover:shadow-md"
+                className="flex flex-col justify-between rounded-xl border border-border bg-card p-5 shadow-xs transition-all hover:border-primary/40 hover:shadow-md"
               >
                 <div>
                   <div className="flex items-start justify-between gap-3">
@@ -834,7 +834,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                         {contact?.avatar_url ? (
                           <AvatarImage src={contact.avatar_url} alt={contact.name || ''} />
                         ) : null}
-                        <AvatarFallback className="bg-[#0624C7]/10 text-sm font-semibold text-[#0624C7]">
+                        <AvatarFallback className="bg-primary/10 text-sm font-semibold text-primary">
                           {contactInitial}
                         </AvatarFallback>
                       </Avatar>
@@ -860,7 +860,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
 
                   <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
-                      <CalendarIcon className="size-3.5 text-[#0624C7]" />
+                      <CalendarIcon className="size-3.5 text-primary" />
                       <span className="font-medium text-foreground">
                         {formatDateTimeBR(scheduledDate)}
                       </span>
@@ -885,7 +885,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                       href={appt.meeting_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#0624C7] py-2 text-xs font-semibold text-white shadow-xs transition-colors hover:bg-[#0624C7]/90 active:scale-98"
+                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground shadow-xs transition-colors hover:bg-primary/90 active:scale-98"
                     >
                       <Video className="size-3.5" />
                       <span>Entrar no Meet</span>
@@ -964,7 +964,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
           <form onSubmit={handleSaveCreate}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-                <CalendarIcon className="size-5 text-[#0624C7]" />
+                <CalendarIcon className="size-5 text-primary" />
                 Novo Agendamento Manual
               </DialogTitle>
               <DialogDescription>
@@ -981,7 +981,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                 <select
                   value={formContactId}
                   onChange={(e) => setFormContactId(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-[#0624C7]"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
                   required
                 >
                   <option value="">Selecione um contato existente...</option>
@@ -1026,7 +1026,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                   <select
                     value={formDuration}
                     onChange={(e) => setFormDuration(e.target.value)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-[#0624C7]"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="15">15 minutos</option>
                     <option value="20">20 minutos (Padrão IA)</option>
@@ -1063,7 +1063,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                   onChange={(e) => setFormNotes(e.target.value)}
                   placeholder="Ex: Lead interessado no pacote integrado LP + CRM + Tráfego."
                   rows={3}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-[#0624C7]"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
@@ -1075,7 +1075,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
               <Button
                 type="submit"
                 disabled={saving}
-                className="bg-[#0624C7] text-white hover:bg-[#0624C7]/90"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {saving ? 'Salvando...' : 'Salvar Agendamento'}
               </Button>
@@ -1090,7 +1090,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
           <form onSubmit={handleSaveEdit}>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-lg font-bold">
-                <Pencil className="size-5 text-[#0624C7]" />
+                <Pencil className="size-5 text-primary" />
                 Editar Agendamento
               </DialogTitle>
               <DialogDescription>
@@ -1107,7 +1107,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                 <select
                   value={formContactId}
                   onChange={(e) => setFormContactId(e.target.value)}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-[#0624C7]"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
                 >
                   <option value="">Selecione o contato...</option>
                   {contacts.map((c) => (
@@ -1151,7 +1151,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                   <select
                     value={formStatus}
                     onChange={(e) => setFormStatus(e.target.value as AppointmentStatus)}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-[#0624C7]"
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
                   >
                     <option value="confirmed">Confirmada</option>
                     <option value="completed">Concluída</option>
@@ -1181,7 +1181,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
                   value={formNotes}
                   onChange={(e) => setFormNotes(e.target.value)}
                   rows={3}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-[#0624C7]"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-hidden focus:ring-2 focus:ring-primary"
                 />
               </div>
             </div>
@@ -1193,7 +1193,7 @@ CREATE INDEX IF NOT EXISTS idx_appointments_scheduled_at ON appointments(schedul
               <Button
                 type="submit"
                 disabled={saving}
-                className="bg-[#0624C7] text-white hover:bg-[#0624C7]/90"
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {saving ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
@@ -1258,8 +1258,8 @@ const statusLabels: Record<AppointmentStatus, string> = {
 function StatusBadge({ status }: { status: AppointmentStatus }) {
   if (status === 'confirmed') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#0624C7]/30 bg-[#0624C7]/10 px-2.5 py-0.5 text-xs font-semibold text-[#0624C7]">
-        <span className="size-1.5 rounded-full bg-[#0624C7]" />
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-semibold text-primary">
+        <span className="size-1.5 rounded-full bg-primary" />
         Confirmada
       </span>
     );

@@ -70,9 +70,9 @@ export interface ThemeMeta {
 export const THEMES: ReadonlyArray<ThemeMeta> = [
   {
     id: "concept",
-    name: "Concept Digital",
-    tagline: "Engenharia de vendas — azul institucional com precisão ouro.",
-    swatch: "#0624C7",
+    name: "Barbearia do Alemão",
+    tagline: "Estética de luxo — Ouro Nobre e Dark Graphite com alta conversão.",
+    swatch: "#C5A880",
   },
   {
     id: "cobalt",
