@@ -11,7 +11,7 @@ import { failJob, finishJob } from './queue';
 
 const BUCKET = 'marketing';
 const MAX_FIX_ROUNDS = 2;
-const MODEL = 'claude-opus-5-5';
+const MODEL = process.env.VIDEO_MODEL || 'claude-haiku-4-5-20251001';
 // The worker always runs from the repo root (`npm run worker`).
 const SCAFFOLD_DIR = join(process.cwd(), 'worker', 'video-scaffold');
 const PROMPTS_DIR = join(process.cwd(), 'worker', 'prompts');
