@@ -51,7 +51,7 @@ export function MobileBottomNav({ onOpenMore, totalUnread }: MobileBottomNavProp
 
   const tabClass = (active: boolean) =>
     cn(
-      "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+      "relative flex min-h-14 w-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 text-center text-[11px] font-medium leading-none transition-colors",
       active ? "text-primary" : "text-muted-foreground active:text-foreground",
     );
 
@@ -64,7 +64,9 @@ export function MobileBottomNav({ onOpenMore, totalUnread }: MobileBottomNavProp
         {/* "Mais" first: the thumb reaches the drawer without crossing the bar. */}
         <li className="flex flex-1">
           <button type="button" onClick={onOpenMore} className={tabClass(moreActive)}>
-            <Menu className="h-5 w-5" />
+            <span className="flex h-5 w-5 items-center justify-center">
+              <Menu className="h-5 w-5" />
+            </span>
             {t("more")}
           </button>
         </li>
@@ -78,7 +80,7 @@ export function MobileBottomNav({ onOpenMore, totalUnread }: MobileBottomNavProp
                 aria-current={active ? "page" : undefined}
                 className={tabClass(active)}
               >
-                <span className="relative">
+                <span className="relative flex h-5 w-5 items-center justify-center">
                   <item.icon className="h-5 w-5" />
                   {showUnread && (
                     <span
