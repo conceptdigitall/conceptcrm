@@ -99,7 +99,7 @@ function MessageContent({
   switch (message.content_type) {
     case "text":
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
           {message.content_text}
         </p>
       );
@@ -113,7 +113,7 @@ function MessageContent({
             <MediaUnavailable label={t("photo")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
               {message.content_text}
             </p>
           )}
@@ -129,7 +129,7 @@ function MessageContent({
             <MediaUnavailable label={t("video")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
               {message.content_text}
             </p>
           )}
@@ -175,12 +175,12 @@ function MessageContent({
             {t("template")}
           </span>
           {message.content_text ? (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
               {message.content_text}
             </p>
           ) : (
             message.template_name && (
-              <p className="mt-1 break-words text-sm italic opacity-80">
+              <p className="mt-1 [overflow-wrap:anywhere] text-sm italic opacity-80">
                 {message.template_name}
               </p>
             )
@@ -216,14 +216,14 @@ function MessageContent({
               <CornerDownLeft className="h-3 w-3" />
               {t("buttonReply")}
             </span>
-            <p className="whitespace-pre-wrap break-words text-sm">
+            <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
               {message.content_text || t("interactiveReply")}
             </p>
           </div>
         );
       }
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
           {message.content_text || t("interactiveReply")}
         </p>
       );
@@ -231,7 +231,7 @@ function MessageContent({
 
     default:
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap [overflow-wrap:anywhere] text-sm">
           {message.content_text || t("unsupported")}
         </p>
       );
@@ -257,13 +257,13 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "flex flex-col",
+        "flex min-w-0 max-w-full flex-col",
         isAgent ? "items-end" : "items-start",
       )}
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          "relative min-w-0 max-w-full rounded-2xl px-3 py-2",
           isAgent
             ? "rounded-br-md bg-primary text-primary-foreground"
             : "rounded-bl-md bg-muted text-foreground",
