@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import { getCalendarAvailability, isGoogleCalendarConfigured } from '@/lib/calendar/google';
 import type { BusyInterval } from '@/lib/calendar/rules';
 
 export async function GET(req: NextRequest) {
+  let accountId: string;
+  try {
+    ({ accountId } = await requireRole('viewer'));
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+
   try {
     const { searchParams } = new URL(req.url);
     const dateStr = searchParams.get('date');
     const durationStr = searchParams.get('duration') || '30';
-    const accountId = searchParams.get('accountId');
 
     if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       return NextResponse.json(
@@ -31,18 +38,14 @@ export async function GET(req: NextRequest) {
     const busyIntervals: BusyInterval[] = [];
     try {
       const db = supabaseAdmin();
-      let query = db
+      // A conta vem da sessão, nunca da query string.
+      const { data: existingAppts } = await db
         .from('appointments')
         .select('scheduled_at, duration_minutes, status')
         .eq('status', 'confirmed')
+        .eq('account_id', accountId)
         .gte('scheduled_at', dayStart.toISOString())
         .lte('scheduled_at', dayEnd.toISOString());
-
-      if (accountId) {
-        query = query.eq('account_id', accountId);
-      }
-
-      const { data: existingAppts } = await query;
 
       if (existingAppts && existingAppts.length > 0) {
         for (const appt of existingAppts) {

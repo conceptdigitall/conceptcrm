@@ -1,10 +1,61 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }));
+
+vi.mock('@/lib/auth/account', () => ({
+  requireRole: mocks.requireRole,
+  toErrorResponse: vi.fn((err: { status?: number }) =>
+    Response.json({ error: 'auth failed' }, { status: err?.status ?? 500 })),
+}));
+
 import { GET, POST, DELETE } from './route';
 import * as configLib from '@/lib/calendar/config';
+
+const INTERNAL = 'acc-concept';
 
 describe('API /api/calendar/config', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.stubEnv('NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS', INTERNAL);
+    mocks.requireRole.mockReset();
+    mocks.requireRole.mockResolvedValue({ accountId: INTERNAL, userId: 'user-1', role: 'admin' });
+  });
+
+  describe('auth', () => {
+    const post = () => new Request('http://localhost:3000/api/calendar/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ icalUrl: 'https://calendar.google.com/x/basic.ics' }),
+    });
+
+    it('rejects anonymous callers on GET, POST and DELETE', async () => {
+      mocks.requireRole.mockRejectedValue({ status: 401 });
+      const save = vi.spyOn(configLib, 'saveCalendarIcalUrl');
+      const remove = vi.spyOn(configLib, 'removeCalendarIcalUrl');
+
+      expect((await GET()).status).toBe(401);
+      expect((await POST(post())).status).toBe(401);
+      expect((await DELETE()).status).toBe(401);
+      expect(save).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    });
+
+    it('requires admin to change the calendar', async () => {
+      await POST(post()).catch(() => null);
+      await DELETE();
+      expect(mocks.requireRole).toHaveBeenCalledWith('admin');
+    });
+
+    it('forbids admins of other accounts from changing the shared iCal', async () => {
+      mocks.requireRole.mockResolvedValue({ accountId: 'acc-cliente', userId: 'u-2', role: 'owner' });
+      const save = vi.spyOn(configLib, 'saveCalendarIcalUrl');
+      const remove = vi.spyOn(configLib, 'removeCalendarIcalUrl');
+
+      expect((await POST(post())).status).toBe(403);
+      expect((await DELETE()).status).toBe(403);
+      expect(save).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET', () => {

@@ -1,4 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }));
+
+vi.mock('@/lib/auth/account', () => ({
+  requireRole: mocks.requireRole,
+  toErrorResponse: vi.fn((err: { status?: number }) =>
+    Response.json({ error: 'auth failed' }, { status: err?.status ?? 500 })),
+}));
+
 import { GET } from './route';
 import { NextRequest } from 'next/server';
 
@@ -12,7 +21,8 @@ vi.mock('@/lib/ai/admin-client', () => ({
   supabaseAdmin: () => ({
     from: () => ({
       select: mockSelect.mockReturnValue({
-        eq: mockEq.mockReturnValue({
+        eq: mockEq.mockImplementation(() => ({
+          eq: mockEq,
           gte: mockGte.mockReturnValue({
             lte: mockLte.mockResolvedValue({
               data: [
@@ -25,7 +35,7 @@ vi.mock('@/lib/ai/admin-client', () => ({
               error: null,
             }),
           }),
-        }),
+        })),
       }),
     }),
   }),
@@ -34,6 +44,20 @@ vi.mock('@/lib/ai/admin-client', () => ({
 describe('GET /api/calendar/availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.requireRole.mockResolvedValue({ accountId: 'acc-1', userId: 'user-1', role: 'viewer' });
+  });
+
+  it('returns 401 without a session', async () => {
+    mocks.requireRole.mockRejectedValue({ status: 401 });
+    const res = await GET(new NextRequest('http://localhost:3000/api/calendar/availability?date=2026-10-12'));
+    expect(res.status).toBe(401);
+    expect(mockSelect).not.toHaveBeenCalled();
+  });
+
+  it('scopes busy slots to the caller account, ignoring ?accountId', async () => {
+    await GET(new NextRequest('http://localhost:3000/api/calendar/availability?date=2026-10-12&accountId=acc-outra'));
+    expect(mockEq).toHaveBeenCalledWith('account_id', 'acc-1');
+    expect(mockEq).not.toHaveBeenCalledWith('account_id', 'acc-outra');
   });
 
   it('returns 400 if date parameter is missing or invalid', async () => {
