@@ -1,9 +1,16 @@
 import { NextResponse } from 'next/server';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { isGoogleCalendarConfigured } from '@/lib/calendar/google';
 import { BUSINESS_HOURS } from '@/lib/calendar/rules';
 import { maskIcalUrl } from '@/lib/calendar/config';
 
 export async function GET() {
+  try {
+    await requireRole('viewer');
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+
   const status = isGoogleCalendarConfigured();
 
   let modeLabel = 'Modo Local (CRM Supabase)';

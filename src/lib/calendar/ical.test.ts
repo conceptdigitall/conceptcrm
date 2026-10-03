@@ -5,6 +5,7 @@ import {
   clearIcsCache,
   sanitizeIcalUrl,
   validateAndFetchIcs,
+  isGoogleIcalUrl,
 } from './ical';
 
 const SAMPLE_ICS = `BEGIN:VCALENDAR
@@ -161,5 +162,15 @@ describe('iCal Parser & Google Calendar integration', () => {
       expect(res.valid).toBe(false);
       expect(res.error).toContain('404');
     });
+  });
+});
+
+describe('isGoogleIcalUrl', () => {
+  it('aceita só https://calendar.google.com', () => {
+    expect(isGoogleIcalUrl('https://calendar.google.com/calendar/ical/x/private-y/basic.ics')).toBe(true);
+    expect(isGoogleIcalUrl('http://calendar.google.com/calendar/ical/x/basic.ics')).toBe(false);
+    expect(isGoogleIcalUrl('http://169.254.169.254/latest/meta-data')).toBe(false);
+    expect(isGoogleIcalUrl('https://calendar.google.com.evil.com/basic.ics')).toBe(false);
+    expect(isGoogleIcalUrl('não é url')).toBe(false);
   });
 });

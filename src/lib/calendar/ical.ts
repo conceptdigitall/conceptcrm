@@ -192,6 +192,15 @@ export function sanitizeIcalUrl(raw: string): string {
   return clean.trim();
 }
 
+export function isGoogleIcalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && parsed.hostname === 'calendar.google.com';
+  } catch {
+    return false;
+  }
+}
+
 export interface ValidateIcsResult {
   valid: boolean;
   eventsCount: number;
@@ -209,6 +218,14 @@ export async function validateAndFetchIcs(rawUrl: string): Promise<ValidateIcsRe
       valid: false,
       eventsCount: 0,
       error: 'URL inválida. O link deve começar com https://',
+    };
+  }
+  // Só busca no Google: sem isso o servidor faria fetch de qualquer endereço (SSRF).
+  if (!isGoogleIcalUrl(url)) {
+    return {
+      valid: false,
+      eventsCount: 0,
+      error: 'Use o "Endereço secreto em formato iCal" do Google Agenda (https://calendar.google.com/...).',
     };
   }
 

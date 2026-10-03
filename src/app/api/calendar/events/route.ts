@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import { isWorkingDay } from '@/lib/calendar/rules';
 import { createCalendarEvent } from '@/lib/calendar/google';
 
 export async function POST(req: NextRequest) {
+  let ctx;
+  try {
+    ctx = await requireRole('agent');
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+  // Conta e usuário vêm da sessão; account_id/user_id do corpo são ignorados.
+  const { accountId: account_id, userId: user_id } = ctx;
+
   try {
     const body = await req.json().catch(() => ({}));
     const {
       contact_id,
-      account_id,
-      user_id,
       title,
       scheduled_at,
       duration_minutes = 30,
@@ -39,6 +47,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const db = supabaseAdmin();
+
+    // supabaseAdmin ignora RLS: confere que o contato é da conta de quem chama.
+    if (contact_id) {
+      const { data: contact } = await db
+        .from('contacts')
+        .select('id')
+        .eq('id', contact_id)
+        .eq('account_id', account_id)
+        .maybeSingle();
+      if (!contact) {
+        return NextResponse.json({ error: 'Contato não encontrado' }, { status: 404 });
+      }
+    }
+
     const duration = Math.max(15, Math.min(120, Number(duration_minutes) || 30));
     const resolvedTitle = title || `Sessão de Diagnóstico & Demonstração${client_name ? ` - ${client_name}` : ''}`;
 
@@ -54,8 +77,6 @@ export async function POST(req: NextRequest) {
       notes,
     });
 
-    const db = supabaseAdmin();
-
     // Insere agendamento no Supabase
     const appointmentPayload: Record<string, unknown> = {
       title: resolvedTitle,
@@ -68,9 +89,9 @@ export async function POST(req: NextRequest) {
       synced_at: new Date().toISOString(),
     };
 
+    appointmentPayload.account_id = account_id;
+    appointmentPayload.user_id = user_id;
     if (contact_id) appointmentPayload.contact_id = contact_id;
-    if (account_id) appointmentPayload.account_id = account_id;
-    if (user_id) appointmentPayload.user_id = user_id;
 
     const { data: createdAppt, error: apptError } = await db
       .from('appointments')
@@ -98,7 +119,7 @@ export async function POST(req: NextRequest) {
 
         await db.from('contacts').update(contactUpdates).eq('id', contact_id);
 
-        if (user_id && (notes || company || client_email)) {
+        if (notes || company || client_email) {
           await db.from('contact_notes').insert({
             contact_id,
             user_id,
