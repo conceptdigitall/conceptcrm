@@ -48,3 +48,11 @@ worker/laya/.venv/
 
 # logs do npm run servicos
 .servicos-logs/
+
+# Laya — modelos, embeddings e caches locais (pesados)
+*.pt
+*.npy
+__pycache__/
+worker/laya/laya_base/
+worker/laya/laya_finetuned_typed_decisions/
+worker/laya/predicoes_*.json
