@@ -1,10 +1,42 @@
+import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import Anthropic from '@anthropic-ai/sdk';
 import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting';
-import { executeCheckAvailability, executeScheduleAppointment } from '@/lib/calendar/ai-calendar-tools';
 
 export const maxDuration = 60;
+
+function verifyWebhookSecret(req: Request): boolean {
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('[Evolution Webhook]: EVOLUTION_WEBHOOK_SECRET is not configured on the server');
+    return false;
+  }
+
+  const provided =
+    req.headers.get('x-evolution-secret') ||
+    req.headers.get('x-webhook-secret') ||
+    req.headers.get('apikey') ||
+    new URL(req.url).searchParams.get('token');
+
+  if (!provided) {
+    return false;
+  }
+
+  try {
+    const secretBuffer = Buffer.from(secret, 'utf-8');
+    const providedBuffer = Buffer.from(provided, 'utf-8');
+
+    if (secretBuffer.length !== providedBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(secretBuffer, providedBuffer);
+  } catch (err) {
+    console.error('[Evolution Webhook Verification Error]:', err);
+    return false;
+  }
+}
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
@@ -87,6 +119,13 @@ async function getAccountAndUser(): Promise<{ accountId: string; userId: string 
 
 export async function POST(req: Request) {
   try {
+    if (!verifyWebhookSecret(req)) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing webhook secret' },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
 
     // 1. FILTRO: Ignora se o evento não for estritamente nova mensagem
@@ -352,6 +391,95 @@ interface GenerateReplyParams {
   conversationId?: string | null;
 }
 
+/**
+ * Calcula a contagem regressiva em dias civis (fuso de Brasília)
+ * até a data da reunião agendada.
+ */
+function getDaysUntil(targetDate: Date): { days: number; label: string; textDesc: string } {
+  const now = new Date();
+  const options: Intl.DateTimeFormatOptions = {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  };
+
+  const toDateOnly = (d: Date) => {
+    const parts = new Intl.DateTimeFormat('pt-BR', options).formatToParts(d);
+    const day = parts.find((p) => p.type === 'day')?.value || '01';
+    const month = parts.find((p) => p.type === 'month')?.value || '01';
+    const year = parts.find((p) => p.type === 'year')?.value || '2026';
+    return new Date(`${year}-${month}-${day}T00:00:00-03:00`);
+  };
+
+  const dNow = toDateOnly(now);
+  const dTarget = toDateOnly(targetDate);
+  const diffMs = dTarget.getTime() - dNow.getTime();
+  const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+  if (days === 0) {
+    return { days, label: '🚨 *É HOJE!*', textDesc: 'é hoje' };
+  } else if (days === 1) {
+    return { days, label: '⏳ *Falta 1 dia (amanhã)*', textDesc: 'falta 1 dia (amanhã)' };
+  } else if (days > 1) {
+    return { days, label: `⏳ *Faltam ${days} dias*`, textDesc: `faltam ${days} dias` };
+  } else if (days === -1) {
+    return { days, label: '⚠️ Data passada (ontem)', textDesc: 'ontem' };
+  } else {
+    return { days, label: `⚠️ Data passada (${Math.abs(days)} dias atrás)`, textDesc: `${Math.abs(days)} dias atrás` };
+  }
+}
+
+/**
+ * Gera URL universal para adicionar evento ao Google Calendar com 1 clique
+ */
+function generateGoogleCalendarUrl({
+  title,
+  startDate,
+  durationMinutes = 30,
+  details,
+  location,
+}: {
+  title: string;
+  startDate: Date;
+  durationMinutes?: number;
+  details?: string;
+  location?: string;
+}): string {
+  const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
+
+  const formatUtcGCal = (d: Date) => {
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+
+  const dates = `${formatUtcGCal(startDate)}/${formatUtcGCal(endDate)}`;
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates,
+    details: details || '',
+    location: location || 'https://meet.google.com/new',
+  });
+
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+/**
+ * Retorna os números de WhatsApp dos diretores/sócios para receberem avisos imediatos
+ */
+function getAdminNotificationNumbers(): string[] {
+  const defaultNumbers = ['5513978071057', '5513982292700'];
+  const envVal = process.env.ADMIN_WHATSAPP_NUMBERS;
+  const customList = envVal
+    ? envVal.split(',').map((n) => n.trim().replace(/\D/g, '')).filter(Boolean)
+    : [];
+
+  const combined = Array.from(new Set([...defaultNumbers, ...customList]));
+  return combined.map((n) => {
+    return n.length >= 10 && n.length <= 11 && !n.startsWith('55') ? '55' + n : n;
+  });
+}
+
 async function generateClaudeReply({
   userName,
   userMessage,
@@ -397,51 +525,25 @@ PORTFÓLIO DE SOLUÇÕES:
 REGRAS RÍGIDAS DE CONDUTA NO CHAT:
 1. Responda SEMPRE em no máximo 2 ou 3 frases curtas. Seja direto, acolhedor e fale como um amigo estratégico de negócios no WhatsApp. NUNCA gere blocos longos de texto nem listas sem solicitação.
 2. Gatilho de Conversão: Sempre sugira uma demonstração rápida de 20 minutos por chamada no Google Meet para mostrar na tela como ficaria a estrutura do cliente na prática.
-3. Horário de atendimento: Segunda a sábado, das 09h às 18h (almoço das 12h às 13h reservado).
+3. Horário de atendimento: Segunda a sexta-feira, das 09h às 18h.
 4. Apresentação de Preços: Mencione faixas estimadas de investimento (ex: pacotes a partir de R$ 1.000 a R$ 1.500) com naturalidade e sofisticação, sempre condicionando ao diagnóstico das necessidades específicas do projeto.
-5. Consulta de Agenda em Tempo Real (REGRA CRÍTICA):
-   - Quando o lead perguntar sobre dias/horários disponíveis ou demonstrar interesse em marcar (ex: "Vocês têm horário na quinta-feira?", "Qual o próximo horário livre?"), acione IMEDIATAMENTE a ferramenta "check_availability".
-   - A ferramenta consulta a agenda do Google Calendar e o CRM e retorna os horários livres.
-   - Apresente ao lead 2 ou 3 horários específicos para facilitar a escolha rápida (ex: "Temos horários livres às 10h, às 14h30 e às 16h. Qual desses fica melhor para você?").
-6. Sincronização & Agendamento via Tool:
-   - Assim que o lead escolher ou confirmar um horário, acione IMEDIATAMENTE a ferramenta "schedule_appointment".
+5. Sincronização & Agendamento via Tool:
+   - Assim que o lead concordar com a demonstração ou indicar um dia e horário comercial (segunda a sexta-feira, das 09h às 18h), acione IMEDIATAMENTE a ferramenta "schedule_appointment".
    - Extraia e passe para os parâmetros da ferramenta tudo o que o cliente tiver mencionado: nome real (client_name), empresa/nicho (client_company), e-mail (client_email), e um breve resumo das necessidades/gargalos (notes).
-7. Nome do cliente atual: "${userName}". Use o primeiro nome de forma natural e sutil.
-8. PROIBIDO FORMATAR EM NEGRITO OU USAR ASTERISCOS (REGRA CRÍTICA): NUNCA use negrito, asteriscos duplos (**) ou simples (*) nas mensagens enviadas ao lead. Escreva sempre em texto puro, fluido e natural, exatamente como uma pessoa real conversando no WhatsApp, sem nenhuma formatação markdown.
+6. Nome do cliente atual: "${userName}". Use o primeiro nome de forma natural e sutil.
+7. PROIBIDO FORMATAR EM NEGRITO OU USAR ASTERISCOS (REGRA CRÍTICA): NUNCA use negrito, asteriscos duplos (**) ou simples (*) nas mensagens enviadas ao lead. Escreva sempre em texto puro, fluido e natural, exatamente como uma pessoa real conversando no WhatsApp, sem nenhuma formatação markdown.
 `;
 
   const tools: Anthropic.Tool[] = [
     {
-      name: 'check_availability',
-      description: 'Consulta a agenda em tempo real no Google Calendar e CRM para verificar horários disponíveis em uma data específica (segunda a sábado, das 09h às 18h, exceto almoço 12h-13h). Retorna os slots livres para sugerir ao cliente.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          date: {
-            type: 'string',
-            description: 'Data a ser consultada no formato YYYY-MM-DD (ex: 2026-10-12)',
-          },
-          time_preference: {
-            type: 'string',
-            description: 'Preferência de turno se o cliente mencionou: "manha", "tarde" ou "qualquer"',
-          },
-          duration_minutes: {
-            type: 'number',
-            description: 'Duração da reunião em minutos (padrão 30)',
-          },
-        },
-        required: ['date'],
-      },
-    },
-    {
       name: 'schedule_appointment',
-      description: 'Acione esta ferramenta para registrar a reunião/demonstração no CRM, sincronizar dados com o Google Calendar (criando sala Google Meet) e notificar a diretoria via WhatsApp quando o lead confirmar dia e horário.',
+      description: 'Acione esta ferramenta para registrar a reunião/demonstração no CRM, sincronizar dados com o Google Calendar e notificar a diretoria via WhatsApp quando o lead concordar com dia e horário (segunda a sexta-feira, das 09h às 18h).',
       input_schema: {
         type: 'object',
         properties: {
           datetime_iso: {
             type: 'string',
-            description: 'Data e hora da reunião no formato ISO 8601 (ex: 2026-10-12T14:30:00-03:00)',
+            description: 'Data e hora da reunião no formato ISO 8601 (ex: 2026-09-25T14:00:00-03:00)',
           },
           title: {
             type: 'string',
@@ -503,50 +605,141 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     chatMessages[chatMessages.length - 1] = { role: 'user', content: userMessage };
   }
 
-  // Helper para processar tool calls de agendamento e consulta de agenda
+  // Helper para processar tool calls de agendamento, sincronizar com banco e notificar via WhatsApp
   const processToolCall = async (toolUse: Anthropic.ToolUseBlock): Promise<string> => {
-    if (toolUse.name === 'check_availability') {
-      const input = toolUse.input as {
-        date?: string;
-        time_preference?: string;
-        duration_minutes?: number;
-      };
-      const checkRes = await executeCheckAvailability({
-        date: input.date || new Date().toISOString().split('T')[0],
-        timePreference: input.time_preference,
-        durationMinutes: input.duration_minutes || 30,
-        accountId,
-      });
-      return cleanReplyFormatting(checkRes.replyText);
+    const input = toolUse.input as {
+      datetime_iso?: string;
+      title?: string;
+      client_name?: string;
+      client_company?: string;
+      client_email?: string;
+      notes?: string;
+    };
+
+    const rawIso = input.datetime_iso || new Date().toISOString();
+    const scheduledDate = new Date(rawIso);
+    const validDate = !isNaN(scheduledDate.getTime()) ? scheduledDate : new Date();
+    const meetingUrl = 'https://meet.google.com/new';
+
+    const resolvedClientName = input.client_name?.trim() || (userName !== 'Novo Lead' ? userName : '') || 'Cliente';
+    const countdown = getDaysUntil(validDate);
+
+    const formattedDate = new Intl.DateTimeFormat('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    }).format(validDate);
+
+    const clientPhoneDisplay = senderPhone ? `+${senderPhone}` : 'Não informado';
+
+    // 1. Sincronizar dados do Contato no Banco de Dados (Supabase CRM)
+    if (contactId) {
+      try {
+        const contactUpdates: Record<string, unknown> = {
+          updated_at: new Date().toISOString(),
+        };
+        if (resolvedClientName && resolvedClientName !== 'Cliente' && resolvedClientName !== 'Novo Lead') {
+          contactUpdates.name = resolvedClientName;
+        }
+        if (input.client_company?.trim()) {
+          contactUpdates.company = input.client_company.trim();
+        }
+        if (input.client_email?.trim()) {
+          contactUpdates.email = input.client_email.trim();
+        }
+
+        await supabaseAdmin().from('contacts').update(contactUpdates).eq('id', contactId);
+
+        // 2. Inserir anotação de diagnóstico e contexto no histórico do contato
+        if (userId && (input.notes || input.client_company || input.client_email)) {
+          const noteLines = [
+            `📅 Reunião agendada: ${formattedDate} (${countdown.textDesc})`,
+            input.client_company ? `🏢 Empresa/Nicho: ${input.client_company}` : null,
+            input.client_email ? `✉️ E-mail: ${input.client_email}` : null,
+            input.notes ? `📝 Dores/Escopo: ${input.notes}` : null,
+            `🔗 Google Meet: ${meetingUrl}`,
+          ]
+            .filter(Boolean)
+            .join('\n');
+
+          await supabaseAdmin().from('contact_notes').insert({
+            contact_id: contactId,
+            user_id: userId,
+            note_text: noteLines,
+          });
+        }
+
+        // 3. Registrar o agendamento na tabela appointments
+        const appointmentPayload: Record<string, unknown> = {
+          contact_id: contactId,
+          title: input.title || `Sessão de Diagnóstico & Demonstração - ${resolvedClientName}`,
+          scheduled_at: validDate.toISOString(),
+          duration_minutes: 30,
+          status: 'confirmed',
+          meeting_url: meetingUrl,
+          notes: input.notes || null,
+        };
+        if (accountId) appointmentPayload.account_id = accountId;
+        if (userId) appointmentPayload.user_id = userId;
+
+        const { error: insErr } = await supabaseAdmin().from('appointments').insert(appointmentPayload);
+        if (insErr) {
+          console.warn('[Evolution Webhook] Aviso ao salvar agendamento:', insErr.message);
+        } else {
+          console.info(`[Evolution Webhook] Agendamento salvo com sucesso para contato ${contactId}!`);
+        }
+      } catch (dbErr) {
+        console.error('[Evolution Webhook] Falha ao sincronizar dados com banco:', dbErr);
+      }
     }
 
-    if (toolUse.name === 'schedule_appointment') {
-      const input = toolUse.input as {
-        datetime_iso?: string;
-        title?: string;
-        client_name?: string;
-        client_company?: string;
-        client_email?: string;
-        notes?: string;
-      };
-      const scheduleRes = await executeScheduleAppointment({
-        datetimeIso: input.datetime_iso || new Date().toISOString(),
-        title: input.title,
-        clientName: input.client_name?.trim() || (userName !== 'Novo Lead' ? userName : '') || 'Cliente',
-        clientCompany: input.client_company,
-        clientEmail: input.client_email,
-        notes: input.notes,
-        senderPhone,
-        contactId,
-        accountId,
-        userId,
-        conversationId,
-        sendEvolutionMessage,
-      });
-      return cleanReplyFormatting(scheduleRes.replyMessage);
-    }
+    // 4. Gerar link universal para adicionar no Google Calendar
+    const gcalUrl = generateGoogleCalendarUrl({
+      title: input.title || `Reunião Concept Digital: ${resolvedClientName}`,
+      startDate: validDate,
+      durationMinutes: 30,
+      details: `Reunião com ${resolvedClientName}\nWhatsApp: ${clientPhoneDisplay}\n${input.client_company ? `Empresa: ${input.client_company}\n` : ''}${input.client_email ? `E-mail: ${input.client_email}\n` : ''}Notas: ${input.notes || 'Sessão de alinhamento e demonstração de ativos digitais Concept Digital.'}\n\nLink Google Meet: ${meetingUrl}`,
+      location: meetingUrl,
+    });
 
-    return '';
+    // 5. Notificar no WhatsApp do sócio e número pessoal ("13978071057" e "13982292700")
+    const partnerNumbers = getAdminNotificationNumbers();
+    const adminNotificationMessage =
+      `🚀 *NOVA REUNIÃO AGENDADA PELA IA!* 🎯\n\n` +
+      `👤 *Cliente:* ${resolvedClientName}\n` +
+      `📱 *WhatsApp:* ${clientPhoneDisplay}\n` +
+      (input.client_company ? `🏢 *Empresa:* ${input.client_company}\n` : '') +
+      (input.client_email ? `✉️ *E-mail:* ${input.client_email}\n` : '') +
+      `📅 *Data & Hora:* ${formattedDate}\n` +
+      `${countdown.label}\n` +
+      `🔗 *Link do Google Meet:* ${meetingUrl}\n` +
+      (input.notes ? `📝 *Contexto/Diagnóstico:* ${input.notes}\n` : '') +
+      `\n📆 *Adicionar ao Google Calendar:*\n${gcalUrl}\n\n` +
+      `_Sincronizado automaticamente no CRM Concept Digital_`;
+
+    console.info(`[Evolution Webhook] Disparando aviso de agendamento para os sócios (${partnerNumbers.join(', ')})...`);
+    Promise.allSettled(
+      partnerNumbers.map(async (num) => {
+        try {
+          await sendEvolutionMessage(num, adminNotificationMessage);
+          console.info(`[Evolution Webhook] Notificação entregue com sucesso para sócio ${num}`);
+        } catch (notifErr) {
+          console.error(`[Evolution Webhook] Erro ao enviar aviso para sócio ${num}:`, notifErr);
+        }
+      })
+    ).catch((pErr) => console.error('[Evolution Webhook] Erro em disparos aos sócios:', pErr));
+
+    // 6. Mensagem de resposta para o cliente no WhatsApp com confirmação, Meet e link do Google Calendar
+    return (
+      `Perfeito, ${resolvedClientName}! Agendado para ${formattedDate}.\n\n` +
+      `Aqui está o link da nossa chamada no Google Meet: ${meetingUrl}\n\n` +
+      `Se quiser adicionar direto na sua agenda: ${gcalUrl}\n\n` +
+      `Te vejo lá!`
+    );
   };
 
   const primaryModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
@@ -562,7 +755,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     });
 
     const toolUse = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
-    if (toolUse && (toolUse.name === 'schedule_appointment' || toolUse.name === 'check_availability')) {
+    if (toolUse && toolUse.name === 'schedule_appointment') {
       return await processToolCall(toolUse);
     }
 
@@ -582,7 +775,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
       });
 
       const fallbackToolUse = fallbackResponse.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
-      if (fallbackToolUse && (fallbackToolUse.name === 'schedule_appointment' || fallbackToolUse.name === 'check_availability')) {
+      if (fallbackToolUse && fallbackToolUse.name === 'schedule_appointment') {
         return await processToolCall(fallbackToolUse);
       }
 
