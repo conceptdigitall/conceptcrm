@@ -36,7 +36,8 @@ describe('depthFor', () => {
   it('scales scroll depth with the requested count', () => {
     expect(depthFor(1)).toBe(1);
     expect(depthFor(50)).toBe(5);
-    expect(depthFor(200)).toBe(10);
+    expect(depthFor(100)).toBe(10);
+    expect(depthFor(200)).toBe(20);
   });
 });
 
