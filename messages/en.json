@@ -1936,7 +1936,26 @@
     "emailLabel": "Email",
     "emailPlaceholder": "you@example.com",
     "sending": "Sending...",
-    "sendLink": "Send reset link"
+    "sendLink": "Send reset link",
+    "linkExpired": "This link is no longer valid: it expired, was already used, or was opened in a different browser. Request a new one below and open it in the same browser."
+  },
+  "ResetPasswordPage": {
+    "checking": "Checking the link...",
+    "title": "Set a new password",
+    "desc": "Choose a password with at least {min} characters.",
+    "newLabel": "New password",
+    "confirmLabel": "Confirm new password",
+    "save": "Save new password",
+    "saving": "Saving...",
+    "tooShort": "Password must be at least {min} characters.",
+    "mismatch": "Passwords don't match.",
+    "failed": "Couldn't save the password: {message}",
+    "doneTitle": "Password updated",
+    "doneDesc": "All set. Taking you to the dashboard...",
+    "expiredTitle": "Invalid or expired link",
+    "expiredDesc": "Request a new reset link and open it in the same browser you requested it from.",
+    "requestNew": "Request a new link",
+    "backToSignIn": "Back to sign in"
   },
   "JoinPage": {
     "fail": {
