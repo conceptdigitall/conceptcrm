@@ -48,6 +48,7 @@ it. Grant the minimum.
 | `contacts:read`      | List and read contacts                   |
 | `contacts:write`     | Create and update contacts               |
 | `conversations:read` | List and read conversations              |
+| `conversations:write`| Pause / resume the AI auto-reply on a chat |
 | `broadcasts:send`    | Launch broadcast campaigns               |
 | `webhooks:manage`    | Register and manage outbound webhooks    |
 | `calendar:read`      | List appointments and free time slots    |
@@ -215,6 +216,16 @@ and `?contact_id=`. Each conversation embeds its contact + tags.
 
 Read one conversation. Scope: `conversations:read`. `404` if it belongs
 to another account.
+
+### `PATCH /api/v1/conversations/{id}`
+
+Pause or resume the AI auto-reply on one conversation — the inbox
+"Take over" / "Resume AI" banner. Scope: `conversations:write`. Body:
+`{ "ai_paused": true }` to hand the chat to a human (add
+`"assign_to_me": true` to assign it to the key's creator), or
+`{ "ai_paused": false }` to give it back to the bot (clears any
+assignment and resets the bot's reply budget on that chat). Returns the
+conversation; every conversation now carries `ai_paused`.
 
 ### `GET /api/v1/conversations/{id}/messages`
 
