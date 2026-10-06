@@ -18,6 +18,8 @@ export interface ApiConversation {
   last_message_text: string | null;
   last_message_at: string | null;
   unread_count: number;
+  /** AI auto-reply paused here (a human took over). */
+  ai_paused: boolean;
   created_at: string;
   updated_at: string;
   contact: {
@@ -60,6 +62,7 @@ export function serializeConversation(conv: Conversation): ApiConversation {
     last_message_text: conv.last_message_text ?? null,
     last_message_at: conv.last_message_at ?? null,
     unread_count: conv.unread_count ?? 0,
+    ai_paused: conv.ai_autoreply_disabled === true,
     created_at: conv.created_at,
     updated_at: conv.updated_at,
     contact: c
