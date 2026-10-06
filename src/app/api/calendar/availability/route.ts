@@ -3,6 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import { getCalendarAvailability, isGoogleCalendarConfigured } from '@/lib/calendar/google';
 import type { BusyInterval } from '@/lib/calendar/rules';
+import { loadBusyIntervals } from '@/lib/calendar/appointments';
 
 export async function GET(req: NextRequest) {
   let accountId: string;
@@ -31,30 +32,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Data inválida' }, { status: 400 });
     }
 
-    const dayStart = new Date(`${dateStr}T00:00:00-03:00`);
-    const dayEnd = new Date(`${dateStr}T23:59:59-03:00`);
-
     // Busca compromissos confirmados no Supabase para o dia
-    const busyIntervals: BusyInterval[] = [];
+    let busyIntervals: BusyInterval[] = [];
     try {
-      const db = supabaseAdmin();
       // A conta vem da sessão, nunca da query string.
-      const { data: existingAppts } = await db
-        .from('appointments')
-        .select('scheduled_at, duration_minutes, status')
-        .eq('status', 'confirmed')
-        .eq('account_id', accountId)
-        .gte('scheduled_at', dayStart.toISOString())
-        .lte('scheduled_at', dayEnd.toISOString());
-
-      if (existingAppts && existingAppts.length > 0) {
-        for (const appt of existingAppts) {
-          const start = new Date(appt.scheduled_at);
-          const duration = appt.duration_minutes || 30;
-          const end = new Date(start.getTime() + duration * 60 * 1000);
-          busyIntervals.push({ start, end });
-        }
-      }
+      busyIntervals = await loadBusyIntervals(supabaseAdmin(), accountId, dateStr);
     } catch (dbErr) {
       console.warn('[Calendar Availability] Aviso ao buscar agendamentos do Supabase:', dbErr);
     }

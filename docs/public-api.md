@@ -50,6 +50,11 @@ it. Grant the minimum.
 | `conversations:read` | List and read conversations              |
 | `broadcasts:send`    | Launch broadcast campaigns               |
 | `webhooks:manage`    | Register and manage outbound webhooks    |
+| `calendar:read`      | List appointments and free time slots    |
+| `calendar:write`     | Create, reschedule and cancel appointments |
+| `deals:read`         | List pipelines, stages and deals         |
+| `deals:write`        | Create deals, move stages, mark won/lost |
+| `marketing:generate` | Queue marketing videos (internal only)   |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -262,6 +267,71 @@ Invalid phone numbers are dropped and counted as `rejected`. Response
 Broadcast status + counts. Scope: `broadcasts:send`. `status` moves
 `sending` → `sent`; `delivered_count` / `read_count` keep climbing as
 Meta delivery webhooks arrive. `404` for another account's broadcast.
+
+### `GET` / `POST /api/v1/appointments`
+
+Agenda. Scopes: `calendar:read` / `calendar:write`.
+
+`GET` lists appointments ordered by `scheduled_at` (soonest first). By
+default it starts from now; narrow with `?from=` / `?to=` (ISO),
+`?status=` (`confirmed` / `cancelled` / `completed`), `?contact_id=`
+and `?limit=` (1–100). Not cursor-paginated: it is a time window.
+
+`POST` creates one through the same path as the dashboard (Google
+Calendar webhook included). `scheduled_at` (ISO) is required and
+Sundays are refused. Optional: `contact_id`, `title`,
+`duration_minutes` (15–120, default 30), `client_name`,
+`client_email`, `client_phone`, `company`, `notes`. Returns `201` with
+the appointment plus `calendar_url`.
+
+### `GET` / `PATCH /api/v1/appointments/{id}`
+
+Read or change one appointment. `PATCH` accepts any of `status`,
+`scheduled_at`, `duration_minutes`, `title`, `notes`. Cancel with
+`{ "status": "cancelled" }`; there is no `DELETE`. Rescheduling moves
+the CRM record only, not an event already sent to Google Calendar.
+
+### `GET /api/v1/availability?date=YYYY-MM-DD`
+
+Free slots for one day (Brasília time). Scope: `calendar:read`.
+Optional `&duration=` (minutes). Returns `available_slots` (`"HH:MM"`),
+`suggested_slots` and `is_working_day`.
+
+### `GET /api/v1/pipelines`
+
+The account's pipelines with their stages in board order. Scope:
+`deals:read`. Use it to map a stage name to the `stage_id` the deal
+endpoints expect.
+
+### `GET` / `POST /api/v1/deals`
+
+Scopes: `deals:read` / `deals:write`. `GET` is paginated with optional
+`?status=` (`open` / `won` / `lost`), `?pipeline_id=`, `?stage_id=`
+and `?contact_id=`. `POST` needs `title` and `contact_id`; `pipeline_id`
+and `stage_id` are optional (default: first stage of the oldest
+pipeline). Optional `value`, `notes`, `expected_close_date`
+(`YYYY-MM-DD`). Currency is the account default.
+
+### `GET` / `PATCH /api/v1/deals/{id}`
+
+`PATCH` accepts any of `title`, `value`, `notes`,
+`expected_close_date`, `stage_id` (must be in the deal's pipeline) and
+`status`. Moving to `won` / `lost` fires the `deal.won` / `deal.lost`
+webhook, like the dashboard. No `DELETE`.
+
+### `GET` / `POST /api/v1/marketing/videos`
+
+Concept Digital internal tool (accounts listed in
+`NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS`); other accounts get `403` even with
+the scope. Scope: `marketing:generate`. `POST` queues a video with
+`prompt` and optional `format` (`vertical` / `square` / `landscape`),
+`tone` and `imagePaths`, under the same 10-per-day limit (`429`). The
+Mac worker renders it. `GET` lists the latest (`?limit=`, max 50).
+
+### `GET /api/v1/marketing/videos/{id}`
+
+Status of one video (`pending` / `running` / `done` / `failed`). When
+`done`, `download_url` is a signed link valid for one hour.
 
 ## Pagination
 
