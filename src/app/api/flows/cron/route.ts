@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { deploymentAccountScope } from '@/lib/deployment-account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 import { resolveFallbackPolicy } from '@/lib/flows/fallback'
 
@@ -45,18 +46,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Banco dividido entre lojas: cada deploy varre só os fluxos
+  // da própria conta.
+  let scopedAccountId: string | null
+  try {
+    scopedAccountId = deploymentAccountScope()
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+  }
+
   const admin = supabaseAdmin()
   const now = new Date()
 
   // Pull all currently-active runs along with their parent flow's
   // fallback_policy. Joined in one query — the small set of active
   // runs per tenant keeps this cheap.
-  const { data: runs, error } = await admin
+  let runsQuery = admin
     .from('flow_runs')
     .select(
       'id, flow_id, user_id, contact_id, last_advanced_at, flows ( fallback_policy )',
     )
     .eq('status', 'active')
+  if (scopedAccountId) runsQuery = runsQuery.eq('account_id', scopedAccountId)
+  const { data: runs, error } = await runsQuery
 
   if (error) {
     console.error('[flows-cron] active-run scan failed:', error.message)

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
+import { deploymentAccountScope } from '@/lib/deployment-account';
 import Anthropic from '@anthropic-ai/sdk';
 import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting';
 import { buildDateContext } from '@/lib/ai/defaults';
@@ -97,10 +98,30 @@ async function sendEvolutionMessage(number: string, text: string) {
 }
 
 /**
- * Resolve o account_id e user_id do CRM (multi-tenant)
- * Busca primeiro no whatsapp_config, com fallback para o primeiro account ativo.
+ * Resolve o account_id e user_id do CRM (multi-tenant).
+ * Com CRM_ACCOUNT_ID (banco dividido entre lojas), usa só a conta deste deploy.
+ * Sem ele, modo antigo: o primeiro whatsapp_config, com fallback para o primeiro account.
  */
 async function getAccountAndUser(): Promise<{ accountId: string; userId: string }> {
+  const scopedAccountId = deploymentAccountScope();
+  if (scopedAccountId) {
+    const { data: acc } = await supabaseAdmin()
+      .from('accounts')
+      .select('id, owner_user_id')
+      .eq('id', scopedAccountId)
+      .maybeSingle();
+    const { data: config } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('user_id')
+      .eq('account_id', scopedAccountId)
+      .limit(1)
+      .maybeSingle();
+    if (!acc?.id) {
+      throw new Error(`CRM_ACCOUNT_ID ${scopedAccountId} não existe na tabela accounts.`);
+    }
+    return { accountId: acc.id, userId: config?.user_id || acc.owner_user_id || '' };
+  }
+
   const { data: config } = await supabaseAdmin()
     .from('whatsapp_config')
     .select('account_id, user_id')
