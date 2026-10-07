@@ -6,7 +6,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildFixPrompt, buildUserPrompt, extractHtml } from '@/lib/marketing/prompt';
 import { validateVideoInput } from '@/lib/marketing/validate';
 import type { MarketingVideo } from '@/types';
-import { runCommand } from './exec';
+import { defaultRenderDeps } from './hf-render';
+import { runTemplatedJob } from './video-template';
 import { failJob, finishJob } from './queue';
 
 const BUCKET = 'marketing';
@@ -15,8 +16,6 @@ const MODEL = process.env.VIDEO_MODEL || 'claude-haiku-4-5-20251001';
 // The worker always runs from the repo root (`npm run worker`).
 const SCAFFOLD_DIR = join(process.cwd(), 'worker', 'video-scaffold');
 const PROMPTS_DIR = join(process.cwd(), 'worker', 'prompts');
-// The pinned local CLI; `npx hyperframes` from a temp dir would fetch the latest from npm.
-const HYPERFRAMES_BIN = join(process.cwd(), 'node_modules', '.bin', 'hyperframes');
 
 export interface ChatMessage { role: 'user' | 'assistant'; content: string }
 
@@ -70,28 +69,14 @@ const defaultDeps: VideoDeps = {
     }
     return response.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
   },
-  async check(dir) {
-    const r = await runCommand(HYPERFRAMES_BIN, ['check'], { cwd: dir, timeoutMs: 5 * 60 * 1000 });
-    return { ok: r.code === 0, output: `${r.stdout}\n${r.stderr}` };
-  },
-  async render(dir, out) {
-    const r = await runCommand(HYPERFRAMES_BIN, ['render', '--quality', 'looks', '--output', out], {
-      cwd: dir, timeoutMs: 15 * 60 * 1000,
-    });
-    if (r.code !== 0) throw new Error(`Render falhou: ${r.stderr.slice(-800)}`);
-  },
-  async poster(video, out) {
-    const r = await runCommand('ffmpeg', ['-y', '-ss', '1', '-i', video, '-frames:v', '1', out], {
-      timeoutMs: 60 * 1000,
-    });
-    if (r.code !== 0) throw new Error(`Poster falhou: ${r.stderr.slice(-400)}`);
-  },
-  readFile: (p) => fsReadFile(p),
+  ...defaultRenderDeps,
 };
 
 export async function runVideoJob(
   db: SupabaseClient, video: MarketingVideo, overrides: Partial<VideoDeps> = {},
 ): Promise<void> {
+  // Vídeos feitos por botão de um pacote de nicho seguem o caminho de templates.
+  if (video.template_id) return runTemplatedJob(db, video);
   const deps = { ...defaultDeps, ...overrides };
   // The worker downloads with the service role, which ignores storage RLS:
   // only files under this job's own account folder may be used.
