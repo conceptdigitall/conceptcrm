@@ -14,7 +14,7 @@ and polish.
 Marketing videos by niche pack (Reels). Behind `NEXT_PUBLIC_MARKETING_NICHE`;
 with it unset nothing changes.
 
-> **Migration required:** apply `supabase/migrations/048_marketing_video_packs.sql`
+> **Migration required:** apply `supabase/migrations/052_marketing_video_packs.sql`
 > (adds `kind`, `niche`, `template_id`, `director_input`, `director_output`,
 > `caption` and `error_kind` to `marketing_videos`, backfills `kind` from
 > `format` — horizontal becomes `resumo`, the rest `reels` — and adds the

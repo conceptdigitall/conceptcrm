@@ -39,7 +39,7 @@
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `supabase/migrations/048_marketing_video_packs.sql` | colunas novas + backfill + constraint |
+| `supabase/migrations/052_marketing_video_packs.sql` | colunas novas + backfill + constraint |
 | `src/lib/marketing/kinds.ts` | `VideoKind`, `isKindFormatValid` |
 | `src/lib/marketing/packs/types.ts` | `TemplateSpec`, `DirectorOutput`, `Pack`, `PackButton`, `validateDirectorOutput` |
 | `src/lib/marketing/packs/render.ts` | `planTimeline`, `renderComposition` (substituição determinística) |
@@ -55,7 +55,7 @@
 ### Task 1: Migration e tipos
 
 **Files:**
-- Create: `supabase/migrations/048_marketing_video_packs.sql`, `src/lib/marketing/kinds.ts`, `src/lib/marketing/kinds.test.ts`
+- Create: `supabase/migrations/052_marketing_video_packs.sql`, `src/lib/marketing/kinds.ts`, `src/lib/marketing/kinds.test.ts`
 - Modify: `src/types/index.ts:769-784` (`MarketingVideo`)
 
 **Interfaces:**
