@@ -778,6 +778,13 @@ export interface MarketingVideo {
   error: string | null;
   video_path: string | null;
   poster_path: string | null;
+  kind: 'reels' | 'resumo';
+  niche: string | null;
+  template_id: string | null;
+  director_input: Record<string, unknown> | null;
+  director_output: Record<string, unknown> | null;
+  caption: string | null;
+  error_kind: 'photos' | 'director' | 'render' | null;
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
