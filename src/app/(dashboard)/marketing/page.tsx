@@ -31,6 +31,10 @@ import { PhotoPicker } from './photo-picker';
 import { VideoProgress } from './video-progress';
 import { SocialModal } from './social-modal';
 import { TemplatePicker } from '@/components/marketing/template-picker';
+import { PackPicker, type ReelsFormat } from '@/components/marketing/pack-picker';
+import { findButton, getActivePack } from '@/lib/marketing/packs';
+import { packFormState } from '@/lib/marketing/pack-form';
+import { videoStatusLabel } from '@/lib/marketing/status-label';
 import {
   composeTemplatePrompt,
   type MarketingTemplateId,
@@ -70,6 +74,14 @@ export default function MarketingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [publishVideo, setPublishVideo] = useState<MarketingVideo | null>(null);
 
+  // Pacote de nicho ligado neste CRM (NEXT_PUBLIC_MARKETING_NICHE): sem ele, só o fluxo antigo.
+  const pack = useMemo(() => getActivePack(), []);
+  const [advanced, setAdvanced] = useState(false);
+  const [packButtonId, setPackButtonId] = useState(() => pack?.buttons[0]?.id ?? '');
+  const [packFields, setPackFields] = useState<TemplateFieldValues>({});
+  const [packFiles, setPackFiles] = useState<File[]>([]);
+  const [packFormats, setPackFormats] = useState<ReelsFormat[]>(['vertical', 'square']);
+
   const effectivePrompt = useMemo(() => {
     if (templateMode === 'templates') {
       return composeTemplatePrompt(selectedTemplateId, templateFields);
@@ -84,6 +96,13 @@ export default function MarketingPage() {
     return videos.filter((v) => v.created_at >= startOfToday).length;
   }, [videos, startOfToday]);
   const limitReached = isDailyLimitReached(videosCountToday);
+  const packSelection = pack ? findButton(pack, packButtonId) : null;
+  const packState = pack
+    ? packFormState({
+        pack, buttonId: packButtonId, fields: packFields, fileCount: packFiles.length,
+        formats: packFormats, videosToday: videosCountToday,
+      })
+    : { ok: false, reason: null };
 
   // Reused across polls: a new token changes <video src> and restarts playback.
   const signedCache = useRef(new Map<string, SignedEntry>());
@@ -170,6 +189,38 @@ export default function MarketingPage() {
     }
   }
 
+  async function submitPack(e: React.FormEvent) {
+    e.preventDefault();
+    if (!accountId || !pack || !packState.ok) return;
+    setSubmitting(true);
+    const imagePaths: string[] = [];
+    try {
+      for (const file of packFiles) {
+        const path = buildMediaPath(accountId, file.name, Date.now(), 'uploads');
+        const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+        if (error) throw new Error(`Falha ao enviar ${file.name}: ${error.message}`);
+        imagePaths.push(path);
+      }
+      const res = await fetch('/api/marketing/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ buttonId: packButtonId, fields: packFields, imagePaths, formats: packFormats }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? 'Não foi possível criar o vídeo');
+      toast.success('Pedido na fila! O vídeo sai quando o computador de renderização estiver ligado.');
+      setPackFields({});
+      setPackFiles([]);
+      load();
+    } catch (err) {
+      // Don't leave orphan uploads in Storage when the request didn't go through.
+      if (imagePaths.length) await supabase.storage.from(BUCKET).remove(imagePaths);
+      toast.error(err instanceof Error ? err.message : 'Erro inesperado');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function retry(id: string) {
     const res = await fetch(`/api/marketing/videos/${id}/retry`, { method: 'POST' });
     if (!res.ok) return toast.error('Não foi possível tentar de novo');
@@ -199,6 +250,57 @@ export default function MarketingPage() {
         </div>
       )}
 
+      {pack && !advanced ? (
+        <form onSubmit={submitPack} className="space-y-5 rounded-2xl border border-border/70 bg-card/50 p-5 shadow-xs backdrop-blur-xs transition-all">
+          <PackPicker
+            pack={pack}
+            buttonId={packButtonId}
+            onButtonChange={setPackButtonId}
+            fieldValues={packFields}
+            onFieldChange={(fieldId, val) => setPackFields((prev) => ({ ...prev, [fieldId]: val }))}
+            formats={packFormats}
+            onFormatsChange={setPackFormats}
+            disabled={!canEdit || submitting}
+          />
+
+          <PhotoPicker
+            files={packFiles}
+            onChange={setPackFiles}
+            disabled={!canEdit || submitting}
+            max={packSelection?.spec.photos.max}
+            hint={
+              packSelection
+                ? `Envie de ${packSelection.spec.photos.min} a ${packSelection.spec.photos.max} fotos em JPG, PNG ou WebP${
+                    packSelection.spec.photos.multipleOf ? ', em pares: antes, depois' : ''
+                  }.`
+                : undefined
+            }
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 pt-4">
+            <div className="flex flex-col gap-1">
+              <Button
+                type="submit"
+                disabled={!canEdit || submitting || !packState.ok}
+                className="cursor-pointer gap-2 font-medium shadow-xs transition-all bg-[#0624C7] hover:bg-[#0624C7]/90 text-white"
+              >
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                Gerar vídeo
+              </Button>
+              {!packState.ok && packState.reason && (
+                <span className="text-[11px] text-muted-foreground">{packState.reason}</span>
+              )}
+            </div>
+            <span className="rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground">
+              Vídeos hoje:{' '}
+              <strong className={limitReached ? 'text-destructive' : 'text-foreground'}>
+                {videosCountToday}/{DAILY_VIDEO_LIMIT}
+              </strong>
+              {limitReached && ' (limite atingido)'}
+            </span>
+          </div>
+        </form>
+      ) : (
       <form onSubmit={submit} className="space-y-5 rounded-2xl border border-border/70 bg-card/50 p-5 shadow-xs backdrop-blur-xs transition-all">
         <TemplatePicker
           mode={templateMode}
@@ -287,7 +389,17 @@ export default function MarketingPage() {
           </span>
         </div>
       </form>
+      )}
 
+      {pack && (
+        <button
+          type="button"
+          onClick={() => setAdvanced((v) => !v)}
+          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline cursor-pointer"
+        >
+          {advanced ? 'Voltar aos modelos do meu negócio' : 'Modo avançado (texto livre)'}
+        </button>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {videos.map((v) => (
@@ -295,13 +407,18 @@ export default function MarketingPage() {
             {v.status === 'done' && urls[v.id]?.video ? (
               <video className="w-full rounded" src={urls[v.id].video} poster={urls[v.id].poster} controls preload="none" />
             ) : v.status === 'failed' ? (
-              <div className="flex aspect-video items-center justify-center rounded bg-destructive/10 text-destructive text-sm font-medium">
-                Falha na geração
+              <div className={`flex aspect-video items-center justify-center rounded text-sm font-medium ${
+                v.error_kind === 'photos' ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-destructive/10 text-destructive'
+              }`}>
+                {v.error_kind === 'photos' ? 'Precisa de atenção' : 'Falha na geração'}
               </div>
             ) : (
               <VideoProgress status={v.status} startedAt={v.started_at} createdAt={v.created_at} />
             )}
             <p className="line-clamp-2 text-sm">{v.prompt || 'Vídeo feito só com as fotos'}</p>
+            {(v.status === 'pending' || v.status === 'running') && (
+              <p className="text-xs text-muted-foreground">{videoStatusLabel(v)}</p>
+            )}
             {v.status === 'failed' && <p className="text-xs text-destructive line-clamp-3">{v.error}</p>}
             <div className="flex flex-wrap gap-2">
               {v.status === 'done' && v.video_path && (
