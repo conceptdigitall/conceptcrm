@@ -1,5 +1,7 @@
 -- ============================================================
--- 047_lead_column_learning.sql — Planilha Preditiva, parte B: cada coluna de
+-- 049_lead_column_learning.sql — (era 047_lead_column_learning.sql; renumerada
+-- porque 047_appointments_google_calendar.sql já usava o 047 e o CLI do Supabase
+-- trata o prefixo como versão única.) Planilha Preditiva, parte B: cada coluna de
 -- IA aprende com os exemplos dela (respostas do Claude e correções do João).
 -- Ver docs/superpowers/specs/2026-10-01-planilha-preditiva-parte-b-design.md.
 -- Aditiva e idempotente.
