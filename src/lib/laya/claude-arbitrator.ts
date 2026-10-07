@@ -32,13 +32,40 @@ export async function arbitrateWithClaude(
 
   const optionsList = allowedOptions.length > 0 ? allowedOptions.join(' | ') : 'sim | não';
 
-  const prompt = [
+  let criteriaSection = '';
+  if (question.criteria && !Array.isArray(question.criteria)) {
+    const entries = Object.entries(question.criteria);
+    const hasDetailedDefs = entries.some(([k, v]) => v.trim() !== k.trim());
+    if (hasDetailedDefs) {
+      criteriaSection = [
+        'Critérios e definições de cada opção:',
+        ...entries.map(([k, v]) => `- ${k}: ${v}`),
+      ].join('\n');
+    }
+  } else if (Array.isArray(question.criteria)) {
+    const hasDetailedDefs = question.criteria.some((c, i) => c !== allowedOptions[i]);
+    if (hasDetailedDefs) {
+      criteriaSection = [
+        'Critérios e definições das opções:',
+        ...question.criteria.map((c) => `- ${c}`),
+      ].join('\n');
+    }
+  }
+
+  const promptLines = [
     leadContext,
     '',
     `Pergunta de Classificação: ${question.instructions}`,
+  ];
+  if (criteriaSection) {
+    promptLines.push('', criteriaSection);
+  }
+  promptLines.push(
+    '',
     `Regra: Responda APENAS com uma das opções válidas a seguir, exatamente como escrita, sem pontuação extra ou justificativa:`,
     `[ ${optionsList} ]`,
-  ].join('\n');
+  );
+  const prompt = promptLines.join('\n');
 
   const response = await client.messages.create({
     model: process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL,

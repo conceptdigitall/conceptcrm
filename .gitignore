@@ -52,7 +52,16 @@ worker/laya/.venv/
 # Laya — modelos, embeddings e caches locais (pesados)
 *.pt
 *.npy
+*.meta.json
 __pycache__/
 worker/laya/laya_base/
 worker/laya/laya_finetuned_typed_decisions/
 worker/laya/predicoes_*.json
+worker/laya/dataset_*.json
+worker/laya/avaliar_*.py
+worker/laya/tri_ensemble_*.py
+worker/laya/gerar_*.py
+worker/laya/otimizar_*.py
+worker/laya/testar_*.py
+worker/laya/laya_finetune_*.py
+

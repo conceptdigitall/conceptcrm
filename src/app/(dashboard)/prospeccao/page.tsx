@@ -77,7 +77,7 @@ export default function ProspeccaoPage() {
   const fetchData = useCallback(async () => {
     const [s, l, c, v] = await Promise.all([
       supabase.from('lead_searches').select('*').order('created_at', { ascending: false }).limit(20),
-      supabase.from('leads').select('*').order('score', { ascending: false }).limit(500),
+      supabase.from('leads').select('*').order('score', { ascending: false }).limit(2000),
       supabase.from('lead_columns').select('*').order('created_at', { ascending: true }),
       fetchAllColumnValues(supabase),
     ]);
@@ -197,6 +197,34 @@ export default function ProspeccaoPage() {
     const res = await fetch(`/api/prospecting/columns/${id}/retry`, { method: 'POST' });
     if (!res.ok) return toast.error('Não foi possível tentar de novo');
     load();
+  }
+
+  async function updateColumnDefinition(id: string, definition: string | null): Promise<boolean> {
+    const res = await fetch(`/api/prospecting/columns/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ definition }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(json.error ?? 'Não foi possível salvar as definições');
+      return false;
+    }
+    toast.success('Definições salvas com sucesso');
+    load();
+    return true;
+  }
+
+  async function recalculateColumn(id: string): Promise<boolean> {
+    const res = await fetch(`/api/prospecting/columns/${id}/recalculate`, { method: 'POST' });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      toast.error(json.error ?? 'Não foi possível recalcular');
+      return false;
+    }
+    toast.success('Coluna colocada na fila para recalcular com as novas regras');
+    load();
+    return true;
   }
 
   async function deleteColumn(column: LeadColumn) {
@@ -559,6 +587,8 @@ export default function ProspeccaoPage() {
                           onRetry={() => retryColumn(c.id)}
                           onTeach={() => teachColumn(c.id)}
                           onDelete={() => deleteColumn(c)}
+                          onUpdateDefinition={(def) => updateColumnDefinition(c.id, def)}
+                          onRecalculate={() => recalculateColumn(c.id)}
                         />
                       </TableHead>
                     ))}

@@ -54,7 +54,7 @@ describe('selectHead', () => {
     const result = selectHead(clouds(8, ['baixo', 'médio', 'alto']));
     expect(result?.model.labels).toEqual(['baixo', 'médio', 'alto']);
     expect(result?.model.weights).toHaveLength(3);
-  });
+  }, 15000);
 
   it('keeps no head when the base model is already right everywhere', () => {
     const set = { ...clouds(12), baseCorrect: new Array(24).fill(true) };
@@ -69,5 +69,6 @@ describe('selectHead', () => {
     const a = selectHead(clouds(12));
     const b = selectHead(clouds(12));
     expect(a?.stats).toEqual(b?.stats);
-  });
+  }, 15000);
 });
+

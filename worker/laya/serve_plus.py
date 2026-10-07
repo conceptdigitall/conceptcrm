@@ -31,10 +31,14 @@ lock = threading.Lock()  # one forward pass at a time, like laya-serve
 
 
 def check_key(authorization):
-    if api_key is None:
-        return
+    if not api_key:
+        raise HTTPException(
+            status_code=500, detail="LAYA_API_KEY environment variable is not configured"
+        )
     supplied = (authorization or "").encode("utf-8", "surrogateescape")
-    if not hmac.compare_digest(supplied, ("Bearer " + api_key).encode("utf-8", "surrogateescape")):
+    if not hmac.compare_digest(
+        supplied, ("Bearer " + api_key).encode("utf-8", "surrogateescape")
+    ):
         raise HTTPException(status_code=401, detail="invalid or missing bearer token")
 
 

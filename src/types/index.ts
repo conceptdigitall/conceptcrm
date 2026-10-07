@@ -808,10 +808,11 @@ export interface LeadColumn {
   trained_at?: string | null;
   claude_calls?: number | null;
   head_decisions?: number | null;
+  definition?: string | null;
 }
 
 /** Who decided a cell's `value`; null on rows filled before migration 047. */
-export type CellSource = 'laya' | 'cabeca' | 'claude';
+export type CellSource = 'laya' | 'cabeca' | 'claude' | 'regra';
 
 export interface LeadColumnValue {
   column_id: string;
