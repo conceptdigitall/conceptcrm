@@ -9,10 +9,16 @@ export function PhotoPicker({
   files,
   onChange,
   disabled,
+  max = MAX_PHOTOS,
+  hint,
 }: {
   files: File[];
   onChange: (files: File[]) => void;
   disabled?: boolean;
+  /** quantas fotos o modelo aceita (padrão: 4) */
+  max?: number;
+  /** frase de orientação no lugar do texto padrão */
+  hint?: string;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -22,7 +28,7 @@ export function PhotoPicker({
 
   function add(list: FileList | null | File[]) {
     const incoming = Array.isArray(list) ? list : Array.from(list ?? []);
-    const { photos, error } = mergePhotos(files, incoming);
+    const { photos, error } = mergePhotos(files, incoming, max);
     if (error) toast.error(error);
     onChange(photos);
     if (input.current) input.current.value = '';
@@ -30,7 +36,7 @@ export function PhotoPicker({
 
   function handleDragOver(e: React.DragEvent) {
     e.preventDefault();
-    if (disabled || files.length >= MAX_PHOTOS) return;
+    if (disabled || files.length >= max) return;
     setIsDragging(true);
   }
 
@@ -42,7 +48,7 @@ export function PhotoPicker({
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setIsDragging(false);
-    if (disabled || files.length >= MAX_PHOTOS) return;
+    if (disabled || files.length >= max) return;
     if (e.dataTransfer.files) {
       add(e.dataTransfer.files);
     }
@@ -53,7 +59,7 @@ export function PhotoPicker({
       <div className="flex items-center justify-between text-xs">
         <span className="font-medium text-foreground">Fotos do negócio:</span>
         <span className="text-muted-foreground font-mono">
-          {files.length}/{MAX_PHOTOS} fotos selecionadas
+          {files.length}/{max} fotos selecionadas
         </span>
       </div>
 
@@ -85,7 +91,7 @@ export function PhotoPicker({
               Arraste fotos ou <span className="text-primary underline-offset-2 hover:underline">clique para selecionar</span>
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Até 4 fotos em JPG, PNG ou WebP (máx. 5 MB cada). Com fotos, a descrição é opcional.
+              {hint ?? `Até ${max} fotos em JPG, PNG ou WebP (máx. 5 MB cada). Com fotos, a descrição é opcional.`}
             </p>
           </div>
         </div>
@@ -121,7 +127,7 @@ export function PhotoPicker({
             </div>
           ))}
 
-          {files.length < MAX_PHOTOS && (
+          {files.length < max && (
             <button
               type="button"
               disabled={disabled}
