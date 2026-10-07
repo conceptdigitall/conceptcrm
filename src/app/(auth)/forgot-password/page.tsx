@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +22,16 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // /auth/callback manda para cá com ?erro=link quando o link do e-mail
+  // venceu, já foi usado ou foi aberto em outro navegador. Lido na
+  // renderização (no servidor é sempre false), sem setState em effect.
+  const linkExpired = useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("erro") === "link",
+    () => false,
+  );
+  const shownError = error ?? (linkExpired && !loading ? t("linkExpired") : null);
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,9 +102,12 @@ export default function ForgotPasswordPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleReset} className="flex flex-col gap-4">
-            {error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-                {error}
+            {shownError && (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"
+              >
+                {shownError}
               </div>
             )}
 
