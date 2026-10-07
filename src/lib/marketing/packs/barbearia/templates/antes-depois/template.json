@@ -1,0 +1,10 @@
+{
+  "id": "antes-depois",
+  "name": "Antes e depois",
+  "formats": ["vertical", "square"],
+  "photos": { "min": 2, "max": 10, "multipleOf": 2 },
+  "texts": {
+    "titulo": { "maxChars": 40, "required": true },
+    "cta": { "maxChars": 40 }
+  }
+}

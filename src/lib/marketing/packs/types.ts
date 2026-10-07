@@ -1,3 +1,6 @@
+import type { VideoTone } from '@/types';
+import type { MarketingTemplateId } from '@/lib/marketing/templates';
+
 // Contrato entre um template de vídeo (template.json) e o diretor (Claude):
 // o diretor devolve só dados, e tudo aqui é validado antes de ir ao render.
 
@@ -96,4 +99,27 @@ export function validateDirectorOutput(
       hashtags: hashtags as string[],
     },
   };
+}
+
+// ---- Pacote de nicho -------------------------------------------------------
+
+export interface PackButton {
+  id: string;
+  label: string;
+  description: string;
+  /** template HyperFrames que o botão usa */
+  templateId: string;
+  /** formulário guiado (src/lib/marketing/templates.ts) que coleta os dados */
+  formId: MarketingTemplateId;
+  /** instrução curta de tom e foco para o diretor */
+  directorHint: string;
+}
+
+export interface Pack {
+  niche: string;
+  name: string;
+  tone: VideoTone;
+  hashtags: string[];
+  buttons: PackButton[];
+  templates: TemplateSpec[];
 }
