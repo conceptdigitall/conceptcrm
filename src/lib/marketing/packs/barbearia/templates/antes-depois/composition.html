@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width={{width}}, height={{height}}" />
+    <title>Antes e depois</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --w: {{width}}px;
+        --h: {{height}}px;
+        --gold: #c9a24b;
+        --ink: #0b0b0c;
+        --paper: #f5f1e8;
+        --pad-top: clamp(60px, calc(var(--h) * 0.12), 240px);
+        --pad-bottom: calc(var(--h) * 0.2);
+        --pad-x: calc(var(--w) * 0.07);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: var(--w);
+        height: var(--h);
+        overflow: hidden;
+        background: var(--ink);
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        color: var(--paper);
+      }
+      #root { position: relative; width: var(--w); height: var(--h); overflow: hidden; background: var(--ink); }
+      .clip { position: absolute; inset: 0; }
+      .card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: var(--pad-top) var(--pad-x) var(--pad-bottom);
+      }
+      .rule { display: block; width: calc(var(--w) * 0.2); height: 8px; background: var(--gold); margin: 0 0 calc(var(--w) * 0.04); }
+      h1 {
+        font-size: calc(var(--w) * 0.098);
+        line-height: 1.04;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        overflow-wrap: anywhere;
+      }
+      .cta {
+        align-self: flex-start;
+        margin-top: calc(var(--w) * 0.06);
+        padding: calc(var(--w) * 0.025) calc(var(--w) * 0.05);
+        border: 4px solid var(--gold);
+        border-radius: 999px;
+        font-size: calc(var(--w) * 0.044);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .cta:empty { display: none; }
+      .photo { background: #000; overflow: hidden; }
+      .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; }
+      .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.6), rgba(0,0,0,0) 40%); }
+      /* fotos chegam em pares consecutivos: ímpar = ANTES, par = DEPOIS (as fotos são os únicos <div> irmãos) */
+      .tag {
+        position: absolute;
+        left: var(--pad-x);
+        bottom: calc(var(--pad-bottom) * 0.55);
+        padding: calc(var(--w) * 0.02) calc(var(--w) * 0.045);
+        font-size: calc(var(--w) * 0.05);
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        border-radius: 8px;
+      }
+      .photo:nth-of-type(odd) .tag { background: rgba(11, 11, 12, 0.78); color: var(--paper); border: 3px solid var(--paper); }
+      .photo:nth-of-type(odd) .tag::after { content: "ANTES"; }
+      .photo:nth-of-type(even) .tag { background: var(--gold); color: var(--ink); border: 3px solid var(--gold); }
+      .photo:nth-of-type(even) .tag::after { content: "DEPOIS"; }
+      .wipe {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 10px;
+        background: var(--gold);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="{{totalSec}}" data-width="{{width}}" data-height="{{height}}">
+      <section id="intro" class="clip card" data-start="0" data-duration="{{introSec}}">
+        <span class="rule"></span>
+        <h1>{{text.titulo}}</h1>
+      </section>
+
+      {{#photos}}<div id="p{{i}}" class="clip photo" data-start="{{start}}" data-duration="{{dur}}">
+        <img src="{{src}}" alt="" data-layout-allow-overflow />
+        <div class="shade"></div>
+        <span class="tag"></span>
+        <div class="wipe" data-layout-allow-overflow></div>
+      </div>
+      {{/photos}}
+
+      <section id="outro" class="clip card" data-start="{{outroStart}}" data-duration="{{outroSec}}">
+        <span class="rule"></span>
+        <h1>{{text.titulo}}</h1>
+        <p class="cta">{{text.cta}}</p>
+      </section>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      tl.from("#intro .rule", { scaleX: 0, transformOrigin: "left center", duration: 0.5, ease: "power2.out" }, 0.1);
+      tl.from("#intro h1", { y: 70, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.25);
+
+      {{#photos}}tl.fromTo("#p{{i}} img", { clipPath: "inset(0% 100% 0% 0%)" }, { clipPath: "inset(0% 0% 0% 0%)", duration: 0.55, ease: "power2.inOut" }, {{start}});
+      tl.to("#p{{i}} img", { scale: 1.1, duration: {{dur}}, ease: "none" }, {{start}});
+      tl.fromTo("#p{{i}} .wipe", { x: 0, opacity: 1 }, { x: {{width}}, opacity: 0.9, duration: 0.55, ease: "power2.inOut" }, {{start}});
+      tl.from("#p{{i}} .tag", { y: 24, opacity: 0, duration: 0.4, ease: "power2.out" }, {{start}} + 0.5);
+      {{/photos}}
+
+      tl.from("#outro .rule", { scaleX: 0, transformOrigin: "left center", duration: 0.5, ease: "power2.out" }, {{outroStart}} + 0.05);
+      tl.from("#outro h1", { y: 50, opacity: 0, duration: 0.6, ease: "power3.out" }, {{outroStart}} + 0.15);
+      tl.from("#outro .cta", { y: 30, opacity: 0, duration: 0.5, ease: "back.out(1.4)" }, {{outroStart}} + 0.6);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

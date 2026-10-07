@@ -5,7 +5,7 @@ import { planTimeline, renderComposition } from '../render';
 import { barbeariaPack } from './pack';
 
 // Cada task de template acrescenta o seu id aqui.
-const IMPLEMENTED = ['compilado'];
+const IMPLEMENTED = ['compilado', 'antes-depois'];
 
 const FORMATS = [
   { name: '9:16', width: 1080, height: 1920 },
