@@ -35,6 +35,7 @@ vi.mock('@base-ui/react/dialog', async (importOriginal) => {
 import { ReactivationRadar } from './reactivation-radar';
 import { PlaybookPickerModal } from './playbook-picker-modal';
 import { CsvImportModal } from './csv-import-modal';
+import { VerticalProspecting } from './vertical-prospecting';
 import { ReactivationResult } from '@/lib/prospecting/reactivation';
 
 describe('prospecting vertical ui components', () => {
@@ -149,4 +150,29 @@ describe('prospecting vertical ui components', () => {
       expect(markup).toContain('Arraste seu arquivo CSV');
     });
   });
+
+  describe('VerticalProspecting', () => {
+    it('renders niche banner, metrics, and reactivation radar', () => {
+      const markup = renderToStaticMarkup(
+        React.createElement(VerticalProspecting, {
+          niche: 'barbeiro',
+          contacts: [
+            {
+              id: 'c1',
+              name: 'Thiago Barbeiro',
+              phone: '5513988889999',
+              last_interaction_at: '2026-08-01T12:00:00Z',
+            },
+          ],
+        })
+      );
+
+      expect(markup).toContain('Barbearias &amp; Salões');
+      expect(markup).toContain('Importar Planilha CSV');
+      expect(markup).toContain('Base Total de Clientes');
+      expect(markup).toContain('Radar de Reativação da Base');
+      expect(markup).toContain('Thiago Barbeiro');
+    });
+  });
 });
+

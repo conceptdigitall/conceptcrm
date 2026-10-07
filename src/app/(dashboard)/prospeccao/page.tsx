@@ -27,6 +27,11 @@ import {
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { isInternalAccount } from '@/lib/internal-accounts';
+import { VerticalProspecting } from '@/components/prospecting/vertical-prospecting';
+import { CandidateContact } from '@/lib/prospecting/reactivation';
+import { ImportedContact } from '@/lib/prospecting/csv-importer';
+import { NicheKey, isValidNiche } from '@/config/niches';
 
 const LAYA_TOP_N = 12;
 
@@ -74,6 +79,78 @@ export default function ProspeccaoPage() {
   const [formOpen, setFormOpen] = useState<boolean | null>(null);
   const [view, setView] = useState<'cards' | 'planilha'>('cards');
 
+  const isInternal = isInternalAccount(accountId);
+  const [mainTab, setMainTab] = useState<'maps' | 'radar'>('radar');
+  const [candidateContacts, setCandidateContacts] = useState<CandidateContact[]>([]);
+  const [niche, setNiche] = useState<NicheKey>(() => {
+    const envNiche = process.env.NEXT_PUBLIC_NICHE;
+    if (envNiche && isValidNiche(envNiche)) return envNiche;
+    return 'concept';
+  });
+
+  const fetchCandidates = useCallback(async () => {
+    if (!accountId) return;
+    const [contactsRes, appointmentsRes] = await Promise.all([
+      supabase
+        .from('contacts')
+        .select('id, name, phone, created_at, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(500),
+      supabase
+        .from('appointments')
+        .select('id, contact_id, start_time, status')
+        .order('start_time', { ascending: false })
+        .limit(1000),
+    ]);
+
+    const appointmentsByContact = new Map<string, Array<{ id: string; start_time: string; status: string }>>();
+    for (const app of appointmentsRes.data ?? []) {
+      if (!app.contact_id) continue;
+      const list = appointmentsByContact.get(app.contact_id) ?? [];
+      list.push({ id: app.id, start_time: app.start_time, status: app.status });
+      appointmentsByContact.set(app.contact_id, list);
+    }
+
+    const list: CandidateContact[] = (contactsRes.data ?? []).map((c) => {
+      const contactApps = appointmentsByContact.get(c.id) ?? [];
+      const lastApp = contactApps[0]?.start_time ?? null;
+      return {
+        id: c.id,
+        name: c.name || 'Sem nome',
+        phone: c.phone,
+        last_interaction_at: c.updated_at || c.created_at,
+        last_appointment_at: lastApp,
+        appointments: contactApps,
+      };
+    });
+    setCandidateContacts(list);
+  }, [supabase, accountId]);
+
+  const handleImportContacts = useCallback(async (importedList: ImportedContact[]) => {
+    if (!accountId) return;
+    const rows = importedList.map((item) => ({
+      account_id: accountId,
+      name: item.name,
+      phone: item.phone,
+    }));
+    const { error } = await supabase.from('contacts').upsert(rows, { onConflict: 'account_id,phone' });
+    if (error) {
+      toast.error('Erro ao importar contatos.');
+    } else {
+      toast.success(`${rows.length} contatos importados com sucesso!`);
+      void fetchCandidates();
+    }
+  }, [supabase, accountId, fetchCandidates]);
+
+  const handleMarkContacted = useCallback(async (contactId: string) => {
+    await supabase
+      .from('contacts')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', contactId);
+    toast.success('Contato marcado como abordado!');
+    void fetchCandidates();
+  }, [supabase, fetchCandidates]);
+
   const fetchData = useCallback(async () => {
     const [s, l, c, v] = await Promise.all([
       supabase.from('lead_searches').select('*').order('created_at', { ascending: false }).limit(20),
@@ -91,6 +168,7 @@ export default function ProspeccaoPage() {
 
   const load = useCallback(() => {
     if (!accountId) return;
+    void fetchCandidates();
     fetchData().then((d) => {
       setSearches(d.searches);
       setLeads(d.leads);
@@ -98,11 +176,12 @@ export default function ProspeccaoPage() {
       setValues(d.values);
       setNow(Date.now());
     });
-  }, [fetchData, accountId]);
+  }, [fetchData, fetchCandidates, accountId]);
 
   useEffect(() => {
     if (!accountId) return;
     let active = true;
+    void fetchCandidates();
     fetchData().then((d) => {
       if (!active) return;
       setLoaded(true);
@@ -115,7 +194,7 @@ export default function ProspeccaoPage() {
     return () => {
       active = false;
     };
-  }, [fetchData, accountId]);
+  }, [fetchData, fetchCandidates, accountId]);
 
   const busy = searches.some((s) => s.status === 'pending' || s.status === 'running')
     || columns.some((c) => c.status === 'pending' || c.status === 'running');
@@ -397,9 +476,63 @@ export default function ProspeccaoPage() {
   const countByStatus = (st: LeadStatus | 'todos') => (st === 'todos' ? leads.length : leads.filter((l) => l.status === st).length);
   const hasFilters = Boolean(selectedRegion || selectedAudience);
 
+  if (!isInternal) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-5">
+        <VerticalProspecting
+          niche={niche}
+          onNicheChange={setNiche}
+          contacts={candidateContacts}
+          onImportContacts={handleImportContacts}
+          onMarkContacted={handleMarkContacted}
+          isLoading={!loaded}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Seletor de Modo da Agência */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <button
+          type="button"
+          onClick={() => setMainTab('radar')}
+          className={cn(
+            'px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer',
+            mainTab === 'radar'
+              ? 'bg-[#0624C7] text-white shadow-xs'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          Radar de Reativação &amp; Playbooks
+        </button>
+        <button
+          type="button"
+          onClick={() => setMainTab('maps')}
+          className={cn(
+            'px-3.5 py-1.5 text-xs font-semibold rounded-xl transition-all cursor-pointer',
+            mainTab === 'maps'
+              ? 'bg-[#0624C7] text-white shadow-xs'
+              : 'bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground'
+          )}
+        >
+          Busca Google Maps (Scraper Interno)
+        </button>
+      </div>
+
+      {mainTab === 'radar' ? (
+        <VerticalProspecting
+          niche={niche}
+          onNicheChange={setNiche}
+          contacts={candidateContacts}
+          onImportContacts={handleImportContacts}
+          onMarkContacted={handleMarkContacted}
+          isLoading={!loaded}
+        />
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Negócios do Google Maps. Nenhuma mensagem é enviada sozinha: você revisa e envia.
         </p>
@@ -671,6 +804,8 @@ export default function ProspeccaoPage() {
           </div>
         )}
       </section>
+        </>
+      )}
     </div>
   );
 }
