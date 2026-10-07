@@ -19,8 +19,14 @@ export const API_SCOPES = [
   'contacts:read',
   'contacts:write',
   'conversations:read',
+  'conversations:write',
   'broadcasts:send',
   'webhooks:manage',
+  'calendar:read',
+  'calendar:write',
+  'deals:read',
+  'deals:write',
+  'marketing:generate',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -32,8 +38,14 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'contacts:read': 'List and read contacts',
   'contacts:write': 'Create and update contacts',
   'conversations:read': 'List and read conversations',
+  'conversations:write': 'Pause or resume the AI auto-reply on a conversation',
   'broadcasts:send': 'Launch broadcast campaigns',
   'webhooks:manage': 'Register and manage outbound event webhooks',
+  'calendar:read': 'List appointments and free time slots',
+  'calendar:write': 'Create, reschedule and cancel appointments',
+  'deals:read': 'List pipelines, stages and deals',
+  'deals:write': 'Create deals, move stages and mark won/lost',
+  'marketing:generate': 'Queue marketing videos and read their status (internal accounts only)',
 };
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */

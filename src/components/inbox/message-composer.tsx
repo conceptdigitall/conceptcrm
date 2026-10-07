@@ -629,7 +629,9 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex items-end gap-2">
+        // Mobile: textarea takes its own full-width row on top, tool buttons
+        // + send sit below. sm+: everything on one row as before.
+        <div className="flex flex-wrap items-end gap-2 sm:flex-nowrap">
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -745,7 +747,7 @@ export function MessageComposer({
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
-              "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
+              "order-first w-full min-w-0 basis-full resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 sm:order-none sm:basis-0 sm:flex-1",
               (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
             )}
           />
@@ -756,7 +758,7 @@ export function MessageComposer({
             gateReason="send messages"
             disabled={!text.trim() || sessionExpired || sending}
             onClick={handleSend}
-            className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
+            className="ml-auto h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 sm:ml-0"
           >
             <Send className="h-4 w-4" />
           </GatedButton>

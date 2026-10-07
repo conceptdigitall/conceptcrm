@@ -153,6 +153,9 @@ export interface Appointment {
   status: AppointmentStatus;
   meeting_url?: string | null;
   notes?: string | null;
+  google_event_id?: string | null;
+  google_calendar_id?: string | null;
+  synced_at?: string | null;
   created_at?: string;
   updated_at?: string;
   contact?: Pick<Contact, 'id' | 'name' | 'phone' | 'email' | 'avatar_url'> | null;

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { isInternalAccount } from '@/lib/internal-accounts';
-import { validateVideoInput } from '@/lib/marketing/validate';
+import { queueVideo } from '@/lib/marketing/queue-video';
 
 export async function POST(request: Request) {
   let ctx;
@@ -15,23 +15,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const parsed = validateVideoInput(body, ctx.accountId);
-  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-
-  const { data, error } = await ctx.supabase
-    .from('marketing_videos')
-    .insert({
-      account_id: ctx.accountId,
-      created_by: ctx.userId,
-      prompt: parsed.value.prompt,
-      image_paths: parsed.value.imagePaths,
-      format: parsed.value.format,
-      tone: parsed.value.tone,
-      status: 'pending',
-    })
-    .select()
-    .single();
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ video: data }, { status: 201 });
+  const result = await queueVideo(ctx.supabase, ctx.accountId, ctx.userId, body);
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+  return NextResponse.json({ video: result.video }, { status: 201 });
 }

@@ -1,9 +1,49 @@
+import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
+import { deploymentAccountScope } from '@/lib/deployment-account';
 import Anthropic from '@anthropic-ai/sdk';
 import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting';
+import { buildDateContext } from '@/lib/ai/defaults';
+import {
+  buildEvolutionHistory,
+  EVOLUTION_HISTORY_LIMIT,
+  type HistoryRow,
+} from '@/lib/whatsapp/evolution-history';
 
 export const maxDuration = 60;
+
+function verifyWebhookSecret(req: Request): boolean {
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
+  if (!secret) {
+    console.error('[Evolution Webhook]: EVOLUTION_WEBHOOK_SECRET is not configured on the server');
+    return false;
+  }
+
+  const provided =
+    req.headers.get('x-evolution-secret') ||
+    req.headers.get('x-webhook-secret') ||
+    req.headers.get('apikey') ||
+    new URL(req.url).searchParams.get('token');
+
+  if (!provided) {
+    return false;
+  }
+
+  try {
+    const secretBuffer = Buffer.from(secret, 'utf-8');
+    const providedBuffer = Buffer.from(provided, 'utf-8');
+
+    if (secretBuffer.length !== providedBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(secretBuffer, providedBuffer);
+  } catch (err) {
+    console.error('[Evolution Webhook Verification Error]:', err);
+    return false;
+  }
+}
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || '',
@@ -58,10 +98,30 @@ async function sendEvolutionMessage(number: string, text: string) {
 }
 
 /**
- * Resolve o account_id e user_id do CRM (multi-tenant)
- * Busca primeiro no whatsapp_config, com fallback para o primeiro account ativo.
+ * Resolve o account_id e user_id do CRM (multi-tenant).
+ * Com CRM_ACCOUNT_ID (banco dividido entre lojas), usa só a conta deste deploy.
+ * Sem ele, modo antigo: o primeiro whatsapp_config, com fallback para o primeiro account.
  */
 async function getAccountAndUser(): Promise<{ accountId: string; userId: string }> {
+  const scopedAccountId = deploymentAccountScope();
+  if (scopedAccountId) {
+    const { data: acc } = await supabaseAdmin()
+      .from('accounts')
+      .select('id, owner_user_id')
+      .eq('id', scopedAccountId)
+      .maybeSingle();
+    const { data: config } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('user_id')
+      .eq('account_id', scopedAccountId)
+      .limit(1)
+      .maybeSingle();
+    if (!acc?.id) {
+      throw new Error(`CRM_ACCOUNT_ID ${scopedAccountId} não existe na tabela accounts.`);
+    }
+    return { accountId: acc.id, userId: config?.user_id || acc.owner_user_id || '' };
+  }
+
   const { data: config } = await supabaseAdmin()
     .from('whatsapp_config')
     .select('account_id, user_id')
@@ -84,8 +144,32 @@ async function getAccountAndUser(): Promise<{ accountId: string; userId: string 
   };
 }
 
+/**
+ * True quando a IA foi pausada nesta conversa pelo CRM. Se a leitura falhar,
+ * trata como pausada: melhor não responder do que responder por cima de um humano.
+ */
+async function isAiPaused(conversationId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin()
+    .from('conversations')
+    .select('ai_autoreply_disabled')
+    .eq('id', conversationId)
+    .maybeSingle();
+  if (error) {
+    console.error('[Evolution Webhook] Erro ao ler pausa da IA (não respondendo):', error);
+    return true;
+  }
+  return data?.ai_autoreply_disabled === true;
+}
+
 export async function POST(req: Request) {
   try {
+    if (!verifyWebhookSecret(req)) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Invalid or missing webhook secret' },
+        { status: 401 }
+      );
+    }
+
     const body = await req.json();
 
     // 1. FILTRO: Ignora se o evento não for estritamente nova mensagem
@@ -282,6 +366,12 @@ export async function POST(req: Request) {
       }
     }
 
+    // IA pausada nesta conversa (botão "Pausar IA" no CRM): a mensagem já foi
+    // salva acima, mas o robô não responde. Antes ele ignorava a pausa.
+    if (conversationId && (await isAiPaused(conversationId))) {
+      return NextResponse.json({ status: 'ai_paused' });
+    }
+
     // ========================================================
     // 2. REGRAS HUMANAS & RESPOSTA INTELIGENTE (CLAUDE)
     // ========================================================
@@ -465,6 +555,8 @@ Você é a inteligência executiva de atendimento da Concept Digital (Engenharia
 Você atende empresários, médicos, advogados e gestores de alto padrão que chegam via WhatsApp.
 Data e hora de referência atual: ${nowBrasilia}.
 
+${buildDateContext()}
+
 DIRETRIZES DA MARCA E POSICIONAMENTO:
 - Propósito: Elevar o posicionamento digital de negócios premium através de engenharia de vendas e design funcional.
 - Posicionamento: Parceiros estratégicos de tecnologia e crescimento, não uma agência operacional comum.
@@ -492,6 +584,8 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
    - Extraia e passe para os parâmetros da ferramenta tudo o que o cliente tiver mencionado: nome real (client_name), empresa/nicho (client_company), e-mail (client_email), e um breve resumo das necessidades/gargalos (notes).
 6. Nome do cliente atual: "${userName}". Use o primeiro nome de forma natural e sutil.
 7. PROIBIDO FORMATAR EM NEGRITO OU USAR ASTERISCOS (REGRA CRÍTICA): NUNCA use negrito, asteriscos duplos (**) ou simples (*) nas mensagens enviadas ao lead. Escreva sempre em texto puro, fluido e natural, exatamente como uma pessoa real conversando no WhatsApp, sem nenhuma formatação markdown.
+8. LINKS, FOTOS, ÁUDIOS E ARQUIVOS (REGRA CRÍTICA): você NÃO consegue abrir links (Instagram, sites, etc.) nem ver fotos, vídeos, áudios ou arquivos. NUNCA diga que viu, gostou ou entendeu o conteúdo, e NUNCA deduza o ramo do cliente pelo nome de um perfil ou link. Responda apenas agradecendo e dizendo que a equipe vai olhar com atenção.
+9. DATAS: se o cliente corrigir um dia ou horário, aceite a correção dele. Confirme sempre o dia da semana e a data exatamente como estão na tabela de próximos dias.
 `;
 
   const tools: Anthropic.Tool[] = [
@@ -532,7 +626,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
   ];
 
   // Recupera histórico recente da conversa para manter contexto fluido
-  const chatMessages: Anthropic.MessageParam[] = [];
+  let historyRows: HistoryRow[] = [];
   if (conversationId) {
     try {
       const { data: history } = await supabaseAdmin()
@@ -540,30 +634,13 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
         .select('sender_type, content_text')
         .eq('conversation_id', conversationId)
         .order('created_at', { ascending: false })
-        .limit(6);
-
-      if (history && history.length > 0) {
-        const sorted = history.reverse();
-        for (const m of sorted) {
-          if (!m.content_text?.trim()) continue;
-          const role = m.sender_type === 'customer' ? 'user' : 'assistant';
-          const cleanContent = cleanReplyFormatting(m.content_text);
-          if (!cleanContent) continue;
-          if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role !== role) {
-            chatMessages.push({ role, content: cleanContent });
-          }
-        }
-      }
+        .limit(EVOLUTION_HISTORY_LIMIT);
+      historyRows = (history ?? []).reverse();
     } catch (hErr) {
       console.warn('[Evolution Webhook] Aviso ao buscar histórico recente:', hErr);
     }
   }
-
-  if (chatMessages.length === 0 || chatMessages[chatMessages.length - 1].role !== 'user') {
-    chatMessages.push({ role: 'user', content: userMessage });
-  } else {
-    chatMessages[chatMessages.length - 1] = { role: 'user', content: userMessage };
-  }
+  const chatMessages: Anthropic.MessageParam[] = buildEvolutionHistory(historyRows, userMessage);
 
   // Helper para processar tool calls de agendamento, sincronizar com banco e notificar via WhatsApp
   const processToolCall = async (toolUse: Anthropic.ToolUseBlock): Promise<string> => {

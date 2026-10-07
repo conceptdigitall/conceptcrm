@@ -4,9 +4,17 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in middleware')
+    return supabaseResponse
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -78,8 +86,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // API routes that need auth (not webhooks)
-  if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
-      !request.nextUrl.pathname.includes('webhook')) {
+  if (!user && (
+    (request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
+      !request.nextUrl.pathname.includes('webhook')) ||
+    request.nextUrl.pathname.startsWith('/api/calendar/')
+  )) {
     return withRefreshedCookies(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )

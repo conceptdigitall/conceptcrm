@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
+import { deploymentAccountScope } from '@/lib/deployment-account'
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { resumePendingExecution } from '@/lib/automations/engine'
 import type { AutomationContext } from '@/lib/automations/engine'
@@ -30,12 +31,23 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Banco dividido entre lojas: só a fila da conta deste deploy, que é
+  // enviada pelo WhatsApp deste deploy.
+  let scopedAccountId: string | null
+  try {
+    scopedAccountId = deploymentAccountScope()
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 })
+  }
+
   const admin = supabaseAdmin()
-  const { data: due, error } = await admin
+  let dueQuery = admin
     .from('automation_pending_executions')
     .select('*')
     .eq('status', 'pending')
     .lte('run_at', new Date().toISOString())
+  if (scopedAccountId) dueQuery = dueQuery.eq('account_id', scopedAccountId)
+  const { data: due, error } = await dueQuery
     .order('run_at', { ascending: true })
     .limit(50)
 

@@ -1924,7 +1924,26 @@
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "you@example.com",
     "sending": "Enviando...",
-    "sendLink": "Enviar enlace de restablecimiento"
+    "sendLink": "Enviar enlace de restablecimiento",
+    "linkExpired": "Este enlace ya no es válido: venció, ya se usó o se abrió en otro navegador. Pide uno nuevo abajo y ábrelo en el mismo navegador."
+  },
+  "ResetPasswordPage": {
+    "checking": "Verificando el enlace...",
+    "title": "Crear nueva contraseña",
+    "desc": "Elige una contraseña de al menos {min} caracteres.",
+    "newLabel": "Nueva contraseña",
+    "confirmLabel": "Confirmar nueva contraseña",
+    "save": "Guardar nueva contraseña",
+    "saving": "Guardando...",
+    "tooShort": "La contraseña debe tener al menos {min} caracteres.",
+    "mismatch": "Las contraseñas no coinciden.",
+    "failed": "No se pudo guardar la contraseña: {message}",
+    "doneTitle": "Contraseña actualizada",
+    "doneDesc": "Listo. Te llevamos al panel...",
+    "expiredTitle": "Enlace inválido o vencido",
+    "expiredDesc": "Pide un nuevo enlace y ábrelo en el mismo navegador en que lo pediste.",
+    "requestNew": "Pedir nuevo enlace",
+    "backToSignIn": "Volver al inicio de sesión"
   },
   "JoinPage": {
     "fail": {

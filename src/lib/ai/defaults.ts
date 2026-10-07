@@ -42,6 +42,54 @@ export function aiContextMessageLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_CONTEXT_MESSAGE_LIMIT
 }
 
+/** Business timezone. Vercel runs in UTC, so dates must be formatted
+ *  explicitly here or "hoje" flips to tomorrow after 21h in Brazil. */
+const BUSINESS_TIMEZONE = 'America/Sao_Paulo'
+const DAYS_AHEAD = 14
+
+/**
+ * Today's date plus a precomputed calendar of the next days. Without
+ * this the model has no idea what day it is and invents weekday/date
+ * pairs (e.g. "segunda-feira, 6 de outubro" when the 6th is a Tuesday).
+ * The table means the model looks dates up instead of computing them.
+ */
+export function buildDateContext(now: Date = new Date()): string {
+  const fmtDay = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: BUSINESS_TIMEZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
+  const fmtYear = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: BUSINESS_TIMEZONE,
+    year: 'numeric',
+  })
+  const fmtTime = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: BUSINESS_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+
+  const day = (offset: number) =>
+    fmtDay.format(new Date(now.getTime() + offset * 24 * 60 * 60 * 1000))
+
+  const calendar = Array.from({ length: DAYS_AHEAD }, (_, i) => {
+    const offset = i + 1
+    const label = offset === 1 ? 'amanhã: ' : ''
+    return `- ${label}${day(offset)}`
+  }).join('\n')
+
+  return (
+    `Current date and time (timezone ${BUSINESS_TIMEZONE}): ` +
+    `Hoje é ${day(0)} de ${fmtYear.format(now)}, ${fmtTime.format(now)}.\n` +
+    `Upcoming days (use this table, never calculate weekdays yourself):\n${calendar}\n` +
+    'When the customer says "hoje", "amanhã" or a weekday, resolve it with the table above. ' +
+    'When confirming an appointment, always state the weekday AND the date exactly as written in this table. ' +
+    'If the customer corrects a date, accept their correction and do not go back to the old date.'
+  )
+}
+
 /**
  * Build the system prompt shared by draft + auto-reply. The account's
  * own `system_prompt` (business context / persona / tone) is appended
@@ -54,12 +102,15 @@ export function buildSystemPrompt(args: {
   mode: 'draft' | 'auto_reply'
   /** Knowledge-base excerpts retrieved for the current question. */
   knowledge?: string[]
+  /** Injectable clock for tests; defaults to the real current time. */
+  now?: Date
 }): string {
-  const { userPrompt, mode, knowledge } = args
+  const { userPrompt, mode, knowledge, now } = args
   const parts: string[] = [
     'You are a customer-messaging assistant for a business that uses a WhatsApp CRM. ' +
       'You are shown the recent WhatsApp conversation between the business (assistant) and a customer (user). ' +
       'Write the next reply the business should send to the customer.',
+    buildDateContext(now),
     'Guidelines: reply in the same language the customer is writing in; keep it concise and friendly, suitable for WhatsApp; ' +
       'never use bold, double asterisks (**), or markdown formatting — write in plain natural text; ' +
       'never invent facts, prices, order numbers, availability, or promises that are not supported by the conversation or the business context below; ' +

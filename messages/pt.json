@@ -1924,7 +1924,26 @@
     "emailLabel": "E-mail",
     "emailPlaceholder": "you@example.com",
     "sending": "Enviando...",
-    "sendLink": "Enviar link de redefinição"
+    "sendLink": "Enviar link de redefinição",
+    "linkExpired": "Esse link não vale mais: venceu, já foi usado ou foi aberto em outro navegador. Peça um novo abaixo e abra no mesmo navegador."
+  },
+  "ResetPasswordPage": {
+    "checking": "Conferindo o link...",
+    "title": "Criar nova senha",
+    "desc": "Escolha uma senha com pelo menos {min} caracteres.",
+    "newLabel": "Nova senha",
+    "confirmLabel": "Confirmar nova senha",
+    "save": "Salvar nova senha",
+    "saving": "Salvando...",
+    "tooShort": "A senha precisa ter pelo menos {min} caracteres.",
+    "mismatch": "As senhas não conferem.",
+    "failed": "Não deu para salvar a senha: {message}",
+    "doneTitle": "Senha atualizada",
+    "doneDesc": "Tudo certo. Levando você para o painel...",
+    "expiredTitle": "Link inválido ou vencido",
+    "expiredDesc": "Peça um novo link de redefinição e abra no mesmo navegador em que pediu.",
+    "requestNew": "Pedir novo link",
+    "backToSignIn": "Voltar ao login"
   },
   "JoinPage": {
     "fail": {
