@@ -64,6 +64,11 @@ describe('renderComposition', () => {
     const out = renderComposition('{{width}}x{{height}} {{introSec}} {{outroSec}} {{totalSec}}', data);
     expect(out).toBe(`1080x1080 2 3 ${+data.timeline.totalSec.toFixed(3)}`);
   });
+  it('expõe outroStart (início do fecho) = totalSec - outroSec', () => {
+    const data = base();
+    const out = renderComposition('{{outroStart}}', data);
+    expect(out).toBe(String(+(data.timeline.totalSec - data.timeline.outroSec).toFixed(3)));
+  });
   it('lança erro para placeholder desconhecido', () => {
     expect(() => renderComposition('{{nada}}', base())).toThrow(/nada/);
   });

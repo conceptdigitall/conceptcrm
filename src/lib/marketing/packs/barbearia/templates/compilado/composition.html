@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width={{width}}, height={{height}}" />
+    <title>Compilado de cortes</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --w: {{width}}px;
+        --h: {{height}}px;
+        --gold: #c9a24b;
+        --ink: #0b0b0c;
+        --paper: #f5f1e8;
+        /* zonas seguras: 9:16 evita topo e rodapé da interface do Instagram/TikTok */
+        --pad-top: clamp(60px, calc(var(--h) * 0.12), 240px);
+        --pad-bottom: calc(var(--h) * 0.2);
+        --pad-x: calc(var(--w) * 0.07);
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: var(--w);
+        height: var(--h);
+        overflow: hidden;
+        background: var(--ink);
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        color: var(--paper);
+      }
+      #root { position: relative; width: var(--w); height: var(--h); overflow: hidden; background: var(--ink); }
+      .clip { position: absolute; inset: 0; }
+      .card {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: var(--pad-top) var(--pad-x) var(--pad-bottom);
+      }
+      .rule { display: block; width: calc(var(--w) * 0.2); height: 8px; background: var(--gold); margin: 0 0 calc(var(--w) * 0.04); }
+      h1 {
+        font-size: calc(var(--w) * 0.098);
+        line-height: 1.04;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        text-transform: uppercase;
+        max-width: 100%;
+        overflow-wrap: anywhere;
+      }
+      .sub {
+        margin-top: calc(var(--w) * 0.04);
+        font-size: calc(var(--w) * 0.05);
+        line-height: 1.25;
+        font-weight: 500;
+        color: var(--gold);
+        max-width: 92%;
+      }
+      .cta {
+        align-self: flex-start;
+        margin-top: calc(var(--w) * 0.06);
+        padding: calc(var(--w) * 0.025) calc(var(--w) * 0.05);
+        border: 4px solid var(--gold);
+        border-radius: 999px;
+        font-size: calc(var(--w) * 0.044);
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      .sub:empty, .cta:empty { display: none; }
+      .photo { background: #000; overflow: hidden; }
+      .photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; will-change: transform; }
+      .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0) 38%); }
+      .bar {
+        position: absolute;
+        left: var(--pad-x);
+        bottom: calc(var(--pad-bottom) * 0.55);
+        width: calc(var(--w) * 0.22);
+        height: 8px;
+        background: var(--gold);
+        transform-origin: left center;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="{{totalSec}}" data-width="{{width}}" data-height="{{height}}">
+      <section id="intro" class="clip card" data-start="0" data-duration="{{introSec}}">
+        <span class="rule"></span>
+        <h1>{{text.titulo}}</h1>
+      </section>
+
+      {{#photos}}<div id="p{{i}}" class="clip photo" data-start="{{start}}" data-duration="{{dur}}">
+        <img src="{{src}}" alt="" data-layout-allow-overflow />
+        <div class="shade"></div>
+        <div class="bar"></div>
+      </div>
+      {{/photos}}
+
+      <section id="outro" class="clip card" data-start="{{outroStart}}" data-duration="{{outroSec}}">
+        <span class="rule"></span>
+        <h1>{{text.titulo}}</h1>
+        <p class="sub">{{text.subtitulo}}</p>
+        <p class="cta">{{text.cta}}</p>
+      </section>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      tl.from("#intro .rule", { scaleX: 0, transformOrigin: "left center", duration: 0.5, ease: "power2.out" }, 0.1);
+      tl.from("#intro h1", { y: 70, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.25);
+
+      {{#photos}}tl.fromTo("#p{{i}} img", { scale: 1, yPercent: 0, opacity: 0 }, { scale: 1.14, yPercent: -2, opacity: 1, duration: {{dur}}, ease: "none" }, {{start}});
+      tl.from("#p{{i}} .bar", { scaleX: 0, duration: 0.45, ease: "power3.out" }, {{start}} + 0.1);
+      {{/photos}}
+
+      tl.from("#outro .rule", { scaleX: 0, transformOrigin: "left center", duration: 0.5, ease: "power2.out" }, {{outroStart}} + 0.05);
+      tl.from("#outro h1", { y: 50, opacity: 0, duration: 0.6, ease: "power3.out" }, {{outroStart}} + 0.15);
+      tl.from("#outro .sub", { y: 30, opacity: 0, duration: 0.5, ease: "power2.out" }, {{outroStart}} + 0.55);
+      tl.from("#outro .cta", { y: 30, opacity: 0, duration: 0.5, ease: "back.out(1.4)" }, {{outroStart}} + 0.9);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

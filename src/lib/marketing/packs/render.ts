@@ -1,7 +1,7 @@
 // Preenche uma composição HyperFrames (HTML) com os dados do vídeo.
 // Substituição determinística, sem lógica no template: mesma entrada, mesmo HTML.
 //
-// Sintaxe: {{width}} {{height}} {{totalSec}} {{introSec}} {{outroSec}}
+// Sintaxe: {{width}} {{height}} {{totalSec}} {{introSec}} {{outroSec}} {{outroStart}}
 //          {{text.<chave>}}  (escapado)
 //          {{#photos}} … {{/photos}}  repetido por foto, com {{i}} {{start}} {{dur}} {{src}}
 
@@ -54,6 +54,7 @@ export function renderComposition(html: string, data: RenderData): string {
     totalSec: num(timeline.totalSec),
     introSec: num(timeline.introSec),
     outroSec: num(timeline.outroSec),
+    outroStart: num(timeline.totalSec - timeline.outroSec),
   };
   for (const [k, v] of Object.entries(data.texts)) globals[`text.${k}`] = escapeHtml(v);
 
