@@ -17,6 +17,7 @@ UPDATE marketing_videos
    SET kind = CASE WHEN format = 'landscape' THEN 'resumo' ELSE 'reels' END
  WHERE kind IS NULL;
 
+ALTER TABLE marketing_videos ALTER COLUMN kind SET DEFAULT 'reels';
 ALTER TABLE marketing_videos ALTER COLUMN kind SET NOT NULL;
 
 ALTER TABLE marketing_videos DROP CONSTRAINT IF EXISTS marketing_videos_kind_check;

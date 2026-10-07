@@ -18,7 +18,15 @@ const supabase = {
     }),
     insert: (row: unknown) => {
       mocks.insert(row);
-      return { select: () => ({ single: async () => ({ data: { id: 'v-1', ...(row as object) }, error: null }) }) };
+      return {
+        select: () => {
+          const rows = Array.isArray(row) ? row : [row];
+          return Object.assign(
+            Promise.resolve({ data: rows.map((r, i) => ({ id: `v-${i + 1}`, ...(r as object) })), error: null }),
+            { single: async () => ({ data: { id: 'v-1', ...(row as object) }, error: null }) },
+          );
+        },
+      };
     },
   }),
 };
@@ -43,6 +51,7 @@ describe('POST /api/marketing/videos', () => {
     expect(mocks.insert).toHaveBeenCalledWith({
       account_id: 'acc-1', created_by: 'user-1', prompt: 'Promo',
       image_paths: ['account-acc-1/uploads/1-a.jpg'], format: 'vertical', tone: 'polished', status: 'pending',
+      kind: 'reels',
     });
   });
 
@@ -59,5 +68,39 @@ describe('POST /api/marketing/videos', () => {
     expect(json.error).toContain('Limite diário');
     expect(mocks.insert).not.toHaveBeenCalled();
   });
-});
 
+  it('legado horizontal grava kind resumo', async () => {
+    await POST(req({ prompt: 'Promo', imagePaths: [], format: 'landscape' }));
+    expect(mocks.insert).toHaveBeenCalledWith(expect.objectContaining({ format: 'landscape', kind: 'resumo' }));
+  });
+
+  describe('por botão do pacote', () => {
+    const photos = [1, 2, 3, 4].map((n) => `account-acc-1/uploads/${n}-a.jpg`);
+    const button = { buttonId: 'compilado', fields: { name: 'Degradê', benefit: 'Na régua' }, imagePaths: photos, formats: ['vertical'] };
+
+    it('enfileira uma linha por formato quando o nicho está ligado', async () => {
+      vi.stubEnv('NEXT_PUBLIC_MARKETING_NICHE', 'barbearia');
+      const res = await POST(req({ ...button, formats: ['vertical', 'square'] }));
+      expect(res.status).toBe(201);
+      const rows = mocks.insert.mock.calls[0][0] as Record<string, unknown>[];
+      expect(rows).toHaveLength(2);
+      expect(rows[0]).toMatchObject({ kind: 'reels', niche: 'barbearia', template_id: 'compilado' });
+      expect((await res.json()).videos).toHaveLength(2);
+      vi.unstubAllEnvs();
+    });
+
+    it('400 quando nenhum nicho está ligado neste deploy', async () => {
+      vi.stubEnv('NEXT_PUBLIC_MARKETING_NICHE', '');
+      expect((await POST(req(button))).status).toBe(400);
+      expect(mocks.insert).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+    });
+
+    it('400 para botão de outro nicho enviado direto à API', async () => {
+      vi.stubEnv('NEXT_PUBLIC_MARKETING_NICHE', 'barbearia');
+      expect((await POST(req({ ...button, buttonId: 'tour-do-imovel' }))).status).toBe(400);
+      expect(mocks.insert).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+    });
+  });
+});
