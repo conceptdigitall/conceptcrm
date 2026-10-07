@@ -28,6 +28,10 @@ describe.each(IMPLEMENTED)('template %s', (id) => {
     }
   });
 
+  it('não anima a opacidade da foto pela cena inteira (a foto ficaria escura quase o tempo todo)', () => {
+    expect(html).not.toMatch(/opacity:\s*1[^}]*duration:\s*\{\{dur\}\}/);
+  });
+
   it('só usa chaves de texto declaradas no template.json', () => {
     const used = [...html.matchAll(/\{\{text\.(\w+)\}\}/g)].map((m) => m[1]);
     for (const key of used) expect(Object.keys(spec.texts), `chave ${key}`).toContain(key);

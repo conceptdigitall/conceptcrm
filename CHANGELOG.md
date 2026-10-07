@@ -9,6 +9,29 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [Unreleased]
+
+Marketing videos by niche pack (Reels). Behind `NEXT_PUBLIC_MARKETING_NICHE`;
+with it unset nothing changes.
+
+> **Migration required:** apply `supabase/migrations/048_marketing_video_packs.sql`
+> (adds `kind`, `niche`, `template_id`, `director_input`, `director_output`,
+> `caption` and `error_kind` to `marketing_videos`, backfills `kind` from
+> `format` — horizontal becomes `resumo`, the rest `reels` — and adds the
+> `kind`/`format` constraint). Additive; apply it to a test database first.
+
+### Added
+
+- **Niche packs for Marketing videos.** A fixed HyperFrames template per button
+  (Barbearia: compilado de cortes, antes e depois, oferta da semana) filled by
+  a "director" that only returns data, in 9:16 and 1:1, instead of Claude
+  writing the composition HTML each time. Photos are checked (size, dark or
+  blurry) before rendering. See `docs/worker.md`.
+
+### Changed
+
+- Retrying a failed video clears its `error_kind`.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

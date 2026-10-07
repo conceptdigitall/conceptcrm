@@ -105,7 +105,8 @@
       tl.from("#intro .rule", { scaleX: 0, transformOrigin: "left center", duration: 0.5, ease: "power2.out" }, 0.1);
       tl.from("#intro h1", { y: 70, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.25);
 
-      {{#photos}}tl.fromTo("#p{{i}} img", { scale: 1, yPercent: 0, opacity: 0 }, { scale: 1.14, yPercent: -2, opacity: 1, duration: {{dur}}, ease: "none" }, {{start}});
+      {{#photos}}tl.fromTo("#p{{i}} img", { opacity: 0 }, { opacity: 1, duration: 0.25, ease: "power1.out" }, {{start}});
+      tl.to("#p{{i}} img", { scale: 1.14, yPercent: -2, duration: {{dur}}, ease: "none" }, {{start}});
       tl.from("#p{{i}} .bar", { scaleX: 0, duration: 0.45, ease: "power3.out" }, {{start}} + 0.1);
       {{/photos}}
 
