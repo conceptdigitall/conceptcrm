@@ -106,7 +106,7 @@ export function SearchRadiusMap({ cities }: SearchRadiusMapProps) {
 
     if (points.length === 1) map.setView(bounds.getCenter(), 12);
     else if (points.length > 1) map.fitBounds(bounds, { padding: [32, 32], maxZoom: 12 });
-    else map.setView([-23.9608, -46.3336], 10);
+    else map.setView([-23.8950, -46.4253], 10);
   }, [ready, locatedKey]);
 
   return (

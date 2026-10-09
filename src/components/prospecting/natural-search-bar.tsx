@@ -14,9 +14,9 @@ interface Props {
 }
 
 const SUGGESTIONS = [
-  { label: 'Recepcionista de IA', query: 'leads mais qualificados para comprar recepcionista de IA' },
-  { label: 'Sem site', query: 'empresas sem site que precisam de presença digital' },
-  { label: 'Alto movimento', query: 'negócios com muitos clientes e alto faturamento' },
+  { label: 'Convênios & Empresas', query: 'empresas e escritórios locais para fechar convênio corporativo' },
+  { label: 'Noivos & Casamentos', query: 'cerimonialistas e lojas de terno para parcerias do Dia do Noivo' },
+  { label: 'Cross-Promotion', query: 'academias e estúdios para parceria de público masculino' },
 ] as const;
 
 const STATUS_TEXT: Record<Exclude<LayaStatus, 'idle'>, string> = {
@@ -35,7 +35,7 @@ export function NaturalSearchBar({ value, onChange, layaStatus, onFocus }: Props
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onFocus={onFocus}
-          placeholder="Nome, bairro ou o que você quer vender…"
+          placeholder="Nome, bairro ou tipo de parceria para a barbearia…"
           maxLength={200}
           aria-label="Buscar leads"
           className="h-11 pl-9 pr-9 text-base sm:text-sm"

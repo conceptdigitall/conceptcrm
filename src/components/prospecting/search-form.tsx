@@ -17,16 +17,23 @@ const SearchRadiusMap = dynamic(
 );
 
 const NICHES = [
-  { query: 'barbearia', plural: 'barbearias' },
-  { query: 'salão de beleza', plural: 'salões de beleza' },
-  { query: 'clínica de estética', plural: 'clínicas de estética' },
-  { query: 'dentista', plural: 'dentistas' },
-  { query: 'advogado', plural: 'advogados' },
-  { query: 'imobiliária', plural: 'imobiliárias' },
+  // Parcerias Noivos & Eventos
+  { query: 'cerimonialista', plural: 'cerimonialistas' },
+  { query: 'aluguel de ternos', plural: 'lojas de ternos' },
+  { query: 'fotógrafo de casamento', plural: 'fotógrafos' },
+  { query: 'espaço de eventos', plural: 'espaços de eventos' },
+  // Estilo de Vida Masculino & Cross-Promotion
   { query: 'academia', plural: 'academias' },
-  { query: 'restaurante', plural: 'restaurantes' },
-  { query: 'pet shop', plural: 'pet shops' },
-  { query: 'oficina mecânica', plural: 'oficinas mecânicas' },
+  { query: 'crossfit', plural: 'boxes de crossfit' },
+  { query: 'estúdio de tatuagem', plural: 'estúdios de tatuagem' },
+  { query: 'moda masculina', plural: 'lojas de moda masculina' },
+  { query: 'estética automotiva', plural: 'estéticas automotivas' },
+  // B2B Corporativo & Convênios Locais
+  { query: 'escritório de advocacia', plural: 'escritórios de advocacia' },
+  { query: 'imobiliária', plural: 'imobiliárias' },
+  { query: 'agência de marketing', plural: 'agências' },
+  { query: 'consultório odontológico', plural: 'consultórios odontológicos' },
+  { query: 'empresa de logística', plural: 'empresas de logística' },
 ] as const;
 
 const AMOUNTS = [20, 50, 100] as const;
@@ -99,7 +106,9 @@ export function SearchForm({ disabled, onSubmit }: Props) {
     <form onSubmit={submit} className="grid gap-6 lg:grid-cols-[1fr_minmax(0,22rem)]">
       <div className="min-w-0 space-y-6">
         <fieldset className="space-y-2">
-          <legend className="text-sm font-semibold">1. Que tipo de negócio?</legend>
+          <legend className="text-sm font-semibold">
+            1. Quem prospectar para a Barbearia? (Parcerias, Convênios e Noivos)
+          </legend>
           <div className="flex flex-wrap gap-2">
             {[...NICHES.map((n) => n.query), 'outro'].map((q) => (
               <button key={q} type="button" aria-pressed={niche === q} onClick={() => setNiche(q)} className={cn(chip(niche === q), 'capitalize')}>
@@ -112,7 +121,7 @@ export function SearchForm({ disabled, onSubmit }: Props) {
               autoFocus
               value={custom}
               onChange={(e) => setCustom(e.target.value)}
-              placeholder="Ex.: escola de inglês, contabilidade…"
+              placeholder="Ex.: revenda de motos, corretora, contabilidade…"
               maxLength={120}
               className="max-w-sm"
             />
@@ -163,7 +172,7 @@ export function SearchForm({ disabled, onSubmit }: Props) {
               <Input
                 value={district}
                 onChange={(e) => setDistrict(e.target.value)}
-                placeholder={`Bairro em ${cities[0].replace(/, [A-Z]{2}$/, '')} (opcional)`}
+                placeholder={`Bairro em ${cities[0].replace(/, [A-Z]{2}$/, '')} (ex.: Casqueiro, Centro…)`}
                 maxLength={40}
               />
             )}

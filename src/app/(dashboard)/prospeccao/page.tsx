@@ -365,7 +365,7 @@ export default function ProspeccaoPage() {
     <div className="mx-auto max-w-6xl space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Negócios do Google Maps. Nenhuma mensagem é enviada sozinha: você revisa e envia.
+          Parcerias locais, noivos e convênios para a Barbearia do Alemão via Google Maps. Nenhuma mensagem é enviada sozinha: você revisa e envia.
         </p>
         <Button onClick={() => setFormOpen(!showForm)} variant={showForm ? 'outline' : 'default'} disabled={!canEdit}>
           {showForm ? <X className="mr-1.5 h-4 w-4" /> : <Plus className="mr-1.5 h-4 w-4" />}

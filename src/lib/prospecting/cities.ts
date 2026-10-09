@@ -25,11 +25,11 @@ export const KNOWN_CITIES: Record<string, [number, number]> = {
 };
 
 export const DEFAULT_CITIES = [
+  'Cubatão, SP',
   'Santos, SP',
   'São Vicente, SP',
-  'Guarujá, SP',
   'Praia Grande, SP',
-  'Cubatão, SP',
+  'Guarujá, SP',
   'Bertioga, SP',
   'Mongaguá, SP',
   'Itanhaém, SP',
@@ -38,11 +38,12 @@ export const DEFAULT_CITIES = [
 ];
 
 export const BAIXADA_SANTISTA_CITIES = [
+  'Cubatão, SP',
   'Santos, SP',
   'São Vicente, SP',
   'Praia Grande, SP',
   'Guarujá, SP',
-  'Cubatão, SP',
+  'Bertioga, SP',
 ];
 
 /** Coordenadas conhecidas da cidade, ou null quando ela não está na lista. */
@@ -60,12 +61,12 @@ export function findCityCoordinates(cityName: string): [number, number] | null {
 }
 
 export function getCityCoordinates(cityName: string): [number, number] {
-  // Fallback para Santos (região base do Concept CRM)
-  return findCityCoordinates(cityName) ?? [-23.9608, -46.3336];
+  // Fallback para Cubatão (sede da Barbearia do Alemão 777 - Jardim Casqueiro)
+  return findCityCoordinates(cityName) ?? [-23.8950, -46.4253];
 }
 
 export function calculateCenterCoordinates(cities: string[]): [number, number] {
-  if (cities.length === 0) return [-23.9608, -46.3336];
+  if (cities.length === 0) return [-23.8950, -46.4253];
 
   let sumLat = 0;
   let sumLng = 0;
@@ -78,3 +79,4 @@ export function calculateCenterCoordinates(cities: string[]): [number, number] {
 
   return [sumLat / cities.length, sumLng / cities.length];
 }
+

@@ -22,23 +22,45 @@ describe('satisfactionLevel', () => {
 });
 
 describe('buildOutreachMessage', () => {
-  const base = { name: 'The Barbershop', category: 'Barbearia', rating: 4.7, review_count: 276, website: null };
+  const base = { name: 'Escritório Alfa', category: 'Advocacia', rating: 4.8, review_count: 52, website: null };
 
-  it('praises good ratings and pitches a site when there is none', () => {
-    const msg = buildOutreachMessage(base);
-    expect(msg).toContain('The Barbershop');
-    expect(msg).toContain('4.7★ com 276 avaliações');
-    expect(msg).toContain('ainda não têm site');
+  it('pitches wedding packages for wedding planners and suit rental stores', () => {
+    const msg = buildOutreachMessage({
+      name: 'Elegance Noivas & Ternos',
+      category: 'Aluguel de Trajes e Ternos para Casamento',
+      rating: 4.9,
+      review_count: 88,
+      website: null,
+    });
+    expect(msg).toContain('Elegance Noivas & Ternos');
+    expect(msg).toContain('4.9★ com 88 avaliações');
+    expect(msg).toContain('Dia do Noivo');
+    expect(msg).toContain('Kawe');
   });
 
-  it('pitches the AI receptionist when the business already has a site', () => {
-    const msg = buildOutreachMessage({ ...base, website: 'https://x.com' });
-    expect(msg).toContain('recepcionista de IA');
-    expect(msg).not.toContain('ainda não têm site');
+  it('pitches cross-promotion for lifestyle businesses (gyms, tattoo, crossfit)', () => {
+    const msg = buildOutreachMessage({
+      name: 'Iron Crossfit Casqueiro',
+      category: 'Academia de Crossfit',
+      rating: 4.7,
+      review_count: 120,
+      website: null,
+    });
+    expect(msg).toContain('Iron Crossfit Casqueiro');
+    expect(msg).toContain('benefícios e vouchers cruzados');
+    expect(msg).toContain('Kawe');
+  });
+
+  it('pitches corporate wellness agreements for local companies and offices', () => {
+    const msg = buildOutreachMessage(base);
+    expect(msg).toContain('Escritório Alfa');
+    expect(msg).toContain('convênios corporativos de cuidados masculinos');
+    expect(msg).toContain('voucher cortesia de primeiro corte');
+    expect(msg).toContain('Kawe');
   });
 
   it('skips praise for low ratings and never mentions price', () => {
-    const msg = buildOutreachMessage({ ...base, rating: 3.9 });
+    const msg = buildOutreachMessage({ ...base, rating: 3.9, review_count: 5 });
     expect(msg).not.toContain('parabéns');
     expect(msg).not.toMatch(/R\$|reais|preço/i);
   });

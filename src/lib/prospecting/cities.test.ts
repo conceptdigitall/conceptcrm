@@ -14,7 +14,7 @@ describe('cities helper', () => {
 
   it('matches prefix or fallback', () => {
     expect(getCityCoordinates('Praia Grande')).toEqual([-24.0058, -46.4028]);
-    expect(getCityCoordinates('Cidade Desconhecida')).toEqual([-23.9608, -46.3336]);
+    expect(getCityCoordinates('Cidade Desconhecida')).toEqual([-23.8950, -46.4253]);
   });
 
   it('calculates center coordinates accurately', () => {
@@ -23,8 +23,8 @@ describe('cities helper', () => {
     expect(center[1]).toBeCloseTo((-46.3336 - 46.3919) / 2, 4);
   });
 
-  it('handles empty city list by returning Santos default', () => {
-    expect(calculateCenterCoordinates([])).toEqual([-23.9608, -46.3336]);
+  it('handles empty city list by returning Cubatão default', () => {
+    expect(calculateCenterCoordinates([])).toEqual([-23.8950, -46.4253]);
   });
 
   it('has Baixada Santista cities defined', () => {
