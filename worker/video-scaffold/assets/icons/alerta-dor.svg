@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" stroke="#18181b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Triângulo de Perigo / Alerta -->
+  <path d="M50 16 L88 82 L12 82 Z" class="draw-path" fill="#fee2e2" stroke="#ef4444" stroke-width="5" />
+  <!-- Ponto de Exclamação -->
+  <line x1="50" y1="36" x2="50" y2="58" class="draw-path" stroke="#ef4444" stroke-width="6" />
+  <circle cx="50" cy="70" r="4" fill="#ef4444" stroke="none" />
+</svg>

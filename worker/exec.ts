@@ -3,10 +3,11 @@ import { spawn } from 'node:child_process';
 export function runCommand(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; timeoutMs: number },
+  opts: { cwd?: string; timeoutMs: number; input?: string; env?: NodeJS.ProcessEnv },
 ): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: opts.cwd, env: process.env });
+    const child = spawn(cmd, args, { cwd: opts.cwd, env: opts.env ?? process.env });
+    if (opts.input !== undefined) child.stdin.end(opts.input);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));

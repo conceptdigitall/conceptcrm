@@ -830,3 +830,83 @@ export interface LeadColumnValue {
   source?: CellSource | null;
   laya_value?: string | null;
 }
+
+// ============================================================
+// Marketing Content & Instagram (Migration 052)
+// ============================================================
+
+export type PostKind = 'feed' | 'story';
+export type PostMediaType = 'foto' | 'carrossel' | 'video';
+export type PostStatus = 'draft' | 'pending_approval' | 'scheduled' | 'published' | 'archived';
+export type StoryInteraction = 'nenhuma' | 'enquete' | 'link';
+
+export interface StoryFrame {
+  text: string;
+  interaction: StoryInteraction;
+  interaction_data?: {
+    question?: string;
+    options?: string[];
+    url?: string;
+  };
+}
+
+export interface MarketingPost {
+  id: string;
+  account_id: string;
+  created_by: string | null;
+  kind: PostKind;
+  media_type: PostMediaType;
+  title: string;
+  idea: string;
+  caption: string;
+  media_urls?: string[];
+  video_id: string | null;
+  frames: StoryFrame[];
+  status: PostStatus;
+  scheduled_at: string | null;
+  parent_id: string | null;
+  version: number;
+  instagram_media_id?: string | null;
+  instagram_permalink?: string | null;
+  posted_at?: string | null;
+  error_message?: string | null;
+  created_at: string;
+}
+
+export type CaptionStyle = 'direto' | 'educativo' | 'provocativo' | 'storytelling';
+export type CaptionSize = 'curta' | 'media' | 'longa';
+export type EmojiLevel = 'nenhum' | 'poucos' | 'muitos';
+
+export interface HashtagGroup {
+  group: string;
+  tags: { t: string; on: boolean }[];
+}
+
+export interface MarketingSettings {
+  account_id: string;
+  caption_style: CaptionStyle;
+  caption_size: CaptionSize;
+  emoji_level: EmojiLevel;
+  cta: string;
+  never_use: string;
+  hashtags: HashtagGroup[];
+  require_approval: boolean;
+  instagram_user_id?: string | null;
+  instagram_username?: string | null;
+  updated_at?: string;
+}
+
+export type ProjectCategory = 'landing' | 'recepcionista' | 'marketing';
+export type ProjectStatus = 'live' | 'building' | 'demo' | 'soon';
+
+export interface MarketingProject {
+  id: string;
+  account_id: string;
+  name: string;
+  category: ProjectCategory;
+  url: string | null;
+  cover_url?: string | null;
+  status: ProjectStatus;
+  created_at: string;
+}
+
