@@ -199,24 +199,25 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<Cr
   const status = isGoogleCalendarConfigured();
   const defaultMeetUrl = location || 'https://meet.google.com/new';
 
-  const detailsText = [
-    `Reunião com: ${clientName}`,
-    clientPhone ? `WhatsApp: ${clientPhone}` : null,
-    company ? `Empresa: ${company}` : null,
-    clientEmail ? `E-mail: ${clientEmail}` : null,
-    notes ? `Notas: ${notes}` : null,
-    `Link da chamada: ${defaultMeetUrl}`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-
-  const calendarUrl = generateDirectGoogleCalendarUrl({
-    title,
-    startDate,
-    durationMinutes,
-    details: detailsText,
-    location: defaultMeetUrl,
-  });
+  // O link "adicionar à agenda" leva o Meet de verdade quando ele existe (senão, /new).
+  const calendarUrlFor = (meetUrl: string) =>
+    generateDirectGoogleCalendarUrl({
+      title,
+      startDate,
+      durationMinutes,
+      details: [
+        `Reunião com: ${clientName}`,
+        clientPhone ? `WhatsApp: ${clientPhone}` : null,
+        company ? `Empresa: ${company}` : null,
+        clientEmail ? `E-mail: ${clientEmail}` : null,
+        notes ? `Notas: ${notes}` : null,
+        `Link da chamada: ${meetUrl}`,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      location: meetUrl,
+    });
+  const calendarUrl = calendarUrlFor(defaultMeetUrl);
 
   // 1. OAuth: evento real com Google Meet
   if (
@@ -226,7 +227,7 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<Cr
   ) {
     try {
       const meet = await createMeetEvent(params);
-      return { eventId: meet.eventId, meetUrl: meet.meetUrl, calendarUrl, meetCreated: true };
+      return { eventId: meet.eventId, meetUrl: meet.meetUrl, calendarUrl: calendarUrlFor(meet.meetUrl), meetCreated: true };
     } catch (err) {
       console.warn(
         '[GoogleCalendar] Falha ao criar Meet via OAuth:',
@@ -259,7 +260,7 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<Cr
         return {
           eventId: data.eventId || `gcal-webhook-${Date.now()}`,
           meetUrl: data.meetUrl || defaultMeetUrl,
-          calendarUrl,
+          calendarUrl: data.meetUrl ? calendarUrlFor(data.meetUrl) : calendarUrl,
           meetCreated: Boolean(data.meetUrl),
         };
       }

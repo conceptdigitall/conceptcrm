@@ -139,6 +139,24 @@ describe('Google Calendar service & unified integration', () => {
       expect(body.start.timeZone).toBe('America/Sao_Paulo');
     });
 
+    it('com Meet real via OAuth, o link "adicionar à agenda" usa o Meet real e não /new', async () => {
+      setOauth();
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'at' }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 'evt-9', hangoutLink: 'https://meet.google.com/real-link-xyz' }),
+        }) as unknown as typeof fetch;
+
+      const result = await createCalendarEvent(baseParams);
+
+      const url = new URL(result.calendarUrl);
+      expect(url.searchParams.get('location')).toBe('https://meet.google.com/real-link-xyz');
+      expect(url.searchParams.get('details')).toContain('Link da chamada: https://meet.google.com/real-link-xyz');
+      expect(result.calendarUrl).not.toContain('meet.google.com%2Fnew');
+    });
+
     it('falls back with meetCreated=false when token exchange returns 400', async () => {
       setOauth();
       global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) }) as unknown as typeof fetch;
