@@ -38,7 +38,7 @@ describe('POST retry', () => {
     const res = await POST(req(), params);
     expect(res.status).toBe(200);
     expect(mocks.update).toHaveBeenCalledWith({
-      status: 'pending', error: null, started_at: null, finished_at: null,
+      status: 'pending', error: null, error_kind: null, started_at: null, finished_at: null,
       video_path: null, poster_path: null,
     });
   });

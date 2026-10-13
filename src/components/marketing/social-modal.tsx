@@ -29,8 +29,9 @@ export function SocialModal({
   open,
   onOpenChange,
 }: SocialModalProps) {
-  const [caption, setCaption] = useState(() =>
-    generateSocialCaption({ prompt: video.prompt, tone: video.tone }).caption,
+  // Vídeos feitos por pacote já trazem a legenda escrita pelo diretor.
+  const [caption, setCaption] = useState(
+    () => video.caption ?? generateSocialCaption({ prompt: video.prompt, tone: video.tone }).caption,
   );
   const [copied, setCopied] = useState(false);
 

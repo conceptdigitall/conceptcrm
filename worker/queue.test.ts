@@ -77,4 +77,9 @@ describe('queue', () => {
     expect(b).toMatchObject({ status: 'done', result_count: 3 });
     expect(b.finished_at).toBeTruthy();
   });
+  it('failJob grava campos extras (ex.: error_kind)', async () => {
+    const db = fakeDb([{ id: 'a', status: 'running', created_at: 'x' }]);
+    await failJob(db, 'marketing_videos', 'a', 'foto escura', { error_kind: 'photos' });
+    expect(db.rows[0]).toMatchObject({ status: 'failed', error: 'foto escura', error_kind: 'photos' });
+  });
 });

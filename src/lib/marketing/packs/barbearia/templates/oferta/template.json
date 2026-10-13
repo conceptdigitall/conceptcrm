@@ -1,0 +1,12 @@
+{
+  "id": "oferta",
+  "name": "Oferta da semana",
+  "formats": ["vertical", "square"],
+  "photos": { "min": 1, "max": 6 },
+  "texts": {
+    "item": { "maxChars": 40, "required": true },
+    "price": { "maxChars": 20, "required": true },
+    "deadline": { "maxChars": 40 },
+    "cta": { "maxChars": 40 }
+  }
+}

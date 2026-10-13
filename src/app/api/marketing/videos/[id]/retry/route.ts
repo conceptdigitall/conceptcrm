@@ -27,7 +27,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const { data, error } = await ctx.supabase
     .from('marketing_videos')
     .update({
-      status: 'pending', error: null, started_at: null, finished_at: null,
+      status: 'pending', error: null, error_kind: null, started_at: null, finished_at: null,
       video_path: null, poster_path: null,
     })
     .eq('id', id)

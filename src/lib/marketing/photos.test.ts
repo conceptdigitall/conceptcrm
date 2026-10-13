@@ -22,4 +22,10 @@ describe('mergePhotos', () => {
     expect(r.photos.map((p) => p.name)).toEqual(['ok.webp']);
     expect(r.error).toBe('Use JPG, PNG ou WebP de até 5 MB: doc.pdf, big.jpg');
   });
+  it('aceita um máximo diferente quando o template pede mais fotos', () => {
+    const many = Array.from({ length: 12 }, (_, i) => photo(`${i}.jpg`));
+    const r = mergePhotos([], many, 10);
+    expect(r.photos).toHaveLength(10);
+    expect(r.error).toBe('No máximo 10 fotos: ficaram as 10 primeiras');
+  });
 });

@@ -27,9 +27,11 @@ export async function finishJob(
   await db.from(table).update({ ...patch, status: 'done', finished_at: new Date().toISOString() }).eq('id', id);
 }
 
-export async function failJob(db: SupabaseClient, table: JobTable, id: string, message: string): Promise<void> {
+export async function failJob(
+  db: SupabaseClient, table: JobTable, id: string, message: string, extra: Record<string, unknown> = {},
+): Promise<void> {
   await db.from(table)
-    .update({ status: 'failed', error: message.slice(0, 2000), finished_at: new Date().toISOString() })
+    .update({ ...extra, status: 'failed', error: message.slice(0, 2000), finished_at: new Date().toISOString() })
     .eq('id', id);
 }
 

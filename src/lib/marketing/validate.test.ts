@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateVideoInput } from './validate';
+import { validatePhotoPaths, validateVideoInput } from './validate';
 
 const acc = 'acc-1';
 const img = (n: number) => `account-${acc}/uploads/1-foto${n}.jpg`;
@@ -38,5 +38,20 @@ describe('validateVideoInput', () => {
   it('rejects unknown format and tone', () => {
     expect(validateVideoInput({ prompt: 'a', format: 'tiktok' }, acc).ok).toBe(false);
     expect(validateVideoInput({ prompt: 'a', tone: 'chaotic' }, acc).ok).toBe(false);
+  });
+});
+
+describe('validatePhotoPaths', () => {
+  const acc = 'acc-1';
+  it('aceita caminhos da pasta de uploads da própria conta', () => {
+    expect(validatePhotoPaths([`account-${acc}/uploads/1-a.jpg`], acc)).toBeNull();
+  });
+  it('recusa pasta de outra conta, .. e valores que não são texto', () => {
+    expect(validatePhotoPaths(['account-other/uploads/x.jpg'], acc)).toBe('Foto inválida');
+    expect(validatePhotoPaths([`account-${acc}/uploads/../x.jpg`], acc)).toBe('Foto inválida');
+    expect(validatePhotoPaths([42], acc)).toBe('Foto inválida');
+  });
+  it('recusa quando não é uma lista', () => {
+    expect(validatePhotoPaths('account-acc-1/uploads/x.jpg', acc)).toBe('Foto inválida');
   });
 });

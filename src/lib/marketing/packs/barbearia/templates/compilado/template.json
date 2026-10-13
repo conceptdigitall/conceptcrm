@@ -1,0 +1,11 @@
+{
+  "id": "compilado",
+  "name": "Compilado de cortes",
+  "formats": ["vertical", "square"],
+  "photos": { "min": 4, "max": 10 },
+  "texts": {
+    "titulo": { "maxChars": 40, "required": true },
+    "subtitulo": { "maxChars": 60 },
+    "cta": { "maxChars": 40 }
+  }
+}

@@ -7,6 +7,17 @@ type Result =
   | { ok: true; value: { prompt: string; imagePaths: string[]; format: VideoFormat; tone: VideoTone } }
   | { ok: false; error: string };
 
+// O worker baixa com a service role (ignora RLS do storage): só vale arquivo
+// da pasta de uploads da própria conta.
+export function validatePhotoPaths(paths: unknown, accountId: string): string | null {
+  if (!Array.isArray(paths)) return 'Foto inválida';
+  const prefix = `account-${accountId}/uploads/`;
+  for (const p of paths) {
+    if (typeof p !== 'string' || !p.startsWith(prefix) || p.includes('..')) return 'Foto inválida';
+  }
+  return null;
+}
+
 export function validateVideoInput(body: unknown, accountId: string): Result {
   if (!body || typeof body !== 'object') return { ok: false, error: 'Corpo inválido' };
   const b = body as Record<string, unknown>;
@@ -20,12 +31,8 @@ export function validateVideoInput(body: unknown, accountId: string): Result {
     return { ok: false, error: 'Escreva uma descrição ou envie pelo menos 1 foto' };
   }
   if (imagePaths.length > 4) return { ok: false, error: 'No máximo 4 fotos' };
-  const prefix = `account-${accountId}/uploads/`;
-  for (const p of imagePaths) {
-    if (typeof p !== 'string' || !p.startsWith(prefix) || p.includes('..')) {
-      return { ok: false, error: 'Foto inválida' };
-    }
-  }
+  const pathError = validatePhotoPaths(imagePaths, accountId);
+  if (pathError) return { ok: false, error: pathError };
 
   const format = (b.format ?? 'vertical') as VideoFormat;
   if (!FORMATS.includes(format)) return { ok: false, error: 'Formato inválido' };

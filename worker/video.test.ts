@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { composeViaGemini, runVideoJob } from './video';
+import { runTemplatedJob } from './video-template';
 import type { MarketingVideo } from '@/types';
+
+vi.mock('./video-template', () => ({ runTemplatedJob: vi.fn().mockResolvedValue(undefined) }));
 
 vi.mock('@google/genai', () => ({
   GoogleGenAI: class MockGoogleGenAI {
@@ -112,6 +115,14 @@ describe('runVideoJob', () => {
     const d = deps({ render: vi.fn().mockRejectedValue(new Error('ffmpeg crashed')) });
     await runVideoJob(db, video, d);
     expect(updates.at(-1)).toMatchObject({ status: 'failed', error: expect.stringContaining('ffmpeg crashed') });
+  });
+  it('delega para o caminho de templates quando o vídeo tem template_id', async () => {
+    const { db } = fakeDb();
+    const d = deps();
+    const templated = { ...video, template_id: 'compilado' } as MarketingVideo;
+    await runVideoJob(db, templated, d);
+    expect(runTemplatedJob).toHaveBeenCalledWith(db, templated);
+    expect(d.compose).not.toHaveBeenCalled();
   });
   it('passes the narration timing to the composer', async () => {
     const { db } = fakeDb();
