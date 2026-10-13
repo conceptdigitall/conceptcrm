@@ -383,6 +383,7 @@ describe('runReception', () => {
     const t = setup()
     t.schedule.mockImplementation(async () => ({
       success: true,
+      appointmentId: undefined as unknown as string,
       meetUrl: 'https://meet.google.com/abc',
       calendarUrl: 'x',
       meetCreated: true,
