@@ -170,7 +170,11 @@ export async function executeScheduleAppointment(
   } = params;
 
   const validDate = new Date(datetimeIso);
-  const resolvedClientName = (clientName || '').trim() || 'Cliente';
+  // "Novo Lead" é o placeholder do webhook quando o WhatsApp não manda nome: não é nome.
+  const rawClientName = (clientName || '').trim();
+  const hasRealName =
+    !!rawClientName && rawClientName !== 'Cliente' && rawClientName.toLowerCase() !== 'novo lead';
+  const resolvedClientName = hasRealName ? rawClientName : 'Cliente';
 
   const formattedDate = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
@@ -203,7 +207,7 @@ export async function executeScheduleAppointment(
       const contactUpdates: Record<string, unknown> = {
         updated_at: new Date().toISOString(),
       };
-      if (resolvedClientName && resolvedClientName !== 'Cliente') {
+      if (hasRealName) {
         contactUpdates.name = resolvedClientName;
       }
       if (clientCompany?.trim()) {
@@ -227,6 +231,7 @@ export async function executeScheduleAppointment(
           .join('\n');
 
         await db.from('contact_notes').insert({
+          account_id: accountId ?? null,
           contact_id: contactId,
           user_id: userId,
           note_text: noteLines,
@@ -300,7 +305,7 @@ export async function executeScheduleAppointment(
 
   // 5. Mensagem amigável de confirmação para o lead (sem markdown/asteriscos)
   const replyMessage =
-    `Perfeito, ${resolvedClientName}! Agendado para ${formattedDate}.\n\n` +
+    `Perfeito${hasRealName ? `, ${resolvedClientName}` : ''}! Agendado para ${formattedDate}.\n\n` +
     `Aqui está o link da nossa chamada no Google Meet: ${gcalResult.meetUrl}\n\n` +
     `Se quiser adicionar direto na sua agenda: ${gcalResult.calendarUrl}\n\n` +
     `Qualquer dúvida antes da reunião, estou por aqui!`;

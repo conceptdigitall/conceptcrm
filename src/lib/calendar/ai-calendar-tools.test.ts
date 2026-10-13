@@ -8,6 +8,7 @@ const mockGte = vi.fn();
 const mockLte = vi.fn();
 const mockInsert = vi.fn();
 const mockUpdate = vi.fn();
+const mockNoteInsert = vi.fn();
 
 vi.mock('@/lib/ai/admin-client', () => ({
   supabaseAdmin: () => ({
@@ -33,7 +34,7 @@ vi.mock('@/lib/ai/admin-client', () => ({
       }
       return {
         update: mockUpdate.mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
-        insert: vi.fn().mockResolvedValue({ error: null }),
+        insert: mockNoteInsert.mockResolvedValue({ error: null }),
       };
     },
   }),
@@ -109,6 +110,35 @@ describe('AI Calendar Tools (WhatsApp integration)', () => {
       expect(result.replyMessage).toContain('Dr. Leonardo');
       expect(result.replyMessage).toContain(result.meetUrl);
       expect(result.replyMessage).not.toContain('**'); // Regra sem markdown/asteriscos
+    });
+
+    it('nota do contato leva account_id (NOT NULL em contact_notes)', async () => {
+      await executeScheduleAppointment({
+        datetimeIso: '2026-10-12T14:30:00-03:00',
+        clientName: 'Dr. Leonardo',
+        notes: 'quer CRM',
+        contactId: 'contact-uuid-1',
+        accountId: 'acc-uuid-1',
+        userId: 'user-uuid-1',
+      });
+
+      expect(mockNoteInsert).toHaveBeenCalledWith(
+        expect.objectContaining({ account_id: 'acc-uuid-1', contact_id: 'contact-uuid-1', user_id: 'user-uuid-1' }),
+      );
+    });
+
+    it.each(['Novo Lead', '', undefined])('sem nome real (%s): confirmação não diz "Perfeito, Novo Lead!" nem renomeia o contato', async (name) => {
+      const result = await executeScheduleAppointment({
+        datetimeIso: '2026-10-12T14:30:00-03:00',
+        clientName: name,
+        contactId: 'contact-uuid-1',
+        accountId: 'acc-uuid-1',
+      });
+
+      expect(result.replyMessage).not.toContain('Novo Lead');
+      expect(result.replyMessage.split('\n')[0]).not.toContain('Cliente');
+      expect(result.replyMessage.startsWith('Perfeito! Agendado')).toBe(true);
+      expect(mockUpdate).not.toHaveBeenCalledWith(expect.objectContaining({ name: expect.anything() }));
     });
 
     it('stores deal_id on the appointment insert and exposes meetCreated', async () => {
