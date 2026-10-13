@@ -1,5 +1,7 @@
 // Narração dos vídeos de marketing: o texto vem do Claude, a voz (Matilda) da ElevenLabs.
 // Falhar aqui nunca derruba o job: o vídeo sai só com a trilha, como antes.
+import { narrationWordLimit } from '@/lib/marketing/video-options';
+
 export interface Narration {
   audio: Buffer;
   text: string;
@@ -12,22 +14,23 @@ export const NARRATION_START = 0.4;
 const DEFAULT_VOICE_ID = 'XrExE9yKIg1WjnnlVkGX';
 export const MAX_NARRATION_WORDS = 48;
 
-export function buildScriptPrompt(brief: string): string {
+export function buildScriptPrompt(brief: string, duration = 20): string {
+  const maxWords = duration === 20 ? MAX_NARRATION_WORDS : narrationWordLimit(duration);
   return [
-    'Escreva o texto de narração (locução) de um vídeo promocional vertical de ~20 segundos, em português do Brasil.',
+    `Escreva o texto de narração (locução) de um vídeo promocional vertical de ~${duration} segundos, em português do Brasil.`,
     `Briefing: ${brief || 'vídeo institucional da Concept Digital (recepcionista de IA no WhatsApp para pequenos negócios)'}`,
     '',
-    `Regras: no máximo ${MAX_NARRATION_WORDS} palavras; frases curtas e naturais para fala; abra com um gancho; feche com um CTA direto.`,
+    `Regras: no máximo ${maxWords} palavras; frases curtas e naturais para fala; abra com um gancho; feche com um CTA direto.`,
     'Só fatos do briefing: não invente preço, endereço, nome ou promoção. Sem emoji, sem aspas, sem rubricas, sem marcações de cena.',
     'Responda apenas com o texto a ser falado.',
   ].join('\n');
 }
 
-export function cleanScript(raw: string): string | null {
+export function cleanScript(raw: string, maxWords = MAX_NARRATION_WORDS): string | null {
   const text = raw.replace(/```[a-z]*\n?|```/gi, '').replace(/["“”]/g, '').replace(/\s+/g, ' ').trim();
   if (!text) return null;
   const words = text.split(' ');
-  return words.length > MAX_NARRATION_WORDS ? `${words.slice(0, MAX_NARRATION_WORDS).join(' ')}.` : text;
+  return words.length > maxWords ? `${words.slice(0, maxWords).join(' ')}.` : text;
 }
 
 interface Alignment {
@@ -74,10 +77,10 @@ export async function synthesize(text: string, fetchImpl: typeof fetch = fetch):
 }
 
 // Instruções de áudio que entram no prompt da composição.
-export function audioPromptLines(n: Narration | null, hasMusic: boolean): string[] {
+export function audioPromptLines(n: Narration | null, hasMusic: boolean, duration = 25): string[] {
   if (!n) {
     return hasMusic
-      ? ['Áudio: sem narração. Inclua só a trilha (veja abaixo).', ...musicLines(25)]
+      ? ['Áudio: sem narração. Inclua só a trilha (veja abaixo).', ...musicLines(duration)]
       : ['Sem áudio. Sem fontes ou imagens externas além das fotos listadas.'];
   }
   const end = +(NARRATION_START + n.duration).toFixed(2);

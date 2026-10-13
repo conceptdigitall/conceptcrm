@@ -36,6 +36,13 @@ import { findButton, getActivePack } from '@/lib/marketing/packs';
 import { packFormState } from '@/lib/marketing/pack-form';
 import { videoStatusLabel } from '@/lib/marketing/status-label';
 import {
+  VIDEO_DURATIONS,
+  VIDEO_STYLES,
+  type VideoDuration,
+  type VideoStyle,
+  type VideoTarget,
+} from '@/lib/marketing/video-options';
+import {
   composeTemplatePrompt,
   type MarketingTemplateId,
   type TemplateFieldValues,
@@ -57,20 +64,32 @@ const TONE_OPTIONS: { value: VideoTone; label: string; icon: React.ComponentType
 
 const JOB_LABEL = { pending: 'Na fila', running: 'Gerando…', done: 'Pronto', failed: 'Erro' } as const;
 
-export function VideoGenerator() {
+interface VideoGeneratorProps {
+  initialPrompt?: string;
+  /** Abre já como Story (9:16) quando vem da aba Stories. */
+  initialTarget?: VideoTarget;
+  /** Dentro das subabas: sem título próprio nem padding (a página já tem). */
+  embedded?: boolean;
+}
+
+export function VideoGenerator({ initialPrompt = '', initialTarget = 'reels', embedded = false }: VideoGeneratorProps = {}) {
   const supabase = useMemo(() => createClient(), []);
   const { accountId } = useAuth();
   const canEdit = useCan('send-messages');
 
   const [videos, setVideos] = useState<MarketingVideo[]>([]);
   const [urls, setUrls] = useState<Record<string, { video?: string; poster?: string }>>({});
-  const [templateMode, setTemplateMode] = useState<'templates' | 'custom'>('templates');
+  const [templateMode, setTemplateMode] = useState<'templates' | 'custom'>(initialPrompt ? 'custom' : 'templates');
   const [selectedTemplateId, setSelectedTemplateId] = useState<MarketingTemplateId>('discount');
   const [templateFields, setTemplateFields] = useState<TemplateFieldValues>({});
-  const [customPrompt, setCustomPrompt] = useState('');
+  const [customPrompt, setCustomPrompt] = useState(initialPrompt);
   const [files, setFiles] = useState<File[]>([]);
   const [format, setFormat] = useState<VideoFormat>('vertical');
   const [tone, setTone] = useState<VideoTone>('default');
+  const [style, setStyle] = useState<VideoStyle>('auto');
+  const [duration, setDuration] = useState<VideoDuration>(15);
+  const [target, setTarget] = useState<VideoTarget>(initialTarget);
+  const isStory = target === 'story';
   const [submitting, setSubmitting] = useState(false);
   const [publishVideo, setPublishVideo] = useState<MarketingVideo | null>(null);
 
@@ -171,11 +190,11 @@ export function VideoGenerator() {
       const res = await fetch('/api/marketing/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: effectivePrompt, imagePaths, format, tone }),
+        body: JSON.stringify({ prompt: effectivePrompt, imagePaths, format: isStory ? 'vertical' : format, tone, style, duration, target }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error ?? 'Não foi possível criar o vídeo');
-      toast.success('Vídeo na fila. Leva alguns minutos com o worker rodando.');
+      toast.success(isStory ? 'Story na fila. Leva alguns minutos com o worker rodando.' : 'Vídeo na fila. Leva alguns minutos com o worker rodando.');
       setCustomPrompt('');
       setTemplateFields({});
       setFiles([]);
@@ -237,11 +256,15 @@ export function VideoGenerator() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Marketing</h1>
-        <p className="text-sm text-muted-foreground">Vídeos curtos (15–25 s) gerados com IA a partir de um texto e suas fotos.</p>
-      </div>
+    <div className={embedded ? 'space-y-6' : 'space-y-6 p-6'}>
+      {embedded ? (
+        <p className="text-sm text-muted-foreground">Reels e stories de 15 a 60 s com narração e trilha, gerados com IA a partir de um texto e suas fotos.</p>
+      ) : (
+        <div>
+          <h1 className="text-2xl font-semibold">Marketing</h1>
+          <p className="text-sm text-muted-foreground">Vídeos curtos (15–25 s) gerados com IA a partir de um texto e suas fotos.</p>
+        </div>
+      )}
 
       {hasStalePending(videos, now) && (
         <div className="flex items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
@@ -250,7 +273,8 @@ export function VideoGenerator() {
         </div>
       )}
 
-      {pack && !advanced ? (
+      {/* Story usa sempre o formulário livre: os pacotes de nicho são Reels. */}
+      {pack && !advanced && !isStory ? (
         <form onSubmit={submitPack} className="space-y-5 rounded-2xl border border-border/70 bg-card/50 p-5 shadow-xs backdrop-blur-xs transition-all">
           <PackPicker
             pack={pack}
@@ -282,7 +306,7 @@ export function VideoGenerator() {
               <Button
                 type="submit"
                 disabled={!canEdit || submitting || !packState.ok}
-                className="cursor-pointer gap-2 font-medium shadow-xs transition-all bg-[#0624C7] hover:bg-[#0624C7]/90 text-white"
+                className="cursor-pointer gap-2 font-medium shadow-xs transition-all bg-primary hover:bg-primary-hover text-primary-foreground"
               >
                 {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                 Gerar vídeo
@@ -302,6 +326,23 @@ export function VideoGenerator() {
         </form>
       ) : (
       <form onSubmit={submit} className="space-y-5 rounded-2xl border border-border/70 bg-card/50 p-5 shadow-xs backdrop-blur-xs transition-all">
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-border bg-muted p-1" role="radiogroup" aria-label="Onde o vídeo vai">
+          {([['reels', 'Reels / Feed'], ['story', 'Story']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={target === value}
+              onClick={() => setTarget(value)}
+              className={`h-11 rounded-lg text-sm font-medium transition-colors ${
+                target === value ? 'bg-card text-foreground font-semibold shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         <TemplatePicker
           mode={templateMode}
           onModeChange={setTemplateMode}
@@ -316,9 +357,61 @@ export function VideoGenerator() {
           disabled={!canEdit || submitting}
         />
 
-        <PhotoPicker files={files} onChange={setFiles} disabled={!canEdit || submitting} />
+        <PhotoPicker
+          files={files}
+          onChange={setFiles}
+          disabled={!canEdit || submitting}
+          hint="Fotos de referência (opcional): até 4 em JPG, PNG ou WebP, 5 MB cada. Produto, espaço, prints ou logo: a IA usa todas no vídeo."
+        />
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-foreground">Estilo de edição:</span>
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+            {VIDEO_STYLES.map((st) => {
+              const selected = style === st.value;
+              return (
+                <button
+                  key={st.value}
+                  type="button"
+                  onClick={() => setStyle(st.value)}
+                  aria-pressed={selected}
+                  className={`flex min-h-14 flex-col items-start justify-center gap-0.5 rounded-lg border px-3 py-2 text-left transition-all cursor-pointer ${
+                    selected
+                      ? 'border-primary bg-primary/10 text-primary shadow-xs'
+                      : 'border-border/70 bg-background/60 text-foreground hover:bg-muted/50'
+                  }`}
+                >
+                  <span className="text-xs font-semibold">{st.label}</span>
+                  <span className="text-[11px] leading-tight text-muted-foreground">{st.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-foreground">Duração:</span>
+          <div className="grid grid-cols-4 gap-1.5">
+            {VIDEO_DURATIONS.map((d) => (
+              <button
+                key={d}
+                type="button"
+                onClick={() => setDuration(d)}
+                aria-pressed={duration === d}
+                className={`h-11 rounded-lg border text-sm transition-all cursor-pointer ${
+                  duration === d
+                    ? 'border-primary bg-primary/10 text-primary font-semibold shadow-xs'
+                    : 'border-border/70 bg-background/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+                }`}
+              >
+                {d}s
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className={`grid gap-4 ${isStory ? '' : 'sm:grid-cols-2'}`}>
+          {!isStory && (
           <div className="space-y-2">
             <span className="text-xs font-medium text-foreground">Formato do vídeo:</span>
             <div className="grid grid-cols-3 gap-1.5">
@@ -343,6 +436,7 @@ export function VideoGenerator() {
               })}
             </div>
           </div>
+          )}
 
           <div className="space-y-2">
             <span className="text-xs font-medium text-foreground">Tom de voz:</span>
@@ -355,7 +449,7 @@ export function VideoGenerator() {
                     key={t.value}
                     type="button"
                     onClick={() => setTone(t.value)}
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 text-xs transition-all cursor-pointer ${
+                    className={`flex min-h-11 items-center gap-2 rounded-lg border px-3 py-2.5 text-xs transition-all cursor-pointer ${
                       selected
                         ? 'border-primary bg-primary/10 text-primary font-medium shadow-xs'
                         : 'border-border/70 bg-background/60 text-muted-foreground hover:bg-muted/50 hover:text-foreground'
@@ -374,10 +468,10 @@ export function VideoGenerator() {
           <Button
             type="submit"
             disabled={!canEdit || submitting || limitReached || (!effectivePrompt.trim() && files.length === 0)}
-            className="cursor-pointer gap-2 font-medium shadow-xs transition-all bg-[#0624C7] hover:bg-[#0624C7]/90 text-white"
+            className="h-11 cursor-pointer gap-2 font-medium shadow-xs transition-all bg-primary hover:bg-primary-hover text-primary-foreground"
           >
             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-            Gerar vídeo com IA
+            {isStory ? 'Gerar story com IA' : 'Gerar vídeo com IA'}
           </Button>
 
           <span className="rounded-full bg-muted/70 px-3 py-1 text-xs text-muted-foreground">

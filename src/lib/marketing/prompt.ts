@@ -1,4 +1,5 @@
 import type { VideoFormat, VideoTone } from '@/types';
+import type { VideoDuration, VideoStyle, VideoTarget } from './video-options';
 
 export const FORMAT_SIZE: Record<VideoFormat, { width: number; height: number }> = {
   vertical: { width: 1080, height: 1920 },
@@ -8,6 +9,7 @@ export const FORMAT_SIZE: Record<VideoFormat, { width: number; height: number }>
 
 export function buildUserPrompt(input: {
   prompt: string; format: VideoFormat; tone: VideoTone; imageFiles: string[]; audio?: string[];
+  style?: VideoStyle; duration?: VideoDuration; target?: VideoTarget;
 }): string {
   const { width, height } = FORMAT_SIZE[input.format];
   const images = input.imageFiles.length
@@ -21,9 +23,12 @@ export function buildUserPrompt(input: {
         'Não invente preços, nomes, endereços ou promoções que não aparecem nas fotos.',
       ].join('\n');
   const lowerPrompt = (input.prompt || '').toLowerCase();
-  const isWhiteboard = lowerPrompt.includes('whiteboard') || lowerPrompt.includes('lousa') || lowerPrompt.includes('mão') || lowerPrompt.includes('desenho');
-  const isCutout = lowerPrompt.includes('cutout') || lowerPrompt.includes('colagem') || lowerPrompt.includes('roast');
-  const isContador = lowerPrompt.includes('contador') || lowerPrompt.includes('faturamento') || lowerPrompt.includes('pix') || lowerPrompt.includes('r$');
+  // Estilo escolhido no painel manda; em 'auto' (ou pedido antigo) vale a detecção por palavra.
+  const style = input.style ?? 'auto';
+  const auto = style === 'auto';
+  const isWhiteboard = style === 'whiteboard' || (auto && (lowerPrompt.includes('whiteboard') || lowerPrompt.includes('lousa') || lowerPrompt.includes('mão') || lowerPrompt.includes('desenho')));
+  const isCutout = style === 'cutout' || (auto && (lowerPrompt.includes('cutout') || lowerPrompt.includes('colagem') || lowerPrompt.includes('roast')));
+  const isContador = style === 'contador' || (auto && (lowerPrompt.includes('contador') || lowerPrompt.includes('faturamento') || lowerPrompt.includes('pix') || lowerPrompt.includes('r$')));
 
   const styleDirectives: string[] = [
     'Estilo de animação obrigatório:',
@@ -63,11 +68,40 @@ export function buildUserPrompt(input: {
     );
   }
 
+  if (style === 'kinetic') {
+    styleDirectives.push(
+      '',
+      'ESTILO ESCOLHIDO: TEXTO ANIMADO (Kinetic Typography puro):',
+      '- O vídeo inteiro é tipografia animada: sem lousa, sem colagem. Fotos, se houver, entram só como fundo de cena.',
+    );
+  }
+
+  if (style === 'fotos') {
+    styleDirectives.push(
+      '',
+      'ESTILO ESCOLHIDO: FOTOS EM DESTAQUE:',
+      '- As fotos enviadas são as protagonistas e ocupam a tela toda, com zoom lento (Ken Burns) e cortes no ritmo da fala.',
+      '- Texto curto por cima, com faixa ou sombra para garantir o contraste.',
+    );
+  }
+
+  const seconds = input.duration;
+  const durationLine = seconds
+    ? `Duração total: cerca de ${seconds} segundos (entre ${seconds - 2} e ${seconds + 3}).`
+    : 'Duração total: entre 15 e 25 segundos.';
+  const storyLines = input.target === 'story'
+    ? [
+        'Formato: Story do Instagram (9:16). Deixe livres os 250px de cima e os 300px de baixo, onde fica a interface do app.',
+        'Termine com um convite para responder o story ou tocar no link.',
+      ]
+    : [];
+
   return [
     'Crie um vídeo promocional curto em português do Brasil, para o negócio descrito no briefing (cliente local ou a própria Concept Digital). Siga o Playbook da Concept Digital.',
     '',
     brief,
-    `Tela: ${width}x${height}. Duração total: entre 15 e 25 segundos.`,
+    `Tela: ${width}x${height}. ${durationLine}`,
+    ...storyLines,
     `Tom: ${input.tone} (veja as definições de tom).`,
     'Fotos disponíveis (caminhos relativos ao projeto; use todas pelo menos uma vez):',
     images,

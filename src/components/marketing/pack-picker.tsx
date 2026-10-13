@@ -61,15 +61,15 @@ export function PackPicker({
               onClick={() => onButtonChange(b.id)}
               className={`group relative flex flex-col rounded-xl border p-3.5 text-left transition-all duration-200 cursor-pointer ${
                 selected
-                  ? 'border-[#0624C7] bg-[#0624C7]/5 ring-1 ring-[#0624C7]/40 shadow-xs'
+                  ? 'border-primary bg-primary/5 ring-1 ring-primary/40 shadow-xs'
                   : 'border-border/70 bg-card hover:border-border hover:bg-muted/30'
               }`}
             >
               <div className="mb-2 flex w-full items-center justify-between">
-                <div className={`flex size-8 items-center justify-center rounded-lg ${selected ? 'bg-[#0624C7] text-white' : 'bg-muted text-muted-foreground'}`}>
+                <div className={`flex size-8 items-center justify-center rounded-lg ${selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                   <Icon className="size-4" />
                 </div>
-                {selected && <CheckCircle2 className="size-4 text-[#0624C7] dark:text-blue-400" />}
+                {selected && <CheckCircle2 className="size-4 text-primary" />}
               </div>
               <h3 className="text-sm font-semibold text-foreground">{b.label}</h3>
               <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{b.description}</p>
@@ -93,7 +93,7 @@ export function PackPicker({
               onChange={(e) => onFieldChange(field.id, e.target.value)}
               placeholder={field.placeholder}
               disabled={disabled}
-              className="h-9 border-border/70 bg-card text-xs focus:border-[#0624C7]"
+              className="h-9 border-border/70 bg-card text-xs focus:border-primary"
             />
           </div>
         ))}

@@ -46,6 +46,7 @@ export async function queueVideo(
       status: 'pending',
       // horizontal é o Resumo (só para o site); o resto é Reels
       kind: parsed.value.format === 'landscape' ? 'resumo' : 'reels',
+      director_input: parsed.value.options,
     })
     .select()
     .single();

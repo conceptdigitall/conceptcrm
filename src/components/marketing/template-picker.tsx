@@ -61,7 +61,7 @@ export function TemplatePicker({
             onClick={() => onModeChange('templates')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-all duration-200 cursor-pointer ${
               mode === 'templates'
-                ? 'bg-background text-[#0624C7] dark:text-blue-400 shadow-xs border border-border/60'
+                ? 'bg-background text-primary shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -74,7 +74,7 @@ export function TemplatePicker({
             onClick={() => onModeChange('custom')}
             className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-medium transition-all duration-200 cursor-pointer ${
               mode === 'custom'
-                ? 'bg-background text-[#0624C7] dark:text-blue-400 shadow-xs border border-border/60'
+                ? 'bg-background text-primary shadow-xs border border-border/60'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -108,7 +108,7 @@ export function TemplatePicker({
                   disabled={disabled}
                   className={`group relative flex flex-col text-left rounded-xl border p-3 transition-all duration-200 cursor-pointer ${
                     isSelected
-                      ? 'border-[#0624C7] bg-[#0624C7]/5 ring-1 ring-[#0624C7]/40 shadow-xs'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary/40 shadow-xs'
                       : 'border-border/70 bg-card hover:border-border hover:bg-muted/30'
                   }`}
                 >
@@ -116,14 +116,14 @@ export function TemplatePicker({
                     <div
                       className={`flex size-7 items-center justify-center rounded-lg transition-colors ${
                         isSelected
-                          ? 'bg-[#0624C7] text-white'
+                          ? 'bg-primary text-primary-foreground'
                           : 'bg-muted text-muted-foreground group-hover:text-foreground'
                       }`}
                     >
                       <Icon className="size-3.5" />
                     </div>
                     {isSelected && (
-                      <CheckCircle2 className="size-4 text-[#0624C7] dark:text-blue-400" />
+                      <CheckCircle2 className="size-4 text-primary" />
                     )}
                   </div>
 
@@ -143,7 +143,7 @@ export function TemplatePicker({
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-border/40 pb-2.5">
               <div>
                 <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                  <span className="flex size-1.5 rounded-full bg-[#0624C7]" />
+                  <span className="flex size-1.5 rounded-full bg-primary" />
                   Preencha os dados do modelo: {currentTemplate.title}
                 </h4>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -175,7 +175,7 @@ export function TemplatePicker({
                       onChange={(e) => onFieldChange(field.id, e.target.value)}
                       placeholder={field.placeholder}
                       disabled={disabled}
-                      className="h-9 text-xs bg-card border-border/70 focus:border-[#0624C7]"
+                      className="h-9 text-xs bg-card border-border/70 focus:border-primary"
                     />
                   </div>
                 );
@@ -183,7 +183,7 @@ export function TemplatePicker({
             </div>
 
             <p className="text-[11px] text-muted-foreground pt-1 flex items-center gap-1">
-              <Sparkles className="size-3 text-[#FCE026]" />
+              <Sparkles className="size-3 text-primary" />
               <span>A IA cria o gancho, roteiro e ritmo profissional a partir das informações acima.</span>
             </p>
           </div>
@@ -199,7 +199,7 @@ export function TemplatePicker({
           </div>
           <textarea
             id="video-prompt"
-            className="min-h-24 w-full rounded-xl border border-border/80 bg-background/80 p-3 text-xs sm:text-sm transition-all placeholder:text-muted-foreground/60 focus:border-[#0624C7] focus:ring-1 focus:ring-[#0624C7] focus:outline-none"
+            className="min-h-24 w-full rounded-xl border border-border/80 bg-background/80 p-3 text-xs sm:text-sm transition-all placeholder:text-muted-foreground/60 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
             placeholder="Descreva a oferta ou o objetivo do vídeo. Ex: Promoção de corte + barba por R$ 50 nesta sexta na Barbearia do Alemão, Santos. Vagas limitadas no WhatsApp."
             value={customPrompt}
             maxLength={1000}

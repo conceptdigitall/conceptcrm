@@ -3,7 +3,7 @@
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-export type MarketingSubtab = 'feed' | 'stories' | 'projects' | 'library' | 'settings';
+export type MarketingSubtab = 'feed' | 'stories' | 'videos' | 'projects' | 'library' | 'settings';
 
 interface MarketingTabsHeaderProps {
   currentTab: MarketingSubtab;
@@ -16,6 +16,7 @@ interface MarketingTabsHeaderProps {
 const TABS: { id: MarketingSubtab; label: string }[] = [
   { id: 'feed', label: 'Feed' },
   { id: 'stories', label: 'Stories' },
+  { id: 'videos', label: 'Vídeos' },
   { id: 'projects', label: 'Projetos' },
   { id: 'library', label: 'Biblioteca' },
   { id: 'settings', label: 'Ajustes' },
@@ -64,7 +65,7 @@ export function MarketingTabsHeader({
       </header>
 
       <nav
-        className="grid grid-cols-5 gap-1 rounded-xl border border-border bg-muted p-1 md:inline-flex md:self-start"
+        className="grid grid-cols-3 gap-1 sm:grid-cols-6 rounded-xl border border-border bg-muted p-1 md:inline-flex md:self-start"
         aria-label="Subabas de marketing"
       >
         {TABS.map((t) => {
