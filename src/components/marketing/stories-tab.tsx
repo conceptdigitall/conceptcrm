@@ -63,10 +63,10 @@ export function StoriesTab({
           onClick={onOpenCreateStory}
           className="flex flex-col items-center gap-2 group flex-none"
         >
-          <div className="w-16 h-16 rounded-full border-2 border-dashed border-[#FCE026] flex items-center justify-center text-[#FCE026] group-hover:scale-105 transition-transform bg-[#081030]">
+          <div className="w-16 h-16 rounded-full border-2 border-dashed border-primary flex items-center justify-center text-primary group-hover:scale-105 transition-transform bg-card">
             <Plus className="w-6 h-6" />
           </div>
-          <span className="text-xs font-bold text-[#FCE026]">+ Criar story</span>
+          <span className="text-xs font-bold text-primary">+ Criar story</span>
         </button>
 
         {stories.map((s, idx) => {
@@ -81,17 +81,17 @@ export function StoriesTab({
             >
               <div
                 className={`w-16 h-16 rounded-full p-0.5 transition-transform ${
-                  isSelected ? 'ring-2 ring-[#FCE026] scale-105' : 'hover:scale-102'
+                  isSelected ? 'ring-2 ring-primary scale-105' : 'hover:scale-102'
                 }`}
               >
-                <div className="w-full h-full rounded-full bg-gradient-to-tr from-[#0624C7] to-[#14245C] flex items-center justify-center border border-[#14245C] text-white font-bold text-xs p-1 text-center line-clamp-2">
+                <div className="w-full h-full rounded-full bg-gradient-to-tr from-primary to-primary-hover flex items-center justify-center border border-border text-primary-foreground font-bold text-xs p-1 text-center line-clamp-2">
                   {s.title.slice(0, 12)}
                 </div>
               </div>
-              <span className="text-xs text-white font-medium">{label}</span>
+              <span className="text-xs text-foreground font-medium">{label}</span>
               <span
                 className={`text-[9px] px-1.5 rounded ${
-                  s.status === 'published' ? 'bg-emerald-950 text-emerald-400' : 'bg-[#0D1948] text-[#9FB0E6]'
+                  s.status === 'published' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'
                 }`}
               >
                 {s.status === 'published' ? 'No ar' : 'Pendente'}
@@ -103,9 +103,9 @@ export function StoriesTab({
 
       {/* Área Central: Prévia Smartphone 9:16 */}
       {selectedStory ? (
-        <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start justify-center p-6 rounded-2xl border border-[#14245C] bg-[#081030]">
+        <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start justify-center p-6 rounded-2xl border border-border bg-card">
           {/* Frame Vertical 9:16 */}
-          <div className="relative w-64 md:w-72 aspect-[9/16] rounded-[28px] border-4 border-[#14245C] bg-gradient-to-b from-[#0624C7] via-[#04081E] to-[#04081E] p-4 flex flex-col justify-between shadow-2xl overflow-hidden">
+          <div className="relative w-64 md:w-72 aspect-[9/16] rounded-[28px] border-4 border-border bg-gradient-to-b from-primary to-primary-hover p-4 flex flex-col justify-between shadow-2xl overflow-hidden">
             {/* Barras de progresso do story */}
             <div className="flex gap-1.5 w-full pt-1">
               <div className="flex-1 h-1 rounded-full bg-white" />
@@ -115,7 +115,7 @@ export function StoriesTab({
 
             {/* Cabeçalho do perfil */}
             <div className="flex items-center gap-2 pt-2">
-              <div className="w-6 h-6 rounded-full bg-[#FCE026] text-[#04081E] text-xs font-bold flex items-center justify-center">
+              <div className="w-6 h-6 rounded-full bg-white text-primary text-xs font-bold flex items-center justify-center">
                 C
               </div>
               <span className="text-xs font-bold text-white">conceptdigita.l</span>
@@ -128,7 +128,7 @@ export function StoriesTab({
                 {selectedStory.title}
               </h2>
               {selectedStory.idea && (
-                <p className="text-xs text-[#E1E7FC] mt-2 opacity-90 line-clamp-3">
+                <p className="text-xs text-white/90 mt-2 opacity-90 line-clamp-3">
                   {selectedStory.idea}
                 </p>
               )}
@@ -144,7 +144,7 @@ export function StoriesTab({
                   <div className="py-2 bg-white/10 hover:bg-white/20 rounded-lg text-center text-white">
                     Sim, muitos 😭
                   </div>
-                  <div className="py-2 bg-[#FCE026]/90 rounded-lg text-center text-[#04081E]">
+                  <div className="py-2 bg-primary/90 rounded-lg text-center text-primary-foreground">
                     Não, temos IA 🚀
                   </div>
                 </div>
@@ -152,7 +152,7 @@ export function StoriesTab({
             )}
 
             {interaction === 'link' && (
-              <div className="self-center bg-[#FCE026] text-[#04081E] font-bold text-xs px-4 py-2 rounded-full flex items-center gap-1.5 shadow-lg mb-4">
+              <div className="self-center bg-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-full flex items-center gap-1.5 shadow-lg mb-4">
                 <LinkIcon className="w-3.5 h-3.5" />
                 <span>conceptdigital.com.br</span>
               </div>
@@ -162,14 +162,14 @@ export function StoriesTab({
           {/* Controles Laterais */}
           <div className="flex-1 max-w-md flex flex-col gap-5">
             <div>
-              <h3 className="text-lg font-bold text-white">Configuração do Story</h3>
-              <p className="text-xs text-[#9FB0E6]">
+              <h3 className="text-lg font-bold text-foreground">Configuração do Story</h3>
+              <p className="text-xs text-muted-foreground">
                 Stories verticais de alta retenção no Instagram da Concept Digital.
               </p>
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-[#9FB0E6]">Tipo de Interação</label>
+              <label className="text-xs font-semibold text-muted-foreground">Tipo de Interação</label>
               <div className="flex gap-2">
                 {(['nenhuma', 'enquete', 'link'] as const).map((opt) => (
                   <button
@@ -178,8 +178,8 @@ export function StoriesTab({
                     onClick={() => setInteraction(opt)}
                     className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-colors capitalize ${
                       interaction === opt
-                        ? 'bg-[#0624C7] border-[#FCE026] text-white'
-                        : 'border-[#14245C] bg-[#04081E] text-[#9FB0E6] hover:text-white'
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'border-border bg-background text-muted-foreground hover:text-foreground'
                     }`}
                   >
                     {opt}
@@ -188,18 +188,18 @@ export function StoriesTab({
               </div>
             </div>
 
-            <div className="flex flex-col gap-2.5 pt-4 border-t border-[#14245C]">
+            <div className="flex flex-col gap-2.5 pt-4 border-t border-border">
               {selectedStory.status !== 'published' ? (
                 <Button
                   onClick={() => handlePublishStory(selectedStory)}
                   disabled={publishing}
-                  className="bg-[#FCE026] hover:bg-[#e5ca1f] text-[#04081E] font-bold h-11 rounded-xl gap-2 shadow"
+                  className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold h-11 rounded-xl gap-2 shadow"
                 >
                   <Send className="w-4 h-4" />
                   {publishing ? 'Publicando...' : 'Aprovar e Publicar Story'}
                 </Button>
               ) : (
-                <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-950/40 text-emerald-400 border border-emerald-800 text-xs font-semibold">
+                <div className="flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 text-xs font-semibold">
                   <Check className="w-4 h-4" />
                   Story Publicado no Instagram
                 </div>
@@ -208,10 +208,10 @@ export function StoriesTab({
           </div>
         </div>
       ) : (
-        <div className="p-12 text-center rounded-2xl border border-[#14245C] bg-[#081030]">
-          <Smartphone className="w-8 h-8 text-[#FCE026] mx-auto mb-2" />
-          <p className="text-white font-medium">Nenhum story planejado para esta semana.</p>
-          <Button onClick={onOpenCreateStory} className="bg-[#FCE026] text-[#04081E] font-bold mt-3">
+        <div className="p-12 text-center rounded-2xl border border-border bg-card">
+          <Smartphone className="w-8 h-8 text-primary mx-auto mb-2" />
+          <p className="text-foreground font-medium">Nenhum story planejado para esta semana.</p>
+          <Button onClick={onOpenCreateStory} className="bg-primary text-primary-foreground font-bold mt-3">
             + Criar primeiro story
           </Button>
         </div>

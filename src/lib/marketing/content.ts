@@ -104,3 +104,46 @@ export const STATUS_LABEL: Record<PostStatus, string> = {
 export function nextVersionNumber(versions: { version: number }[]): number {
   return versions.reduce((m, v) => Math.max(m, v.version), 0) + 1;
 }
+
+/** Ideias prontas para o modal de criar post: um toque preenche a ideia e já gera as legendas. */
+export const IDEA_PRESETS: { label: string; idea: string }[] = [
+  { label: 'Erro que custa clientes', idea: 'Pequenos negócios perdem vendas por demorar mais de 10 minutos para responder no WhatsApp.' },
+  { label: 'Antes e depois', idea: 'Como um site profissional mudou a forma como o cliente encontra e confia na empresa.' },
+  { label: 'Dica rápida', idea: '3 automações simples que economizam horas de atendimento por semana.' },
+  { label: 'Bastidores', idea: 'Um dia de projeto na Concept Digital: do briefing ao site no ar.' },
+  { label: 'Prova social', idea: 'Resultado real de um cliente depois de organizar o atendimento com CRM e IA.' },
+];
+
+/** Três legendas locais (sem IA), uma por estilo, começando pelo estilo salvo nos Ajustes. */
+export function buildCaptionOptions(
+  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'hashtags'>,
+  idea: string,
+): string[] {
+  const order = [s.caption_style, ...CAPTION_STYLES.map((c) => c.value).filter((v) => v !== s.caption_style)];
+  return order.slice(0, 3).map((style) => buildCaption({ ...s, caption_style: style }, idea));
+}
+
+export const CAPTION_OPTION_SEPARATOR = '---';
+
+export function captionSystemPrompt(
+  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'never_use' | 'hashtags'>,
+): string {
+  const tags = activeHashtags(s.hashtags).join(' ');
+  return [
+    'Você escreve legendas de Instagram em português do Brasil para a Concept Digital (sites, CRM e automação com IA).',
+    'Escreva exatamente 3 legendas diferentes para a ideia recebida, cada uma com um gancho distinto na primeira linha.',
+    `Estilo preferido: ${s.caption_style}. Tamanho: ${s.caption_size}. Emojis: ${s.emoji_level}.`,
+    s.cta.trim() ? `Termine cada legenda com esta chamada: "${s.cta.trim()}".` : '',
+    s.never_use.trim() ? `Nunca use: ${s.never_use.trim()}.` : '',
+    tags ? `Na última linha de cada legenda, use estas hashtags: ${tags}` : '',
+    `Separe as legendas com uma linha contendo apenas ${CAPTION_OPTION_SEPARATOR}. Não numere, não use markdown, não escreva nada além das legendas.`,
+  ].filter(Boolean).join('\n');
+}
+
+export function parseCaptionOptions(raw: string): string[] {
+  return raw
+    .split(/^\s*-{3,}\s*$/m)
+    .map((p) => p.trim())
+    .filter((p) => p.length > 20)
+    .slice(0, 3);
+}

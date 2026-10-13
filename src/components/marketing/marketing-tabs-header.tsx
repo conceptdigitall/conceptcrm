@@ -21,6 +21,11 @@ const TABS: { id: MarketingSubtab; label: string }[] = [
   { id: 'settings', label: 'Ajustes' },
 ];
 
+// Toque sutil no Android ao trocar de aba; no iOS a API não existe e nada acontece.
+function haptic() {
+  if (typeof navigator !== 'undefined') navigator.vibrate?.(10);
+}
+
 export function MarketingTabsHeader({
   currentTab,
   onTabChange,
@@ -29,20 +34,20 @@ export function MarketingTabsHeader({
   onFilterPending,
 }: MarketingTabsHeaderProps) {
   return (
-    <div className="flex flex-col gap-4 border-b border-[#14245C] pb-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-white font-heading">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground font-heading">
               Marketing
             </h1>
-            <Badge variant="outline" className="border-[#FCE026]/40 text-[#FCE026] bg-[#FCE026]/10 text-xs gap-1">
+            <Badge variant="outline" className="border-primary/30 text-primary bg-primary-soft text-xs gap-1">
               <Sparkles className="w-3 h-3" />
               IA Ativa
             </Badge>
           </div>
-          <p className="text-sm text-[#9FB0E6]">
-            @{instagramUsername}
+          <p className="text-sm text-muted-foreground">
+            Posts e stories com IA para @{instagramUsername}
           </p>
         </div>
 
@@ -50,26 +55,33 @@ export function MarketingTabsHeader({
           <button
             type="button"
             onClick={onFilterPending}
-            className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-950/40 px-3.5 py-1.5 text-xs font-semibold text-[#FCE026] hover:bg-amber-900/50 transition-colors"
+            className="inline-flex items-center gap-2 min-h-11 rounded-full border border-amber-500/40 bg-amber-500/10 px-4 text-xs font-semibold text-amber-700 hover:bg-amber-500/20 transition-colors"
           >
-            <span className="w-2 h-2 rounded-full bg-[#FCE026] animate-pulse" />
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
             {pendingCount} esperando sua aprovação
           </button>
         )}
       </header>
 
-      <nav className="grid grid-cols-5 gap-1 md:flex md:gap-2" aria-label="Subabas de marketing">
+      <nav
+        className="grid grid-cols-5 gap-1 rounded-xl border border-border bg-muted p-1 md:inline-flex md:self-start"
+        aria-label="Subabas de marketing"
+      >
         {TABS.map((t) => {
           const isActive = currentTab === t.id;
           return (
             <button
               key={t.id}
               type="button"
-              onClick={() => onTabChange(t.id)}
-              className={`flex items-center justify-center h-10 px-1 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
+              aria-current={isActive ? 'page' : undefined}
+              onClick={() => {
+                haptic();
+                onTabChange(t.id);
+              }}
+              className={`flex items-center justify-center h-11 px-1 md:px-5 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap active:scale-95 ${
                 isActive
-                  ? 'bg-[#0624C7] text-white shadow-sm border border-[#14245C]'
-                  : 'text-[#9FB0E6] hover:text-white hover:bg-[#0D1948]'
+                  ? 'bg-card text-foreground font-semibold shadow-sm ring-1 ring-border'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
               {t.label}

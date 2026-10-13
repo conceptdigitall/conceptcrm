@@ -77,17 +77,17 @@ export function SettingsTab({
   return (
     <div className="flex flex-col lg:flex-row gap-6 items-start">
       {/* Coluna Principal dos Formulários */}
-      <div className="flex-1 w-full rounded-2xl border border-[#14245C] bg-[#081030] p-6 flex flex-col gap-6">
+      <div className="flex-1 w-full rounded-2xl border border-border bg-card p-6 flex flex-col gap-6">
         <div>
-          <h2 className="text-xl font-heading font-bold text-white">Personalização e Marca</h2>
-          <p className="text-xs text-[#9FB0E6] mt-0.5">
+          <h2 className="text-xl font-heading font-bold text-foreground">Personalização e Marca</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Defina o tom de voz, chamadas e hashtags que a IA usará nas criações do Instagram.
           </p>
         </div>
 
         {/* Estilo de Legenda */}
         <div className="flex flex-col gap-2.5">
-          <label className="text-xs font-semibold text-[#9FB0E6]">Estilo de Legenda</label>
+          <label className="text-xs font-semibold text-muted-foreground">Estilo de Legenda</label>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             {CAPTION_STYLES.map((st) => (
               <button
@@ -96,12 +96,12 @@ export function SettingsTab({
                 onClick={() => setCaptionStyle(st.value)}
                 className={`p-3 rounded-xl border text-left transition-colors flex flex-col gap-0.5 ${
                   captionStyle === st.value
-                    ? 'border-[#FCE026] bg-[#0D1948]'
-                    : 'border-[#14245C] bg-[#04081E] hover:border-[#14245C]/80'
+                    ? 'border-primary bg-muted'
+                    : 'border-border bg-background hover:border-border/80'
                 }`}
               >
-                <span className="text-xs font-bold text-white">{st.label}</span>
-                <span className="text-[11px] text-[#9FB0E6]">{st.hint}</span>
+                <span className="text-xs font-bold text-foreground">{st.label}</span>
+                <span className="text-[11px] text-muted-foreground">{st.hint}</span>
               </button>
             ))}
           </div>
@@ -110,7 +110,7 @@ export function SettingsTab({
         {/* Tamanho e Emojis */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-[#9FB0E6]">Tamanho da Legenda</label>
+            <label className="text-xs font-semibold text-muted-foreground">Tamanho da Legenda</label>
             <div className="flex gap-2">
               {(['curta', 'media', 'longa'] as const).map((sz) => (
                 <button
@@ -119,8 +119,8 @@ export function SettingsTab({
                   onClick={() => setCaptionSize(sz)}
                   className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors capitalize ${
                     captionSize === sz
-                      ? 'bg-[#0624C7] border-[#FCE026] text-white'
-                      : 'border-[#14245C] bg-[#04081E] text-[#9FB0E6]'
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-border bg-background text-muted-foreground'
                   }`}
                 >
                   {sz}
@@ -130,7 +130,7 @@ export function SettingsTab({
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-semibold text-[#9FB0E6]">Quantidade de Emojis</label>
+            <label className="text-xs font-semibold text-muted-foreground">Quantidade de Emojis</label>
             <div className="flex gap-2">
               {(['nenhum', 'poucos', 'muitos'] as const).map((em) => (
                 <button
@@ -139,8 +139,8 @@ export function SettingsTab({
                   onClick={() => setEmojiLevel(em)}
                   className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors capitalize ${
                     emojiLevel === em
-                      ? 'bg-[#0624C7] border-[#FCE026] text-white'
-                      : 'border-[#14245C] bg-[#04081E] text-[#9FB0E6]'
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-border bg-background text-muted-foreground'
                   }`}
                 >
                   {em}
@@ -153,33 +153,33 @@ export function SettingsTab({
         {/* CTA e Nunca Usar */}
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-[#9FB0E6]">Chamada Final (CTA Padrão)</label>
+            <label className="text-xs font-semibold text-muted-foreground">Chamada Final (CTA Padrão)</label>
             <input
               type="text"
               value={cta}
               onChange={(e) => setCta(e.target.value)}
-              className="bg-[#04081E] border border-[#14245C] rounded-lg px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#FCE026]"
+              className="bg-background border border-border rounded-lg px-3.5 py-2 text-base md:text-sm text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold text-[#9FB0E6]">Nunca Usar (Palavras Proibidas)</label>
+            <label className="text-xs font-semibold text-muted-foreground">Nunca Usar (Palavras Proibidas)</label>
             <input
               type="text"
               value={neverUse}
               onChange={(e) => setNeverUse(e.target.value)}
-              className="bg-[#04081E] border border-[#14245C] rounded-lg px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#FCE026]"
+              className="bg-background border border-border rounded-lg px-3.5 py-2 text-base md:text-sm text-foreground focus:outline-none focus:border-primary"
             />
           </div>
         </div>
 
         {/* Grupos de Hashtags */}
-        <div className="flex flex-col gap-3 border-t border-[#14245C] pt-4">
-          <label className="text-xs font-semibold text-[#9FB0E6]">Hashtags por Grupos (Clique para ativar/desativar)</label>
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
+          <label className="text-xs font-semibold text-muted-foreground">Hashtags por Grupos (Clique para ativar/desativar)</label>
           <div className="flex flex-col gap-3">
             {hashtags.map((grp, gIdx) => (
               <div key={grp.group} className="flex flex-col gap-1.5">
-                <span className="text-[11px] font-bold text-white uppercase">{grp.group}</span>
+                <span className="text-[11px] font-bold text-foreground uppercase">{grp.group}</span>
                 <div className="flex flex-wrap gap-1.5">
                   {grp.tags.map((tag, tIdx) => (
                     <button
@@ -188,8 +188,8 @@ export function SettingsTab({
                       onClick={() => toggleHashtag(gIdx, tIdx)}
                       className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
                         tag.on
-                          ? 'bg-[#0624C7] border-[#FCE026]/50 text-white'
-                          : 'bg-[#04081E] border-[#14245C] text-[#9FB0E6]/50 line-through'
+                          ? 'bg-primary border-primary/50 text-primary-foreground'
+                          : 'bg-background border-border text-muted-foreground/50 line-through'
                       }`}
                     >
                       {tag.t}
@@ -202,37 +202,37 @@ export function SettingsTab({
         </div>
 
         {/* Trava de Aprovação */}
-        <div className="flex items-center justify-between border-t border-[#14245C] pt-4">
+        <div className="flex items-center justify-between border-t border-border pt-4">
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-white">Exigir aprovação antes de publicar</span>
-            <span className="text-[11px] text-[#9FB0E6]">Posts e stories nunca vão ao ar sem sua confirmação explícita</span>
+            <span className="text-xs font-semibold text-foreground">Exigir aprovação antes de publicar</span>
+            <span className="text-[11px] text-muted-foreground">Posts e stories nunca vão ao ar sem sua confirmação explícita</span>
           </div>
           <input
             type="checkbox"
             checked={requireApproval}
             onChange={(e) => setRequireApproval(e.target.checked)}
-            className="w-4 h-4 rounded border-[#14245C] accent-[#FCE026] cursor-pointer"
+            className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
           />
         </div>
 
         {/* Integração Instagram */}
-        <div className="flex flex-col gap-2 border-t border-[#14245C] pt-4">
-          <label className="text-xs font-semibold text-[#9FB0E6] flex items-center gap-1.5">
-            <Share2 className="w-4 h-4 text-[#FCE026]" />
+        <div className="flex flex-col gap-2 border-t border-border pt-4">
+          <label className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
+            <Share2 className="w-4 h-4 text-primary" />
             Conta do Instagram
           </label>
           <input
             type="text"
             value={instagramUsername}
             onChange={(e) => setInstagramUsername(e.target.value)}
-            className="bg-[#04081E] border border-[#14245C] rounded-lg px-3.5 py-2 text-xs text-white focus:outline-none focus:border-[#FCE026]"
+            className="bg-background border border-border rounded-lg px-3.5 py-2 text-base md:text-sm text-foreground focus:outline-none focus:border-primary"
           />
         </div>
 
         <Button
           onClick={handleSave}
           disabled={saving}
-          className="bg-[#FCE026] hover:bg-[#e5ca1f] text-[#04081E] font-bold h-11 rounded-xl gap-2 shadow"
+          className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold h-11 rounded-xl gap-2 shadow"
         >
           <Save className="w-4 h-4" />
           {saving ? 'Salvando...' : 'Salvar Ajustes'}
@@ -240,21 +240,21 @@ export function SettingsTab({
       </div>
 
       {/* Coluna da direita: Prévia ao Vivo */}
-      <aside className="w-full lg:w-80 xl:w-96 rounded-2xl border border-[#14245C] bg-[#081030] p-5 flex flex-col gap-4">
-        <div className="flex items-center gap-2 border-b border-[#14245C] pb-3">
-          <Sparkles className="w-4 h-4 text-[#FCE026]" />
-          <span className="text-xs uppercase font-bold text-white">Prévia da Copy Gerada</span>
+      <aside className="w-full lg:w-80 xl:w-96 rounded-2xl border border-border bg-card p-5 flex flex-col gap-4">
+        <div className="flex items-center gap-2 border-b border-border pb-3">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <span className="text-xs uppercase font-bold text-foreground">Prévia da Copy Gerada</span>
         </div>
 
-        <div className="rounded-xl border border-[#14245C] bg-[#04081E] p-4 flex flex-col gap-3">
+        <div className="rounded-xl border border-border bg-background p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-full bg-[#FCE026] text-[#04081E] text-xs font-bold flex items-center justify-center">
+            <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-xs font-bold flex items-center justify-center">
               C
             </div>
-            <span className="text-xs font-bold text-white">@{instagramUsername}</span>
+            <span className="text-xs font-bold text-foreground">@{instagramUsername}</span>
           </div>
 
-          <p className="text-xs text-[#E1E7FC] leading-relaxed whitespace-pre-wrap">
+          <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
             {previewCaption}
           </p>
         </div>
