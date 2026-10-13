@@ -11,7 +11,7 @@ import { COPY, composeReply, formatOffer, makePhrase, type Phrase } from './comp
 import { ensureDeal, moveDeal, pauseAi, tagContact } from './crm'
 import { advance, type Action } from './machine'
 import { maskPhone, notifyOps, parseOrigin } from './ops'
-import { makeLoadDay, pickOfferSlots } from './slots'
+import { isSlotStillFree, makeLoadDay, pickOfferSlots } from './slots'
 import { createSession, enqueueJob, loadSession, saveSession } from './store'
 import type { Answers, OfferedSlot, ReceptionSession, ReceptionSettings } from './types'
 
@@ -172,11 +172,25 @@ function replyCtx(ctx: Ctx, s: ReceptionSession) {
   }
 }
 
+async function slotStillBookable(ctx: Ctx, slot: OfferedSlot): Promise<boolean> {
+  try {
+    return await isSlotStillFree(ctx.now, ctx.deps.loadDay, slot.iso)
+  } catch (err) {
+    console.error(`[reception/run] conferir horário falhou (lead ${ctx.masked}):`, shortError(err))
+    return false
+  }
+}
+
 /** advance → (pre-save effects) → conditional save → post-save effects → reply. */
 async function handle(ctx: Ctx, prev: ReceptionSession, reading: StageReading): Promise<string | null> {
   const { deps, now } = ctx
-  const { session: advanced, action } = advance(prev, reading)
+  let { session: advanced, action } = advance(prev, reading)
   if (action.type === 'silent') return null
+
+  // A slot offered earlier may be in the past or taken by now: treat it as "none of these".
+  if (action.type === 'book' && !(await slotStillBookable(ctx, action.slot))) {
+    ;({ session: advanced, action } = advance(prev, { kind: 'slot_none' }))
+  }
 
   let next: ReceptionSession = advanced
   let slotsFailed = false

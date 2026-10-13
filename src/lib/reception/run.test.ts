@@ -142,7 +142,7 @@ function setup(over: Partial<ReceptionDeps> = {}) {
     sendWhatsApp,
     ...over,
   }
-  const say = (text: string) => {
+  const say = (text: string, now: Date = NOW) => {
     const input: ReceptionInput = {
       accountId: 'acc-1',
       userId: 'user-1',
@@ -152,7 +152,7 @@ function setup(over: Partial<ReceptionDeps> = {}) {
       senderPhone: '5513988887777',
       text,
       settings: SETTINGS,
-      now: NOW,
+      now,
     }
     return runReception(input, deps)
   }
@@ -244,6 +244,45 @@ describe('runReception', () => {
     expect(second.some((iso: string) => first.includes(iso))).toBe(false)
     expect(reply).toBe(formatOffer(t.session().offered_slots))
     expect(t.session().slot_rounds).toBe(1)
+  })
+
+  it('slot escolhido já passou (menos de 2h): nova oferta, sem agendar', async () => {
+    const t = setup()
+    await reachAgendando(t)
+    const first = t.session().offered_slots.map((s: any) => s.iso)
+    expect(first[0]).toBe(slot('2026-10-13', '10:00').iso)
+    const later = new Date('2026-10-13T09:00:00-03:00') // 10h agora está a 1h
+    const reply = await t.say('1', later)
+    expect(t.schedule).not.toHaveBeenCalled()
+    const second = t.session().offered_slots.map((s: any) => s.iso)
+    expect(second.length).toBeGreaterThan(0)
+    expect(second.some((iso: string) => first.includes(iso))).toBe(false)
+    expect(reply).toBe(formatOffer(t.session().offered_slots))
+    expect(t.session()).toMatchObject({ stage: 'agendando', slot_rounds: 1 })
+  })
+
+  it('slot escolhido foi ocupado depois da oferta: nova oferta, sem agendar', async () => {
+    const t = setup()
+    await reachAgendando(t)
+    const first = t.session().offered_slots.map((s: any) => s.iso)
+    ;(t.deps.loadDay as any).mockImplementation(async (d: string) =>
+      (await loadDay(d)).filter((s) => s.iso !== slot('2026-10-13', '10:00').iso),
+    )
+    const reply = await t.say('1')
+    expect(t.schedule).not.toHaveBeenCalled()
+    expect(reply).toBe(formatOffer(t.session().offered_slots))
+    expect(t.session().offered_slots.some((s: any) => first.includes(s.iso))).toBe(false)
+    expect(t.session()).toMatchObject({ stage: 'agendando', slot_rounds: 1 })
+  })
+
+  it('slot inválido na 2ª rodada: handoff como slot_none', async () => {
+    const t = setup()
+    await reachAgendando(t)
+    await t.say('pode ser quinta 15h?')
+    ;(t.deps.loadDay as any).mockImplementation(async () => [])
+    expect(await t.say('1')).toBe(COPY.handoff)
+    expect(t.schedule).not.toHaveBeenCalled()
+    expect(t.session()).toMatchObject({ stage: 'humano', outcome: 'humano' })
   })
 
   it('sem horários livres na 1ª oferta: calendarFail e handoff completo para o João', async () => {

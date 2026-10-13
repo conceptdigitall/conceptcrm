@@ -99,6 +99,18 @@ export async function pickOfferSlots(
     .map(toOffered)
 }
 
+/** The chosen slot is still ≥ 2h ahead and still free in the agenda (it may have been offered hours ago). */
+export async function isSlotStillFree(
+  now: Date,
+  loadDay: (dateStr: string) => Promise<AvailableSlot[]>,
+  iso: string
+): Promise<boolean> {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime()) || at.getTime() < now.getTime() + MIN_LEAD_MS) return false
+  const day = await loadDay(saoPauloDateStr(at))
+  return day.some((s) => s.iso === iso)
+}
+
 export function makeLoadDay(
   db: SupabaseClient,
   accountId: string,
