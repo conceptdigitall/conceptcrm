@@ -19,12 +19,14 @@ interface CreatePostModalProps {
   settings: MarketingSettings;
   onCreated: (post: MarketingPost) => void;
   defaultKind?: PostKind;
+  /** Vídeo não é post: abre o gerador, que manda o pedido para o worker renderizar. */
+  onPickVideo?: () => void;
 }
 
 const MEDIA_TYPES: { type: PostMediaType; label: string; hint: string; icon: typeof Camera }[] = [
   { type: 'foto', label: 'Foto', hint: '1 imagem com texto e legenda estratégica', icon: Camera },
   { type: 'carrossel', label: 'Carrossel', hint: 'Até 10 telas em sequência educativa', icon: Layers },
-  { type: 'video', label: 'Vídeo (Reel)', hint: 'Com narração, ritmo dinâmico e trilha sonora', icon: Film },
+  { type: 'video', label: 'Vídeo', hint: 'Fotos de referência, estilo de edição, duração, narração e trilha', icon: Film },
 ];
 
 const FIELD =
@@ -36,6 +38,7 @@ export function CreatePostModal({
   settings,
   onCreated,
   defaultKind = 'feed',
+  onPickVideo,
 }: CreatePostModalProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [mediaType, setMediaType] = useState<PostMediaType>('foto');
@@ -48,6 +51,10 @@ export function CreatePostModal({
   const [options, setOptions] = useState<string[]>([]);
 
   function handleSelectType(type: PostMediaType) {
+    if (type === 'video' && onPickVideo) {
+      onPickVideo();
+      return;
+    }
     setMediaType(type);
     setStep(2);
   }
@@ -172,7 +179,9 @@ export function CreatePostModal({
                   <Icon className="w-5 h-5" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-semibold text-foreground">{label}</span>
+                  <span className="font-semibold text-foreground">
+                    {type === 'video' ? (defaultKind === 'story' ? 'Vídeo (Story)' : 'Vídeo (Reel)') : label}
+                  </span>
                   <span className="text-xs text-muted-foreground">{hint}</span>
                 </div>
               </button>

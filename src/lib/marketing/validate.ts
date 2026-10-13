@@ -1,10 +1,11 @@
 import type { VideoFormat, VideoTone } from '@/types';
+import { parseVideoOptions, type VideoOptions } from './video-options';
 
 const FORMATS: VideoFormat[] = ['vertical', 'square', 'landscape'];
 const TONES: VideoTone[] = ['default', 'polished', 'app-store', 'cinematic'];
 
 type Result =
-  | { ok: true; value: { prompt: string; imagePaths: string[]; format: VideoFormat; tone: VideoTone } }
+  | { ok: true; value: { prompt: string; imagePaths: string[]; format: VideoFormat; tone: VideoTone; options: VideoOptions } }
   | { ok: false; error: string };
 
 // O worker baixa com a service role (ignora RLS do storage): só vale arquivo
@@ -34,10 +35,12 @@ export function validateVideoInput(body: unknown, accountId: string): Result {
   const pathError = validatePhotoPaths(imagePaths, accountId);
   if (pathError) return { ok: false, error: pathError };
 
-  const format = (b.format ?? 'vertical') as VideoFormat;
+  const options = parseVideoOptions(b);
+  // Story é sempre 9:16, não importa o que veio no formato.
+  const format = (options.target === 'story' ? 'vertical' : (b.format ?? 'vertical')) as VideoFormat;
   if (!FORMATS.includes(format)) return { ok: false, error: 'Formato inválido' };
   const tone = (b.tone ?? 'default') as VideoTone;
   if (!TONES.includes(tone)) return { ok: false, error: 'Tom inválido' };
 
-  return { ok: true, value: { prompt, imagePaths: imagePaths as string[], format, tone } };
+  return { ok: true, value: { prompt, imagePaths: imagePaths as string[], format, tone, options } };
 }

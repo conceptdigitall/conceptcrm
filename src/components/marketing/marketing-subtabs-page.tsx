@@ -12,6 +12,7 @@ import { ProjectsTab } from '@/components/marketing/projects-tab';
 import { LibraryTab } from '@/components/marketing/library-tab';
 import { SettingsTab } from '@/components/marketing/settings-tab';
 import { CreatePostModal } from '@/components/marketing/create-post-modal';
+import { VideoGenerator } from '@/components/marketing/video-generator';
 
 export function MarketingSubtabsPage() {
   const [currentTab, setCurrentTab] = useState<MarketingSubtab>('feed');
@@ -25,6 +26,8 @@ export function MarketingSubtabsPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalKind, setCreateModalKind] = useState<'feed' | 'story'>('feed');
   const [librarySelectedPostId, setLibrarySelectedPostId] = useState<string>('');
+  // Prompt vindo de Projetos ou do modal; a key força o gerador a recomeçar com ele.
+  const [videoSeed, setVideoSeed] = useState<{ prompt: string; target: 'reels' | 'story'; key: number }>({ prompt: '', target: 'reels', key: 0 });
 
   const loadData = useCallback(async () => {
     try {
@@ -79,9 +82,13 @@ export function MarketingSubtabsPage() {
     setCurrentTab('library');
   }
 
+  function openVideoGenerator(prompt: string, target: 'reels' | 'story' = 'reels') {
+    setVideoSeed((prev) => ({ prompt, target, key: prev.key + 1 }));
+    setCurrentTab('videos');
+  }
+
   function handleGenerateFromProject(prompt: string, _project: MarketingProject) {
-    setCreateModalKind('feed');
-    setCreateModalOpen(true);
+    openVideoGenerator(prompt);
   }
 
   if (loading) {
@@ -129,6 +136,10 @@ export function MarketingSubtabsPage() {
           />
         )}
 
+        {currentTab === 'videos' && (
+          <VideoGenerator key={videoSeed.key} initialPrompt={videoSeed.prompt} initialTarget={videoSeed.target} embedded />
+        )}
+
         {currentTab === 'projects' && (
           <ProjectsTab
             projects={projects}
@@ -159,6 +170,10 @@ export function MarketingSubtabsPage() {
         settings={settings}
         onCreated={handlePostCreated}
         defaultKind={createModalKind}
+        onPickVideo={() => {
+          setCreateModalOpen(false);
+          openVideoGenerator('', createModalKind === 'story' ? 'story' : 'reels');
+        }}
       />
     </div>
   );

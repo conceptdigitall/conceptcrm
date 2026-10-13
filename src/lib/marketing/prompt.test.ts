@@ -51,3 +51,20 @@ describe('buildFixPrompt', () => {
     expect(p.length).toBeLessThan(7000);
   });
 });
+
+describe('buildUserPrompt video options', () => {
+  it('uses the chosen style, duration and story safe area', () => {
+    const p = buildUserPrompt({
+      prompt: 'Promo', format: 'vertical', tone: 'default', imageFiles: [],
+      style: 'whiteboard', duration: 30, target: 'story',
+    });
+    expect(p).toContain('DIRETRIZES WHITEBOARD');
+    expect(p).toContain('cerca de 30 segundos');
+    expect(p).toContain('Story do Instagram');
+  });
+  it('ignores keywords when a style is chosen', () => {
+    const p = buildUserPrompt({ prompt: 'faturamento no pix', format: 'vertical', tone: 'default', imageFiles: [], style: 'kinetic' });
+    expect(p).not.toContain('DIRETRIZES DE DADOS');
+    expect(p).toContain('TEXTO ANIMADO');
+  });
+});

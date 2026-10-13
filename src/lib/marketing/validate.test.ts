@@ -1,14 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { validatePhotoPaths, validateVideoInput } from './validate';
+import { DEFAULT_VIDEO_OPTIONS } from './video-options';
 
 const acc = 'acc-1';
 const img = (n: number) => `account-${acc}/uploads/1-foto${n}.jpg`;
 
 describe('validateVideoInput', () => {
+  it('keeps style, duration and forces 9:16 for stories', () => {
+    const r = validateVideoInput({ prompt: 'Story', format: 'landscape', style: 'whiteboard', duration: 45, target: 'story' }, acc);
+    expect(r.ok && r.value.format).toBe('vertical');
+    expect(r.ok && r.value.options).toEqual({ style: 'whiteboard', duration: 45, target: 'story' });
+  });
+  it('falls back to defaults on unknown style or duration', () => {
+    const r = validateVideoInput({ prompt: 'x', style: 'hack', duration: 999 }, acc);
+    expect(r.ok && r.value.options).toEqual(DEFAULT_VIDEO_OPTIONS);
+  });
   it('accepts prompt + images and applies defaults', () => {
     expect(validateVideoInput({ prompt: ' Promo corte + barba R$50 ', imagePaths: [img(1)] }, acc)).toEqual({
       ok: true,
-      value: { prompt: 'Promo corte + barba R$50', imagePaths: [img(1)], format: 'vertical', tone: 'default' },
+      value: { prompt: 'Promo corte + barba R$50', imagePaths: [img(1)], format: 'vertical', tone: 'default', options: DEFAULT_VIDEO_OPTIONS },
     });
   });
   it('accepts no images', () => {
@@ -22,7 +32,7 @@ describe('validateVideoInput', () => {
   it('accepts photos without a description (video made only from the photos)', () => {
     expect(validateVideoInput({ imagePaths: [img(1), img(2)] }, acc)).toEqual({
       ok: true,
-      value: { prompt: '', imagePaths: [img(1), img(2)], format: 'vertical', tone: 'default' },
+      value: { prompt: '', imagePaths: [img(1), img(2)], format: 'vertical', tone: 'default', options: DEFAULT_VIDEO_OPTIONS },
     });
   });
   it('rejects too long prompts', () => {

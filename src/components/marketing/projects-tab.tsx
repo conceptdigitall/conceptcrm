@@ -29,7 +29,7 @@ export function ProjectsTab({
   function handleGenerate() {
     if (!selectedProject) return;
     const prompt = projectVideoPrompt(selectedProject, videoKind, duration);
-    toast.success(`Prompt gerado para ${selectedProject.name}!`);
+    toast.success(`Roteiro de ${selectedProject.name} pronto: confira e gere o vídeo`);
     onGenerateFromProject(prompt, selectedProject);
   }
 

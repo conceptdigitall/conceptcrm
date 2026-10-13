@@ -8,6 +8,7 @@ import { buildFixPrompt, buildUserPrompt, extractHtml } from '@/lib/marketing/pr
 import { validateVideoInput } from '@/lib/marketing/validate';
 import type { MarketingVideo } from '@/types';
 import { runCommand } from './exec';
+import { parseVideoOptions, narrationWordLimit } from '@/lib/marketing/video-options';
 import { audioPromptLines, buildScriptPrompt, cleanScript, synthesize, type Narration } from './narration';
 import { failJob, finishJob } from './queue';
 import { defaultRenderDeps } from './hf-render';
@@ -30,7 +31,7 @@ export interface ChatMessage { role: 'user' | 'assistant'; content: string }
 
 export interface VideoDeps {
   compose(messages: ChatMessage[]): Promise<string>;
-  script(brief: string): Promise<string>;
+  script(brief: string, duration?: number): Promise<string>;
   narrate(text: string): Promise<Narration | null>;
   check(dir: string): Promise<{ ok: boolean; output: string }>;
   render(dir: string, out: string): Promise<void>;
@@ -150,9 +151,9 @@ const defaultDeps: VideoDeps = {
     }
     return response.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
   },
-  async script(brief) {
+  async script(brief, duration) {
     const system = 'Você é redator de locução publicitária em português do Brasil. Responda só com o texto a ser falado.';
-    const msg: ChatMessage[] = [{ role: 'user', content: buildScriptPrompt(brief) }];
+    const msg: ChatMessage[] = [{ role: 'user', content: buildScriptPrompt(brief, duration) }];
     if (ENGINE === 'gemini') return composeViaGemini(msg, system);
     if (ENGINE === 'cli') return composeViaCli(msg, system);
     const r = await new Anthropic().messages.create({ model: MODEL, max_tokens: 600, system, messages: msg });
@@ -178,6 +179,8 @@ export async function runVideoJob(
     await failJob(db, 'marketing_videos', video.id, valid.error);
     return;
   }
+  // Estilo, duração e Reels/Story escolhidos no painel (padrão para pedidos antigos).
+  const options = parseVideoOptions(video.director_input);
   const dir = await mkdtemp(join(tmpdir(), 'hf-'));
   try {
     // Scaffold may be empty in tests; the real one comes from Step 1.
@@ -196,7 +199,7 @@ export async function runVideoJob(
     // Narração (ElevenLabs, voz Matilda). Falha aqui não derruba o job: o vídeo sai só com a trilha.
     let narration: Narration | null = null;
     try {
-      const text = cleanScript(await deps.script(video.prompt));
+      const text = cleanScript(await deps.script(video.prompt, options.duration), narrationWordLimit(options.duration));
       narration = text ? await deps.narrate(text) : null;
       if (narration) await writeFile(join(dir, 'assets', 'narration.mp3'), narration.audio);
     } catch (err) {
@@ -209,7 +212,8 @@ export async function runVideoJob(
       role: 'user',
       content: buildUserPrompt({
         prompt: video.prompt, format: video.format, tone: video.tone, imageFiles,
-        audio: audioPromptLines(narration, hasMusic),
+        style: options.style, duration: options.duration, target: options.target,
+        audio: audioPromptLines(narration, hasMusic, options.duration),
       }),
     }];
 
