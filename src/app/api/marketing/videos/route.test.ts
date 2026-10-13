@@ -52,6 +52,7 @@ describe('POST /api/marketing/videos', () => {
       account_id: 'acc-1', created_by: 'user-1', prompt: 'Promo',
       image_paths: ['account-acc-1/uploads/1-a.jpg'], format: 'vertical', tone: 'polished', status: 'pending',
       kind: 'reels',
+      director_input: { style: 'auto', duration: 15, target: 'reels' },
     });
   });
 
