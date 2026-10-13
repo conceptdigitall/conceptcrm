@@ -30,7 +30,7 @@ describe('scoreLead', () => {
 
 describe('advance', () => {
   it('caminho feliz até agendando', () => {
-    let s = base('nicho')
+    const s = base('nicho')
     let r = advance(s, { kind: 'nicho', nicho: 'dentista' })
     expect(r.session.stage).toBe('interesse'); expect(r.session.answers.nicho).toBe('dentista')
     expect(r.action).toEqual({ type: 'ask', stage: 'interesse', reask: false })

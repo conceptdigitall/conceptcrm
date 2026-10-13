@@ -38,6 +38,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "reception:eval": "tsx --env-file=.env.local worker/scripts/eval-reception.ts",
     "worker": "tsx --env-file=.env.local worker/index.ts",
     "laya": "sh worker/laya/serve.sh",
     "servicos": "sh worker/servicos.sh"
