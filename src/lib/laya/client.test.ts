@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { EMBED_BATCH, layaBatch, layaEmbed } from './laya-client';
+import { EMBED_BATCH, layaBatch, layaEmbed } from './client';
 
 const question = { type: 'noul' as const, instructions: 'Tem site?' };
 const ok = (answers: unknown[]) =>
