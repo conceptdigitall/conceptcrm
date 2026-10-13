@@ -117,7 +117,7 @@ async function bestEffort(ctx: Ctx, label: string, fn: () => Promise<unknown>): 
 
 /** Reply when Laya and Haiku are both down: the stage question again, fixed text, no state change. */
 function fallbackReply(s: ReceptionSession): string | null {
-  if (s.stage === 'agendando') return formatOffer(s.offeredSlots)
+  if (s.stage === 'agendando') return s.offeredSlots.length ? formatOffer(s.offeredSlots) : COPY.calendarFail
   if (s.stage === 'nicho' || s.stage === 'interesse' || s.stage === 'momento' || s.stage === 'urgencia') {
     return COPY.ask[s.stage]
   }
@@ -188,7 +188,11 @@ async function handle(ctx: Ctx, prev: ReceptionSession, reading: StageReading): 
       console.error(`[reception/run] pickOfferSlots falhou (lead ${ctx.masked}):`, shortError(err))
     }
     if (slots.length) next = { ...next, offeredSlots: slots }
-    else slotsFailed = true
+    else {
+      // No slot to offer (or the agenda failed): hand the lead over to João instead of an empty offer.
+      slotsFailed = true
+      next = { ...next, stage: 'humano', outcome: 'humano' }
+    }
   }
   if (action.type === 'book') next = { ...next, stage: 'concluida' }
 
@@ -214,7 +218,9 @@ async function effects(
   switch (action.type) {
     case 'offer_slots':
       if (slotsFailed) {
-        await ctx.notify(`Recepcionista: sem horários para oferecer ao lead ${ctx.masked}. Mande os horários manualmente.`)
+        await move(stageIds.humano, 'mover deal para humano')
+        await bestEffort(ctx, 'pausar a IA', () => pauseAi(db, input.conversationId, summarizeAnswers(next.answers)))
+        await ctx.notify(`Recepcionista: sem horários ou agenda com falha para o lead ${ctx.masked}. Conversa passada para você.`)
         return COPY.calendarFail
       }
       return formatOffer(next.offeredSlots)

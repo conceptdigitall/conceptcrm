@@ -15,6 +15,7 @@ type Row = Record<string, any>
 function memoryDb() {
   const tables = new Map<string, Map<string, Row>>()
   let seq = 0
+  const calls: { table: string; op: string; payload: any }[] = []
   const table = (name: string) => {
     if (!tables.has(name)) tables.set(name, new Map())
     return tables.get(name)!
@@ -27,6 +28,7 @@ function memoryDb() {
     const matches = (r: Row) => filters.every(([k, v]) => r[k] === v)
 
     const exec = (): { data: any; error: any } => {
+      if (op !== 'select') calls.push({ table: name, op, payload })
       const t = table(name)
       if (op === 'insert') {
         const rows: Row[] = (Array.isArray(payload) ? payload : [payload]).map((p: Row) => ({ id: `${name}-${++seq}`, ...p }))
@@ -72,7 +74,7 @@ function memoryDb() {
     return b
   }
 
-  return { db: { from } as unknown as SupabaseClient, table }
+  return { db: { from } as unknown as SupabaseClient, table, calls }
 }
 
 // ---------- fakes ----------
@@ -243,12 +245,70 @@ describe('runReception', () => {
     expect(t.session().slot_rounds).toBe(1)
   })
 
-  it('sem horários livres: avisa o João e responde calendarFail', async () => {
+  it('sem horários livres na 1ª oferta: calendarFail e handoff completo para o João', async () => {
     const t = setup({ loadDay: vi.fn(async () => []) })
+    t.mem.table('conversations').set('conv-1', { id: 'conv-1' })
     const reply = await reachAgendando(t)
     expect(reply).toBe(COPY.calendarFail)
+    expect(t.session()).toMatchObject({ stage: 'humano', outcome: 'humano' })
+    const pauses = t.mem.calls.filter((c) => c.table === 'conversations' && c.op === 'update')
+    expect(pauses).toHaveLength(1)
+    expect(pauses[0].payload).toMatchObject({ ai_autoreply_disabled: true })
+    expect(pauses[0].payload.ai_handoff_summary).toContain('dentista')
+    const moves = t.mem.calls.filter((c) => c.table === 'deals' && c.op === 'update')
+    expect(moves).toHaveLength(1)
+    expect(moves[0].payload.stage_id).toBe('st-humano')
+    expect(t.sendWhatsApp).toHaveBeenCalledTimes(1)
     expect(t.sendWhatsApp).toHaveBeenCalledWith(OPS, expect.stringContaining('***7777'))
     expect(t.sendWhatsApp.mock.calls.every((c: any[]) => !String(c[1]).includes('5513988887777'))).toBe(true)
+
+    // stage humano → silent
+    expect(await t.say('e aí, cadê os horários?')).toBeNull()
+    expect(t.sendWhatsApp).toHaveBeenCalledTimes(1)
+  })
+
+  it('agenda falha na 2ª rodada (slot_none): calendarFail e handoff', async () => {
+    let calls = 0
+    const t = setup({
+      loadDay: vi.fn(async (d: string) => {
+        calls++
+        if (calls > 5) throw new Error('google fora')
+        return loadDay(d)
+      }),
+    })
+    await reachAgendando(t)
+    t.sendWhatsApp.mockClear()
+    expect(await t.say('pode ser quinta 15h?')).toBe(COPY.calendarFail)
+    expect(t.session()).toMatchObject({ stage: 'humano', outcome: 'humano' })
+    expect(t.deal().stage_id).toBe('st-humano')
+    expect(t.sendWhatsApp).toHaveBeenCalledTimes(1)
+  })
+
+  it('fallback em agendando sem horários oferecidos não manda oferta vazia', async () => {
+    const t = setup()
+    await t.say('oi')
+    t.session().stage = 'agendando'
+    t.session().offered_slots = []
+    ;(t.deps.classify as any).mockImplementation(async () => {
+      throw new Error('fora')
+    })
+    expect(await t.say('1')).toBe(COPY.calendarFail)
+  })
+
+  it.each([
+    ['success:false', async () => ({ success: false, meetUrl: '', calendarUrl: '', meetCreated: false, replyMessage: '' })],
+    ['lança erro', async () => { throw new Error('google fora') }],
+  ])('agendamento falha (%s): volta para agendando, calendarFail e avisa o João', async (_, impl) => {
+    const t = setup()
+    await reachAgendando(t)
+    t.schedule.mockImplementation(impl as any)
+    t.sendWhatsApp.mockClear()
+    expect(await t.say('1')).toBe(COPY.calendarFail)
+    expect(t.session().stage).toBe('agendando')
+    expect(t.session().appointment_id ?? null).toBeNull()
+    expect(t.jobs()).toHaveLength(0)
+    expect(t.sendWhatsApp).toHaveBeenCalledTimes(1)
+    expect(t.sendWhatsApp).toHaveBeenCalledWith(OPS, expect.stringContaining('***7777'))
   })
 
   it('fluxo morno: move para morno e cria followup em +3 dias', async () => {
