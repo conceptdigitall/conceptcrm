@@ -3,13 +3,17 @@ import type { LeadColumn, LeadSearch, MarketingVideo } from '@/types';
 import { internalAccountIds } from '@/lib/internal-accounts';
 import { claimNext, requeueOrphaned } from './queue';
 import { runProspectingJob } from './prospecting';
-import { runVideoJob } from './video';
+import { generateText, runVideoJob } from './video';
+import { runAutopilotTick, syncPostsForVideo } from './autopilot';
+import { autopilotConfigFromEnv } from '@/lib/marketing/autopilot';
 import { requeueColumnsForAccount, runColumnJob } from './columns';
 import { layaBatch, layaEmbed } from './laya-client';
 import { headPredictor, learnAfterRun } from './learning';
 import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator';
 
 const POLL_MS = 5000;
+// O piloto só olha a agenda de tempos em tempos; a fila de vídeos segue no ritmo normal.
+const AUTOPILOT_EVERY_MS = 15 * 60 * 1000;
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -26,6 +30,12 @@ const layaUrl = process.env.LAYA_URL;
 if (!layaUrl) {
   console.warn('LAYA_URL não definida: colunas da Planilha Preditiva ficam na fila (veja docs/worker.md)');
 }
+
+const autopilot = autopilotConfigFromEnv(process.env);
+if (autopilot) {
+  console.log(`Piloto automático ligado: ${autopilot.feedPerWeek} posts e ${autopilot.storiesPerWeek} stories por semana (sempre com aprovação).`);
+}
+let lastAutopilotAt = 0;
 
 const db = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
   auth: { persistSession: false },
@@ -61,7 +71,17 @@ async function tick(): Promise<boolean> {
   if (video) {
     console.log(`[marketing] ${video.prompt.slice(0, 60)}`);
     await runVideoJob(db, video);
+    await syncPostsForVideo(db, video.id);
     return true;
+  }
+  if (autopilot && Date.now() - lastAutopilotAt > AUTOPILOT_EVERY_MS) {
+    const created = await runAutopilotTick(db, accountIds, autopilot, {
+      now: () => new Date(),
+      generateText: (system, content) => generateText(system, content),
+    });
+    // Criou um item: olha de novo logo (pode haver outro atrasado); senão espera o intervalo.
+    if (!created) lastAutopilotAt = Date.now();
+    return created;
   }
   return false;
 }

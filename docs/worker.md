@@ -61,6 +61,20 @@ Limite atual: o worker conversa com **um** projeto Supabase (o do `.env.local`),
 atende contas listadas em `NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS`. Atender CRMs de clientes com banco próprio
 é outra etapa.
 
+## Piloto automático de marketing
+
+Liga com `MARKETING_AUTOPILOT=1` no `.env.local` e reinicie o worker. Por padrão cria **3 posts de feed e 5 stories por semana** (mude com `AUTOPILOT_FEED_PER_WEEK` e `AUTOPILOT_STORIES_PER_WEEK`).
+
+- A meta é espalhada pelos 7 dias (semana começa segunda 00:00 de Brasília). O worker olha a agenda a cada 15 min e cria no máximo um item por vez.
+- Cada item: pauta, título e legenda pela IA (usa o estilo de legenda de Marketing → Ajustes), mais um pedido em `marketing_videos` marcado com `director_input.autopilot = true`.
+- Feed: o 1º de cada 3 é Reel de 30 s; os outros são arte estática (o worker renderiza e usa o frame 0, sem áudio). Stories: vídeo 9:16 de 15 s.
+- O post nasce como rascunho e vai para **esperando aprovação** quando a mídia fica pronta. Nada é publicado sem aprovação no painel.
+- Os pedidos do piloto contam no limite diário de vídeos da conta.
+
+## Biblioteca de trilhas
+
+As trilhas de fundo ficam em `worker/music/` e são listadas em `worker/music/tracks.json` (arquivo, tons, fonte e licença). O worker escolhe uma faixa pelo tom do vídeo (mesmo vídeo, mesma faixa). Só adicione faixas com licença que permita uso comercial no Instagram sem atribuição obrigatória, e anote a fonte no JSON.
+
 ## Mover para um servidor
 Rodar o mesmo `npm run worker` num VPS com Docker, Node 22+ e FFmpeg, com as mesmas variáveis.
 

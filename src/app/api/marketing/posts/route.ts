@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import type { MarketingPost, PostKind, PostMediaType, PostStatus } from '@/types';
 import { nextVersionNumber } from '@/lib/marketing/content';
+import { attachPostMedia } from '@/lib/marketing/post-media';
 
 export async function GET(request: Request) {
   let ctx;
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ posts: data as MarketingPost[] });
+  return NextResponse.json({ posts: await attachPostMedia(ctx.supabase, (data ?? []) as MarketingPost[]) });
 }
 
 export async function POST(request: Request) {

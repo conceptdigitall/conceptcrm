@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { publishToInstagram, InstagramApiError } from '@/lib/marketing/instagram';
+import { attachPostMedia } from '@/lib/marketing/post-media';
 import type { MarketingPost } from '@/types';
 
 export async function POST(request: Request) {
@@ -36,7 +37,7 @@ export async function POST(request: Request) {
     if (error || !data) {
       return NextResponse.json({ error: 'Post não encontrado' }, { status: 404 });
     }
-    post = data as MarketingPost;
+    [post] = await attachPostMedia(ctx.supabase, [data as MarketingPost]);
     if (post.status === 'published') {
       return NextResponse.json({ error: 'Este post já foi publicado no Instagram.' }, { status: 400 });
     }
