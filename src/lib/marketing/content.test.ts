@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_SETTINGS, activeHashtags, buildCaption, nextVersionNumber, projectVideoPrompt, variationPrompt,
+  DEFAULT_SETTINGS, activeHashtags, buildCaption, buildCaptionOptions, captionSystemPrompt, nextVersionNumber,
+  parseCaptionOptions, projectVideoPrompt, variationPrompt,
 } from './content';
 
 describe('marketing content helpers', () => {
@@ -36,5 +37,32 @@ describe('marketing content helpers', () => {
   it('next version is max + 1', () => {
     expect(nextVersionNumber([{ version: 1 }, { version: 3 }])).toBe(4);
     expect(nextVersionNumber([])).toBe(1);
+  });
+});
+
+describe('legendas do modal de criar post', () => {
+  const s = { ...DEFAULT_SETTINGS, account_id: 'a' };
+
+  it('buildCaptionOptions devolve 3 legendas distintas, a primeira no estilo salvo', () => {
+    const opts = buildCaptionOptions({ ...s, caption_style: 'provocativo' }, 'Responder rápido vende mais.');
+    expect(opts).toHaveLength(3);
+    expect(new Set(opts).size).toBe(3);
+    expect(opts[0]).toContain('Quantas vezes você ignorou isto?');
+  });
+
+  it('parseCaptionOptions separa por --- e descarta pedaços curtos', () => {
+    const raw = 'Legenda um com texto suficiente aqui.\n---\nLegenda dois com texto suficiente aqui.\n---\nok\n---\nLegenda três com texto suficiente aqui.\n---\nLegenda quatro com texto suficiente.';
+    expect(parseCaptionOptions(raw)).toEqual([
+      'Legenda um com texto suficiente aqui.',
+      'Legenda dois com texto suficiente aqui.',
+      'Legenda três com texto suficiente aqui.',
+    ]);
+  });
+
+  it('captionSystemPrompt inclui CTA, proibições e hashtags ativas', () => {
+    const p = captionSystemPrompt(s);
+    expect(p).toContain(s.cta);
+    expect(p).toContain(s.never_use);
+    expect(p).toContain('#conceptdigital');
   });
 });

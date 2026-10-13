@@ -86,15 +86,15 @@ export function MarketingSubtabsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-[#9FB0E6]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#FCE026]" />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-muted-foreground">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
         <span className="text-sm font-medium">Carregando Aba Marketing IA...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-8 max-w-7xl mx-auto w-full min-h-screen bg-[#04081E] text-white">
+    <div className="flex flex-col gap-6 p-4 pb-28 md:p-6 lg:pb-6 max-w-7xl mx-auto w-full text-foreground">
       {/* Cabeçalho Global e Abas */}
       <MarketingTabsHeader
         currentTab={currentTab}
