@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ requireRole: vi.fn() }));
 
@@ -44,7 +44,13 @@ vi.mock('@/lib/ai/admin-client', () => ({
 describe('GET /api/calendar/availability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T08:00:00-03:00'));
     mocks.requireRole.mockResolvedValue({ accountId: 'acc-1', userId: 'user-1', role: 'viewer' });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('returns 401 without a session', async () => {

@@ -103,12 +103,65 @@ export interface LayaQuestion {
   criteria?: Record<string, string> | string[];
 }
 
-export function toLayaQuestion(c: Pick<ParsedColumn, 'kind' | 'options' | 'instructions'>): LayaQuestion {
-  if (c.kind === 'noul') return { type: 'noul', instructions: c.instructions };
-  if (c.kind === 'choice') {
-    return { type: 'choice', instructions: c.instructions, criteria: Object.fromEntries(c.options.map((o) => [o, o])) };
+export function parseDefinitions(raw: string | null | undefined): Record<string, string> {
+  if (!raw || typeof raw !== 'string') return {};
+  const trimmed = raw.trim();
+  if (!trimmed) return {};
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const out: Record<string, string> = {};
+        for (const [k, v] of Object.entries(parsed)) {
+          if (typeof v === 'string' && v.trim()) {
+            out[k.trim()] = v.trim();
+          }
+        }
+        return out;
+      }
+    } catch {
+      // fallback to line parsing
+    }
   }
-  return { type: 'score', instructions: c.instructions, criteria: [...c.options] };
+
+  const out: Record<string, string> = {};
+  const lines = trimmed.split('\n');
+  for (const line of lines) {
+    const colon = line.indexOf(':');
+    if (colon > 0) {
+      const key = line.slice(0, colon).trim();
+      const val = line.slice(colon + 1).trim();
+      if (key && val) out[key] = val;
+    }
+  }
+  return out;
+}
+
+export function formatDefinitions(defs: Record<string, string>): string {
+  return JSON.stringify(defs);
+}
+
+export function toLayaQuestion(
+  c: Pick<ParsedColumn, 'kind' | 'options' | 'instructions'>,
+  definition?: string | null,
+): LayaQuestion {
+  const defs = parseDefinitions(definition);
+  if (c.kind === 'noul') {
+    const hasDefs = Object.keys(defs).length > 0;
+    return { type: 'noul', instructions: c.instructions, ...(hasDefs ? { criteria: defs } : {}) };
+  }
+  if (c.kind === 'choice') {
+    const criteria: Record<string, string> = {};
+    for (const opt of c.options) {
+      criteria[opt] = defs[opt] ? `${opt}: ${defs[opt]}` : opt;
+    }
+    return { type: 'choice', instructions: c.instructions, criteria };
+  }
+  const hasDefs = Object.keys(defs).length > 0;
+  const criteria = hasDefs
+    ? c.options.map((o) => (defs[o] ? `${o}: ${defs[o]}` : o))
+    : [...c.options];
+  return { type: 'score', instructions: c.instructions, criteria };
 }
 
 export interface LayaAnswer {

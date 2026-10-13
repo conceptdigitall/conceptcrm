@@ -25,16 +25,26 @@ MODEL = "multilingual"
 MAX_TEXTS = 64
 
 router = build_router()
+# Concept fine-tune: with LAYA_CONCEPT_MODEL=<folder>, the name "typed-decisions" points to it. The CRM asks
+# for it with LAYA_DECISION_MODEL=typed-decisions; the encoder for embeddings stays on "multilingual".
+_concept = os.environ.get("LAYA_CONCEPT_MODEL")
+if _concept:
+    router.models["typed-decisions"] = _concept
+    router.load("typed-decisions")  # warm up now so the first column does not wait for the load
 app = create_app(router)
 api_key = os.environ.get("LAYA_API_KEY") or None
 lock = threading.Lock()  # one forward pass at a time, like laya-serve
 
 
 def check_key(authorization):
-    if api_key is None:
-        return
+    if not api_key:
+        raise HTTPException(
+            status_code=500, detail="LAYA_API_KEY environment variable is not configured"
+        )
     supplied = (authorization or "").encode("utf-8", "surrogateescape")
-    if not hmac.compare_digest(supplied, ("Bearer " + api_key).encode("utf-8", "surrogateescape")):
+    if not hmac.compare_digest(
+        supplied, ("Bearer " + api_key).encode("utf-8", "surrogateescape")
+    ):
         raise HTTPException(status_code=401, detail="invalid or missing bearer token")
 
 

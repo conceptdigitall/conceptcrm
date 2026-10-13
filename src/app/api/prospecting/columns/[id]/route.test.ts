@@ -9,8 +9,9 @@ vi.mock('@/lib/auth/account', () => ({
   toErrorResponse: vi.fn(() => Response.json({ error: 'auth failed' }, { status: 403 })),
 }));
 
-import { DELETE } from './route';
+import { DELETE, PATCH } from './route';
 import { POST as RETRY } from './retry/route';
+import { POST as RECALCULATE } from './recalculate/route';
 
 function ctx(accountId = 'acc-1') {
   return {
@@ -23,7 +24,12 @@ function ctx(accountId = 'acc-1') {
           mocks.update(patch);
           return { eq: () => ({ select: () => ({ single: async () => ({ data: { id: 'col-1', ...(patch as object) }, error: null }) }) }) };
         },
-        delete: () => ({ eq: () => ({ select: async () => ({ data: mocks.deleted, error: null }) }) }),
+        delete: () => ({
+          eq: () => ({
+            is: () => ({ error: null }),
+            select: async () => ({ data: mocks.deleted, error: null }),
+          }),
+        }),
       }),
     },
   };
@@ -37,6 +43,33 @@ beforeEach(() => {
   mocks.current = null;
   mocks.deleted = [];
   mocks.requireRole.mockResolvedValue(ctx());
+});
+
+describe('PATCH /api/prospecting/columns/:id', () => {
+  it('updates the definition of a column', async () => {
+    const patchReq = new Request('http://localhost/api/prospecting/columns/col-1', {
+      method: 'PATCH',
+      body: JSON.stringify({ definition: '{"beleza":"salão"}' }),
+    });
+    const res = await PATCH(patchReq, params);
+    expect(res.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith({ definition: '{"beleza":"salão"}' });
+  });
+});
+
+describe('POST /api/prospecting/columns/:id/recalculate', () => {
+  it('resets column status to pending and preserves manual corrections', async () => {
+    mocks.current = { id: 'col-1', status: 'done' };
+    const res = await RECALCULATE(req, params);
+    expect(res.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith({
+      status: 'pending',
+      error: null,
+      started_at: null,
+      finished_at: null,
+      filled_count: 0,
+    });
+  });
 });
 
 describe('POST /api/prospecting/columns/:id/retry', () => {

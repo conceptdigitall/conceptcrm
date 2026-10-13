@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240">
+  <!-- Mão com marcador para animação Whiteboard. Ponta do marcador em (15, 225) -->
+  <g id="hand-pen">
+    <!-- Sombra suave da caneta -->
+    <path d="M25 215 L145 65 L165 80 L45 230 Z" fill="rgba(0,0,0,0.12)"/>
+    <!-- Corpo da Caneta Marcador -->
+    <path d="M20 220 L135 60 L155 75 L40 235 Z" fill="#18181b" stroke="#27272a" stroke-width="2"/>
+    <!-- Tampa / Anel Dourado da Concept -->
+    <path d="M48 185 L60 170 L72 180 L60 195 Z" fill="#eab308"/>
+    <!-- Ponta Cônica da Caneta -->
+    <path d="M20 220 L30 207 L42 216 L32 229 Z" fill="#3f3f46"/>
+    <!-- Ponta de Feltro do Marcador (ponto exato do desenho em ~12, 230) -->
+    <polygon points="12,230 22,217 28,222 17,235" fill="#09090b"/>
+    <!-- Dedos da Mão Segurando a Caneta -->
+    <!-- Polegar -->
+    <path d="M50 160 C40 140 55 120 75 125 C90 128 95 145 88 165 C82 178 65 175 50 160 Z" fill="#fbcfe8" stroke="#f472b6" stroke-width="3"/>
+    <!-- Dedo Indicador -->
+    <path d="M70 145 C65 125 80 100 105 105 C125 110 125 130 115 150 C105 165 85 160 70 145 Z" fill="#fce7f3" stroke="#f472b6" stroke-width="3"/>
+    <!-- Dedo Médio e Articulações -->
+    <path d="M95 135 C95 115 115 95 135 105 C150 112 145 135 135 150 C125 162 105 150 95 135 Z" fill="#fbcfe8" stroke="#f472b6" stroke-width="3"/>
+    <!-- Palma da Mão e Punho -->
+    <path d="M85 165 C100 160 130 150 155 140 C175 145 190 170 185 200 C180 230 145 240 115 220 C95 205 85 185 85 165 Z" fill="#fdf2f8" stroke="#f472b6" stroke-width="3"/>
+  </g>
+</svg>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" stroke="#18181b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Eixos do gráfico -->
+  <line x1="16" y1="16" x2="16" y2="84" class="draw-path" />
+  <line x1="16" y1="84" x2="88" y2="84" class="draw-path" />
+  <!-- Barras do gráfico -->
+  <rect x="26" y="58" width="12" height="26" class="draw-path" fill="#e2e8f0" />
+  <rect x="44" y="42" width="12" height="42" class="draw-path" fill="#cbd5e1" />
+  <rect x="62" y="24" width="12" height="60" class="draw-path" fill="#fef08a" stroke="#ca8a04" />
+  <!-- Seta de Alta -->
+  <path d="M22 62 L48 38 L68 20 L84 20 M84 20 L74 30 M84 20 L84 32" class="draw-path" stroke="#22c55e" stroke-width="4" />
+</svg>

@@ -16,4 +16,7 @@ export LAYA_API_KEY="$KEY" LAYA_HOST=127.0.0.1 LAYA_PORT=8765 LAYA_DEVICE=cpu LA
 # (ex.: a dificuldade de tarefa do segundo cérebro). Ver serve_plus.py.
 LAYA_PLUS=$(grep -E '^LAYA_PLUS=' .env.local | cut -d= -f2- | tr -d '"')
 export LAYA_PLUS
+# Opcional: pasta do modelo ajustado da Concept (ver serve_plus.py). Vazio = só o multilingual.
+LAYA_CONCEPT_MODEL=$(grep -E '^LAYA_CONCEPT_MODEL=' .env.local | cut -d= -f2- | tr -d '"')
+export LAYA_CONCEPT_MODEL
 exec worker/laya/.venv/bin/python worker/laya/serve_plus.py

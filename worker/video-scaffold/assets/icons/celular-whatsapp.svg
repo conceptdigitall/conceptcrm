@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" stroke="#18181b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Corpo do Celular -->
+  <rect x="25" y="10" width="50" height="80" rx="10" class="draw-path" />
+  <!-- Alto-falante / Notch -->
+  <line x1="44" y1="18" x2="56" y2="18" class="draw-path" />
+  <!-- Balão de WhatsApp / Mensagem -->
+  <path d="M38 35 C38 35 38 48 50 48 C55 48 58 46 62 50 L62 45 C64 43 65 40 65 37 C65 32 60 28 51 28 C43 28 38 32 38 35 Z" class="draw-path" stroke="#22c55e" fill="none" />
+  <!-- Notificação pulsante -->
+  <circle cx="68" cy="24" r="7" fill="#ef4444" stroke="#ffffff" stroke-width="2" />
+  <!-- Botão inferior -->
+  <circle cx="50" cy="82" r="3" class="draw-path" />
+</svg>

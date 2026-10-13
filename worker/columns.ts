@@ -1,15 +1,16 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
-  buildLeadState, mapLayaAnswer, parseColumnTitle, toLayaQuestion,
+  buildLeadState, mapLayaAnswer, normalizeLabel, parseColumnTitle, toLayaQuestion,
   type LayaAnswer, type LayaQuestion,
 } from '@/lib/prospecting/columns';
+import { nivelPorLead } from '@/lib/prospecting/regiao';
 import { resolveEnsemblePrediction, sanitizeLeadContext } from '@/lib/laya/reliable-inference';
 import type { CellSource, Lead, LeadColumn } from '@/types';
 import { LAYA_MODEL } from './laya-client';
 import type { HeadPredictor } from './learning';
 import { failJob, finishJob } from './queue';
 
-export const FILL_LIMIT = 500;
+export const FILL_LIMIT = 2000;
 export const BATCH_SIZE = 32;
 const FK_VIOLATION = '23503';
 
@@ -56,7 +57,8 @@ export async function runColumnJob(
         .map((v) => v.lead_id as string),
     );
     const missing = rows.filter((l) => !filled.has(l.id));
-    const question = toLayaQuestion(parsed.value);
+    const question = toLayaQuestion(parsed.value, column.definition);
+    const isDinheiroColumn = kind === 'score' && normalizeLabel(column.title).includes('dinheiro');
 
     let written = 0;
     let claudeCalls = 0;
@@ -74,25 +76,30 @@ export async function runColumnJob(
           const base = mapLayaAnswer(kind, options, rawAnswer);
           let decided: { value: string; confidence: number; source: CellSource } = { ...base, source: 'laya' };
 
-          const fromHead = headAnswers[j];
-          if (fromHead) {
-            decided = { ...fromHead, source: 'cabeca' };
-            headDecisions += 1;
-          } else if (deps.arbitrateWithClaude) {
-            const ensemble = await resolveEnsemblePrediction(
-              kind,
-              options,
-              rawAnswer,
-              leadStates[j],
-              question,
-              { arbitrateWithClaude: deps.arbitrateWithClaude },
-            );
-            if (ensemble.escalated) claudeCalls += 1;
-            decided = {
-              value: ensemble.value,
-              confidence: ensemble.confidence,
-              source: ensemble.source === 'claude_arbitration' ? 'claude' : 'laya',
-            };
+          const regiaoNivel = isDinheiroColumn ? nivelPorLead(lead) : null;
+          if (regiaoNivel) {
+            decided = { value: regiaoNivel, confidence: 1, source: 'regra' };
+          } else {
+            const fromHead = headAnswers[j];
+            if (fromHead) {
+              decided = { ...fromHead, source: 'cabeca' };
+              headDecisions += 1;
+            } else if (deps.arbitrateWithClaude) {
+              const ensemble = await resolveEnsemblePrediction(
+                kind,
+                options,
+                rawAnswer,
+                leadStates[j],
+                question,
+                { arbitrateWithClaude: deps.arbitrateWithClaude },
+              );
+              if (ensemble.escalated) claudeCalls += 1;
+              decided = {
+                value: ensemble.value,
+                confidence: ensemble.confidence,
+                source: ensemble.source === 'claude_arbitration' ? 'claude' : 'laya',
+              };
+            }
           }
 
           return {

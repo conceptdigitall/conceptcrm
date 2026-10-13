@@ -169,6 +169,29 @@ describe('runColumnJob with a trained head (parte B)', () => {
     expect(calls.updates.at(-1)).toMatchObject({ claude_calls: 0, head_decisions: 0 });
   });
 
+  it('decides by regional rule for Parece ter dinheiro when address is recognized', async () => {
+    const dinheiroCol = {
+      id: 'col-dinheiro', account_id: 'acc-1', title: 'Parece ter dinheiro', kind: 'score', options: ['baixo', 'médio', 'alto'], status: 'running',
+    } as unknown as LeadColumn;
+    const gonzagaLead: Row = {
+      ...lead(0),
+      raw: { complete_address: { city: 'Santos', borough: 'Gonzaga' } },
+    };
+    const svCentroLead: Row = {
+      ...lead(1),
+      raw: { complete_address: { city: 'São Vicente', borough: 'Centro' } },
+    };
+    const { db, calls } = fakeDb({ leads: [gonzagaLead, svCentroLead] });
+    const arbitrateWithClaude = vi.fn();
+    const mockLaya = vi.fn<LayaFn>(async (s) => s.map(() => ({ score: 1.0, probabilities: { 0: 0.1, 1: 0.8, 2: 0.1 } })));
+
+    await runColumnJob(db, dinheiroCol, { laya: mockLaya, arbitrateWithClaude });
+
+    expect(arbitrateWithClaude).not.toHaveBeenCalled();
+    expect(calls.upserts[0][0]).toMatchObject({ value: 'alto', confidence: 1, source: 'regra' });
+    expect(calls.upserts[0][1]).toMatchObject({ value: 'médio', confidence: 1, source: 'regra' });
+  });
+
   it('returns false when the column fails', async () => {
     const { db } = fakeDb({ leads: [lead(0)] });
     expect(await runColumnJob(db, column, { laya: vi.fn().mockRejectedValue(new Error('x')) })).toBe(false);

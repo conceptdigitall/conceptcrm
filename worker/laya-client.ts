@@ -1,6 +1,10 @@
 import type { LayaAnswer, LayaQuestion } from '@/lib/prospecting/columns';
 
 export const LAYA_MODEL = 'multilingual';
+// Model that answers the columns. Embeddings and the cached vectors stay on LAYA_MODEL, because the heads
+// were trained on them. Set LAYA_DECISION_MODEL=typed-decisions to use the Concept fine-tune (the server
+// maps that name to it via LAYA_CONCEPT_MODEL, see worker/laya/serve_plus.py); unset = multilingual.
+export const decisionModel = () => process.env.LAYA_DECISION_MODEL || LAYA_MODEL;
 const QUESTION_KEY = 'col';
 
 export interface LayaClientDeps {
@@ -58,7 +62,7 @@ export async function layaBatch(
   baseUrl: string, states: string[], question: LayaQuestion, deps: LayaClientDeps = {},
 ): Promise<LayaAnswer[]> {
   const json = await callLaya<{ results?: { answers?: Record<string, LayaAnswer> }[] }>(
-    baseUrl, '/v1/systemone/batch', { states, questions: { [QUESTION_KEY]: question }, model: LAYA_MODEL }, deps,
+    baseUrl, '/v1/systemone/batch', { states, questions: { [QUESTION_KEY]: question }, model: decisionModel() }, deps,
   );
   const results = json.results ?? [];
   if (results.length !== states.length) {

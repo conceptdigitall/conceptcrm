@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  allowedValues, buildLeadState, canTeach, canonicalValue, displayedCell, learningLabel, runCostLabel, mapLayaAnswer, normalizeLabel, parseColumnTitle, sortScore, toLayaQuestion,
+  allowedValues, buildLeadState, canTeach, canonicalValue, displayedCell, formatDefinitions, learningLabel, runCostLabel, mapLayaAnswer, normalizeLabel, parseColumnTitle, parseDefinitions, sortScore, toLayaQuestion,
 } from './columns';
 
 describe('normalizeLabel', () => {
@@ -99,14 +99,65 @@ describe('buildLeadState', () => {
   });
 });
 
+describe('parseDefinitions and formatDefinitions', () => {
+  it('parses JSON format correctly', () => {
+    const raw = JSON.stringify({ beleza: 'salão e estética', saúde: 'médicos e dentistas' });
+    expect(parseDefinitions(raw)).toEqual({
+      beleza: 'salão e estética',
+      saúde: 'médicos e dentistas',
+    });
+  });
+  it('parses colon-separated lines as fallback', () => {
+    const raw = 'beleza: salão e estética\nsaúde: médicos e dentistas';
+    expect(parseDefinitions(raw)).toEqual({
+      beleza: 'salão e estética',
+      saúde: 'médicos e dentistas',
+    });
+  });
+  it('returns empty object for empty or invalid input', () => {
+    expect(parseDefinitions(null)).toEqual({});
+    expect(parseDefinitions('')).toEqual({});
+    expect(parseDefinitions('   ')).toEqual({});
+  });
+  it('formats definitions to JSON string', () => {
+    expect(formatDefinitions({ beleza: 'salão' })).toBe('{"beleza":"salão"}');
+  });
+});
+
 describe('toLayaQuestion', () => {
-  it('builds the question each Laya type expects', () => {
+  it('builds the question each Laya type expects without definitions', () => {
     expect(toLayaQuestion({ kind: 'noul', options: [], instructions: 'Tem site?' }))
       .toEqual({ type: 'noul', instructions: 'Tem site?' });
     expect(toLayaQuestion({ kind: 'choice', options: ['saúde', 'beleza'], instructions: 'Nicho' }))
       .toEqual({ type: 'choice', instructions: 'Nicho', criteria: { saúde: 'saúde', beleza: 'beleza' } });
     expect(toLayaQuestion({ kind: 'score', options: ['baixo', 'médio', 'alto'], instructions: 'Dinheiro' }))
       .toEqual({ type: 'score', instructions: 'Dinheiro', criteria: ['baixo', 'médio', 'alto'] });
+  });
+
+  it('enriches criteria when definitions are provided', () => {
+    const defs = JSON.stringify({
+      beleza: 'salão e estética',
+      saúde: 'clínica e dentista',
+    });
+    expect(toLayaQuestion({ kind: 'choice', options: ['saúde', 'beleza'], instructions: 'Nicho' }, defs))
+      .toEqual({
+        type: 'choice',
+        instructions: 'Nicho',
+        criteria: {
+          saúde: 'saúde: clínica e dentista',
+          beleza: 'beleza: salão e estética',
+        },
+      });
+
+    const scoreDefs = JSON.stringify({
+      alto: 'Gonzaga e Centro',
+    });
+    expect(toLayaQuestion({ kind: 'score', options: ['baixo', 'médio', 'alto'], instructions: 'Dinheiro' }, scoreDefs))
+      .toEqual({
+        type: 'score',
+        instructions: 'Dinheiro',
+        criteria: ['baixo', 'médio', 'alto: Gonzaga e Centro'],
+      });
   });
 });
 

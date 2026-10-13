@@ -11,8 +11,9 @@ import { failJob, finishJob } from './queue';
 const SCRAPER_IMAGE = 'gosom/google-maps-scraper';
 const SCRAPE_TIMEOUT_MS = 20 * 60 * 1000;
 
+// ~10 results per scroll; capped at 20 because max_results tops out at 200 (validate.ts).
 export function depthFor(maxResults: number): number {
-  return Math.min(10, Math.max(1, Math.ceil(maxResults / 10)));
+  return Math.min(20, Math.max(1, Math.ceil(maxResults / 10)));
 }
 
 // Runs one query through the scraper container and returns its JSON output.

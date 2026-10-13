@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { executeCheckAvailability, executeScheduleAppointment } from './ai-calendar-tools';
 
 // Mock do supabaseAdmin
@@ -42,6 +42,12 @@ vi.mock('@/lib/ai/admin-client', () => ({
 describe('AI Calendar Tools (WhatsApp integration)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-12T08:00:00-03:00'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('executeCheckAvailability', () => {

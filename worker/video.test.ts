@@ -1,9 +1,30 @@
-import { describe, expect, it, vi } from 'vitest';
-import { runVideoJob } from './video';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { composeViaGemini, runVideoJob } from './video';
 import { runTemplatedJob } from './video-template';
 import type { MarketingVideo } from '@/types';
 
 vi.mock('./video-template', () => ({ runTemplatedJob: vi.fn().mockResolvedValue(undefined) }));
+
+vi.mock('@google/genai', () => ({
+  GoogleGenAI: class MockGoogleGenAI {
+    apiKey: string;
+    models: { generateContent: unknown };
+    constructor(config: { apiKey: string }) {
+      this.apiKey = config.apiKey;
+      this.models = {
+        generateContent: vi.fn().mockImplementation(async (params: { contents: { parts: { text: string }[] }[] }) => {
+          if (params.contents.some((c) => c.parts[0]?.text === 'force-error')) {
+            return { text: '', candidates: [{ finishReason: 'SAFETY' }] };
+          }
+          return {
+            text: '```html\n<!doctype html><html><body>ok gemini</body></html>\n```',
+            candidates: [{ finishReason: 'STOP' }],
+          };
+        }),
+      };
+    }
+  },
+}));
 
 const video = {
   id: 'v-1', account_id: 'acc-1', prompt: 'Promo', image_paths: ['account-acc-1/uploads/1-a.jpg'],
@@ -32,6 +53,8 @@ function fakeDb() {
 function deps(over: Record<string, unknown> = {}) {
   return {
     compose: vi.fn().mockResolvedValue(HTML),
+    script: vi.fn().mockResolvedValue('Seu produto é bom. Chame a gente.'),
+    narrate: vi.fn().mockResolvedValue({ audio: Buffer.from('mp3'), text: 'Seu produto é bom.', duration: 2, words: [{ word: 'Seu', start: 0, end: 0.3 }] }),
     check: vi.fn().mockResolvedValue({ ok: true, output: '' }),
     render: vi.fn().mockResolvedValue(undefined),
     poster: vi.fn().mockResolvedValue(undefined),
@@ -100,5 +123,47 @@ describe('runVideoJob', () => {
     await runVideoJob(db, templated, d);
     expect(runTemplatedJob).toHaveBeenCalledWith(db, templated);
     expect(d.compose).not.toHaveBeenCalled();
+  });
+  it('passes the narration timing to the composer', async () => {
+    const { db } = fakeDb();
+    const d = deps();
+    await runVideoJob(db, video, d);
+    const first = (d.compose.mock.calls[0][0] as { content: string }[])[0].content;
+    expect(first).toContain('assets/narration.mp3');
+    expect(first).toContain('Seu@0.40');
+  });
+  it('still renders (no narration) when the voice fails', async () => {
+    const { db, updates } = fakeDb();
+    const d = deps({ narrate: vi.fn().mockRejectedValue(new Error('ElevenLabs HTTP 401')) });
+    await runVideoJob(db, video, d);
+    const first = (d.compose.mock.calls[0][0] as { content: string }[])[0].content;
+    expect(first).not.toContain('assets/narration.mp3');
+    expect(updates.at(-1)).toMatchObject({ status: 'done' });
+  });
+});
+
+describe('composeViaGemini', () => {
+  const originalEnv = process.env.GEMINI_API_KEY;
+
+  afterEach(() => {
+    process.env.GEMINI_API_KEY = originalEnv;
+  });
+
+  it('throws an error if GEMINI_API_KEY is not set', async () => {
+    delete process.env.GEMINI_API_KEY;
+    await expect(composeViaGemini([{ role: 'user', content: 'hello' }]))
+      .rejects.toThrow('GEMINI_API_KEY não configurada no ambiente (.env.local)');
+  });
+
+  it('generates content successfully using GoogleGenAI when API key is set', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    const res = await composeViaGemini([{ role: 'user', content: 'test prompt' }]);
+    expect(res).toContain('ok gemini');
+  });
+
+  it('throws if gemini generation is blocked or finishes abnormally without text', async () => {
+    process.env.GEMINI_API_KEY = 'test-key';
+    await expect(composeViaGemini([{ role: 'user', content: 'force-error' }]))
+      .rejects.toThrow('Gemini não retornou texto (motivo: SAFETY)');
   });
 });

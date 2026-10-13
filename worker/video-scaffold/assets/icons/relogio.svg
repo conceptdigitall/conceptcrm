@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" stroke="#18181b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Círculo do Relógio -->
+  <circle cx="50" cy="50" r="42" class="draw-path" />
+  <!-- Marcações das horas principais -->
+  <line x1="50" y1="14" x2="50" y2="20" class="draw-path" />
+  <line x1="50" y1="80" x2="50" y2="86" class="draw-path" />
+  <line x1="14" y1="50" x2="20" y2="50" class="draw-path" />
+  <line x1="80" y1="50" x2="86" y2="50" class="draw-path" />
+  <!-- Ponteiros marcando 22:30 -->
+  <line x1="50" y1="50" x2="30" y2="35" class="draw-path" stroke-width="5" />
+  <line x1="50" y1="50" x2="50" y2="76" class="draw-path" stroke-width="4" stroke="#eab308" />
+  <circle cx="50" cy="50" r="3" fill="#18181b" />
+</svg>

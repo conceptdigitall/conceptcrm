@@ -29,7 +29,7 @@ const NICHES = [
   { query: 'oficina mecânica', plural: 'oficinas mecânicas' },
 ] as const;
 
-const AMOUNTS = [20, 50, 100] as const;
+const AMOUNTS = [20, 50, 100, 200] as const;
 
 export interface SearchInput {
   query: string;

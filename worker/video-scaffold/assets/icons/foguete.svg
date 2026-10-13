@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" fill="none" stroke="#18181b" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+  <!-- Corpo do Foguete -->
+  <path d="M50 14 C36 28 32 50 36 70 L50 64 L64 70 C68 50 64 28 50 14 Z" class="draw-path" fill="#f8fafc" />
+  <!-- Janela do Foguete -->
+  <circle cx="50" cy="40" r="8" class="draw-path" stroke="#3b82f6" stroke-width="3" fill="#dbeafe" />
+  <!-- Asas Laterais -->
+  <path d="M34 56 L18 72 L33 70 Z" class="draw-path" fill="#eab308" />
+  <path d="M66 56 L82 72 L67 70 Z" class="draw-path" fill="#eab308" />
+  <!-- Fogo de Propulsão -->
+  <path d="M42 70 Q50 94 50 94 Q50 94 58 70" class="draw-path" stroke="#ef4444" stroke-width="4" />
+</svg>
