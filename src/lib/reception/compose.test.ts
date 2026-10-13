@@ -59,3 +59,10 @@ describe('composeReply', () => {
     expect(await composeReply({ type: 'book', slot: { iso: 'a', label: 'b' } }, ctx, fail)).toBeNull()
   })
 })
+
+describe('composeReply ask com guardrail', () => {
+  it('Haiku cita preço numa pergunta de etapa: devolve a pergunta fixa da etapa', async () => {
+    const phrase = async () => 'Antes, saiba que custa R$ 500. O que você quer resolver primeiro?'
+    expect(await composeReply({ type: 'ask', stage: 'interesse', reask: false }, ctx, phrase)).toBe(COPY.ask.interesse)
+  })
+})

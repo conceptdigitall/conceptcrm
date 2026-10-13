@@ -28,8 +28,12 @@ export function fill(template: string, vars: Record<string, string>): string {
 const PRICE_RE = /R\$\s?\d|\d+\s?(reais|mil)\b/i
 const DEADLINE_RE = /\b\d+\s?(dias?|semanas?|meses?)\b/i
 
+function violatesGuardrail(text: string): boolean {
+  return PRICE_RE.test(text) || DEADLINE_RE.test(text)
+}
+
 export function applyGuardrails(text: string, plansUrl: string): string {
-  if (PRICE_RE.test(text) || DEADLINE_RE.test(text)) return fill(COPY.guardrail, { plansUrl })
+  if (violatesGuardrail(text)) return fill(COPY.guardrail, { plansUrl })
   return cleanReplyFormatting(text)
 }
 
@@ -100,7 +104,9 @@ export async function composeReply(
       const goal =
         (action.reask ? 'o lead não respondeu de forma clara; reformule. ' : '') + ASK_GOALS[action.stage]
       try {
-        return applyGuardrails(await phrase(goal, ctx.leadText), ctx.plansUrl)
+        const text = await phrase(goal, ctx.leadText)
+        // A stage question must stay a question: on price/deadline, use the fixed one.
+        return violatesGuardrail(text) ? COPY.ask[action.stage] : cleanReplyFormatting(text)
       } catch {
         return COPY.ask[action.stage]
       }
