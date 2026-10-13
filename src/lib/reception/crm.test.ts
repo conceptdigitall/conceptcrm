@@ -146,6 +146,12 @@ describe('store', () => {
     expect(calls[0].payload).toMatchObject({ stage: 'interesse', updated_at: expect.any(String) })
   })
 
+  it('saveSession never writes deal_id (only setSessionDeal does, so a stale load cannot null it)', async () => {
+    const { db, calls } = fakeDb({ 'reception_sessions:update': { data: [{ id: 's1' }] } })
+    await saveSession(db, { ...session, dealId: null }, 'nicho')
+    expect(calls[0].payload).not.toHaveProperty('deal_id')
+  })
+
   it('saveSession returns true when a row changed', async () => {
     const { db } = fakeDb({ 'reception_sessions:update': { data: [{ id: 's1' }] } })
     expect(await saveSession(db, session, 'nicho')).toBe(true)

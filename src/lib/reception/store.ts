@@ -83,7 +83,11 @@ export async function setSessionDeal(db: SupabaseClient, sessionId: string, deal
   if (error) throw new Error(`[reception/store] setSessionDeal: ${error.message}`)
 }
 
-/** Optimistic save: only applies if the stored stage is still `prevStage`. False = lost the race. */
+/**
+ * Optimistic save: only applies if the stored stage is still `prevStage`. False = lost the race.
+ * deal_id is deliberately not written here: setSessionDeal owns it, and a session loaded before the
+ * deal was attached would otherwise null it out.
+ */
 export async function saveSession(
   db: SupabaseClient,
   next: ReceptionSession,
@@ -92,7 +96,6 @@ export async function saveSession(
   const { data, error } = await db
     .from('reception_sessions')
     .update({
-      deal_id: next.dealId,
       stage: next.stage,
       answers: next.answers,
       unclear_count: next.unclearCount,
