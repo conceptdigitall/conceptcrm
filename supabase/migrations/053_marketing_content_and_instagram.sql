@@ -1,4 +1,4 @@
--- Migration 052: Marketing posts, settings, projects e integração com Instagram
+-- Migration 053: Marketing posts, settings, projects e integração com Instagram
 CREATE TABLE IF NOT EXISTS marketing_posts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

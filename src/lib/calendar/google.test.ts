@@ -112,6 +112,7 @@ describe('Google Calendar service & unified integration', () => {
             end: new Date('2026-10-12T11:00:00-03:00'),
           },
         ],
+        now: new Date('2026-10-12T08:00:00-03:00'),
       });
 
       expect(availability.availableSlots.length).toBeGreaterThan(0);
