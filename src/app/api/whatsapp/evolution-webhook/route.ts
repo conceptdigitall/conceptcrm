@@ -10,6 +10,11 @@ import {
   EVOLUTION_HISTORY_LIMIT,
   type HistoryRow,
 } from '@/lib/whatsapp/evolution-history';
+import { loadSettings } from '@/lib/reception/store';
+import { buildReceptionDeps, runReception } from '@/lib/reception/run';
+import { maskPhone } from '@/lib/reception/ops';
+import { transcribeEvolutionAudio } from '@/lib/reception/audio';
+import type { ReceptionSettings } from '@/lib/reception/types';
 
 export const maxDuration = 60;
 
@@ -52,6 +57,8 @@ const anthropic = new Anthropic({
 const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-production-0d4c.up.railway.app';
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
+
+const AUDIO_UNREADABLE_REPLY = 'Não consegui ouvir o áudio, pode me mandar por escrito?';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -204,10 +211,24 @@ export async function POST(req: Request) {
     }
 
     // 4. FILTRO DE CONTEÚDO VAZIO
-    const messageText =
+    let messageText: string =
       data?.message?.conversation ||
       data?.message?.extendedTextMessage?.text ||
       '';
+
+    // Áudio: transcreve (Whisper). Sem transcrição, grava '[áudio]' e pede por escrito.
+    let contentType: 'text' | 'audio' = 'text';
+    let audioUnreadable = false;
+    if (!messageText.trim() && data?.message?.audioMessage) {
+      contentType = 'audio';
+      const transcript = key?.id ? await transcribeEvolutionAudio(String(key.id)) : null;
+      if (transcript && transcript.trim()) {
+        messageText = transcript.trim();
+      } else {
+        messageText = '[áudio]';
+        audioUnreadable = true;
+      }
+    }
 
     if (!messageText.trim()) {
       return NextResponse.json({ status: 'ignored_empty_text' });
@@ -222,7 +243,9 @@ export async function POST(req: Request) {
     const senderNumber = rawNumber.replace(/\D/g, '') || rawNumber;
     const senderName = data?.pushName || 'Novo Lead';
 
-    console.log(`[Nova Mensagem] ${senderName} (${senderNumber}): ${messageText}`);
+    console.log(
+      `[Nova Mensagem] ${maskPhone(senderNumber)}: ${contentType === 'audio' ? `[áudio, ${messageText.length} chars]` : messageText}`
+    );
 
     // ========================================================
     // 1. GRAVAR NO BANCO DO CRM (SUPABASE) PARA MOSTRAR NA INBOX
@@ -346,7 +369,7 @@ export async function POST(req: Request) {
               conversation_id: conversationId,
               message_id: messageId,
               content_text: messageText,
-              content_type: 'text',
+              content_type: contentType,
               sender_type: 'customer',
               status: 'delivered',
             },
@@ -372,6 +395,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'ai_paused' });
     }
 
+    // Áudio que não deu para transcrever: pede por escrito (só com a IA ativa, checado acima).
+    if (audioUnreadable) {
+      await sendAndRecordBotReply(remoteJid, conversationId, AUDIO_UNREADABLE_REPLY);
+      return NextResponse.json({ status: 'audio_unreadable' });
+    }
+
+    // Recepcionista (funil fase 1): só quando reception_settings.enabled nesta conta.
+    // Se a leitura falhar, o robô antigo segue respondendo como antes.
+    let settings: ReceptionSettings | null = null;
+    try {
+      settings = await loadSettings(supabaseAdmin(), accountId);
+    } catch (err) {
+      console.error(
+        `[Evolution Webhook] Falha ao ler reception_settings (lead ${maskPhone(senderNumber)}); usando o robô antigo:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+    const useReception = !!(settings?.enabled && contact?.id && conversationId);
+
     // ========================================================
     // 2. REGRAS HUMANAS & RESPOSTA INTELIGENTE (CLAUDE)
     // ========================================================
@@ -379,48 +421,48 @@ export async function POST(req: Request) {
     const randomDelay = Math.floor(Math.random() * (6000 - 3000 + 1)) + 3000;
     await simulateHumanPresence(remoteJid, randomDelay);
 
-    const [replyText] = await Promise.all([
-      generateClaudeReply({
-        userName: senderName,
-        userMessage: messageText,
-        senderPhone: senderNumber,
-        contactId: contact?.id,
-        accountId,
-        userId,
-        conversationId,
-      }),
-      sleep(randomDelay)
-    ]);
+    let replyText: string | null;
+    if (useReception && settings && contact?.id && conversationId) {
+      const now = new Date();
+      [replyText] = await Promise.all([
+        runReception(
+          {
+            accountId,
+            userId,
+            contactId: contact.id,
+            conversationId,
+            senderName,
+            senderPhone: senderNumber,
+            text: messageText,
+            settings,
+            now,
+          },
+          buildReceptionDeps(supabaseAdmin(), accountId, now, sendEvolutionMessage)
+        ),
+        sleep(randomDelay),
+      ]);
+      if (!replyText) {
+        return NextResponse.json({ status: 'reception_silent' });
+      }
+    } else {
+      [replyText] = await Promise.all([
+        generateClaudeReply({
+          userName: senderName,
+          userMessage: messageText,
+          senderPhone: senderNumber,
+          contactId: contact?.id,
+          accountId,
+          userId,
+          conversationId,
+        }),
+        sleep(randomDelay)
+      ]);
+    }
 
     if (replyText) {
       const sanitizedReply = cleanReplyFormatting(replyText);
       if (sanitizedReply) {
-        // Envia via WhatsApp
-        await sendEvolutionMessage(remoteJid, sanitizedReply);
-
-        // Salva a resposta da IA no CRM também
-        if (conversationId) {
-          const { error: botMsgErr } = await supabaseAdmin().from('messages').insert({
-            conversation_id: conversationId,
-            content_text: sanitizedReply,
-            content_type: 'text',
-            sender_type: 'bot',
-            status: 'sent',
-          });
-
-          if (botMsgErr) {
-            console.error('[Evolution Webhook] Erro ao salvar mensagem do bot:', botMsgErr);
-          }
-
-          await supabaseAdmin()
-            .from('conversations')
-            .update({
-              last_message_text: sanitizedReply,
-              last_message_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', conversationId);
-        }
+        await sendAndRecordBotReply(remoteJid, conversationId, sanitizedReply);
       }
     }
 
@@ -428,6 +470,36 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('[Evolution Webhook Error]:', error);
     return NextResponse.json({ error: 'Internal Error' }, { status: 500 });
+  }
+}
+
+/** Envia via WhatsApp e grava a resposta do bot no CRM (mensagem + last_message_*). */
+async function sendAndRecordBotReply(remoteJid: string, conversationId: string | null, text: string) {
+  // Envia via WhatsApp
+  await sendEvolutionMessage(remoteJid, text);
+
+  // Salva a resposta da IA no CRM também
+  if (conversationId) {
+    const { error: botMsgErr } = await supabaseAdmin().from('messages').insert({
+      conversation_id: conversationId,
+      content_text: text,
+      content_type: 'text',
+      sender_type: 'bot',
+      status: 'sent',
+    });
+
+    if (botMsgErr) {
+      console.error('[Evolution Webhook] Erro ao salvar mensagem do bot:', botMsgErr);
+    }
+
+    await supabaseAdmin()
+      .from('conversations')
+      .update({
+        last_message_text: text,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId);
   }
 }
 
