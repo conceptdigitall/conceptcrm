@@ -69,6 +69,11 @@ export function buildReceptionDeps(
   }
 }
 
+function realName(senderName: string): string | undefined {
+  const name = (senderName ?? '').trim()
+  return !name || name.toLowerCase() === 'novo lead' ? undefined : name
+}
+
 function firstNameOf(senderName: string): string {
   const name = (senderName ?? '').trim()
   if (!name || name === 'Novo Lead') return ''
@@ -219,7 +224,8 @@ async function handle(ctx: Ctx, prev: ReceptionSession, reading: StageReading): 
   if (action.type === 'book') next = { ...next, stage: 'concluida' }
 
   // Optimistic save: losing the race to a concurrent message means that one answers, not this one.
-  if (!(await saveSession(deps.db, next, prev.stage))) return null
+  // free_reply changes nothing, so it never rewrites the session.
+  if (action.type !== 'free_reply' && !(await saveSession(deps.db, next, prev.stage))) return null
 
   return effects(ctx, next, action, slotsFailed)
 }
@@ -281,7 +287,8 @@ async function book(ctx: Ctx, claimed: ReceptionSession, slot: OfferedSlot): Pro
   try {
     result = await deps.schedule({
       datetimeIso: slot.iso,
-      clientName: input.senderName,
+      // Never "Novo Lead" (the webhook's placeholder): the confirmation would say "Perfeito, Novo Lead!".
+      clientName: realName(input.senderName),
       senderPhone: input.senderPhone,
       contactId: input.contactId,
       accountId: input.accountId,
@@ -309,15 +316,20 @@ async function book(ctx: Ctx, claimed: ReceptionSession, slot: OfferedSlot): Pro
     const dealId = claimed.dealId
     await bestEffort(ctx, 'mover deal para agendado', () => moveDeal(db, dealId, input.settings.stageIds.agendado))
   }
-  await bestEffort(ctx, 'agendar lembrete', () =>
-    enqueueJob(db, {
-      accountId: input.accountId,
-      kind: 'lembrete',
-      runAt: new Date(new Date(slot.iso).getTime() - HOUR_MS),
-      sessionId: claimed.id,
-      appointmentId: appointmentId ?? undefined,
-    }),
-  )
+  if (appointmentId) {
+    await bestEffort(ctx, 'agendar lembrete', () =>
+      enqueueJob(db, {
+        accountId: input.accountId,
+        kind: 'lembrete',
+        runAt: new Date(new Date(slot.iso).getTime() - HOUR_MS),
+        sessionId: claimed.id,
+        appointmentId,
+      }),
+    )
+  } else {
+    // Event created but the appointment row was not: a reminder would have nothing to point at.
+    await ctx.notify(`Recepcionista: reunião com o lead ${ctx.masked} em ${slot.label} sem registro no CRM; lembrete não agendado. Confira a agenda.`)
+  }
 
   if (!result.meetCreated) {
     await ctx.notify(`Recepcionista: reunião com o lead ${ctx.masked} em ${slot.label} ficou sem link do Meet. Envie o link manualmente.`)

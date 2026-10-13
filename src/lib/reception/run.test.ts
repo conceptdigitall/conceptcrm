@@ -366,6 +366,48 @@ describe('runReception', () => {
     expect(t.jobs()[0].run_at).toBe(new Date(NOW.getTime() + 3 * 86400_000).toISOString())
   })
 
+  it('free_reply depois de concluída não regrava a sessão', async () => {
+    const t = setup()
+    await t.say('oi')
+    await t.say('dentista')
+    await t.say('quero marketing')
+    await t.say('sim, faturo')
+    await t.say('estou pesquisando')
+    const saves = () => t.mem.calls.filter((c) => c.table === 'reception_sessions' && c.op === 'update').length
+    const before = saves()
+    expect(await t.say('e quanto tempo leva?')).not.toBeNull()
+    expect(saves()).toBe(before)
+  })
+
+  it('agendou mas sem appointmentId: não cria lembrete e avisa o João', async () => {
+    const t = setup()
+    t.schedule.mockImplementation(async () => ({
+      success: true,
+      meetUrl: 'https://meet.google.com/abc',
+      calendarUrl: 'x',
+      meetCreated: true,
+      replyMessage: 'ok',
+    }))
+    await reachAgendando(t)
+    t.sendWhatsApp.mockClear()
+    expect(await t.say('1')).toBe('ok')
+    expect(t.jobs()).toHaveLength(0)
+    expect(t.sendWhatsApp).toHaveBeenCalledWith(OPS, expect.stringMatching(/lembrete/))
+  })
+
+  it('lead sem nome (Novo Lead): agenda sem passar "Novo Lead" como clientName', async () => {
+    const t = setup()
+    const input = (text: string): ReceptionInput => ({
+      accountId: 'acc-1', userId: 'user-1', contactId: 'contact-1', conversationId: 'conv-1',
+      senderName: 'Novo Lead', senderPhone: '5513988887777', text, settings: SETTINGS, now: NOW,
+    })
+    for (const m of ['oi', 'dentista', 'tráfego e CRM', 'sim, faturo e tenho secretária', 'agora', '1']) {
+      await runReception(input(m), t.deps)
+    }
+    expect(t.schedule).toHaveBeenCalledTimes(1)
+    expect(t.schedule.mock.calls[0][0].clientName).toBeUndefined()
+  })
+
   it('fluxo frio: move para curioso e aplica a tag curioso', async () => {
     const t = setup()
     await t.say('oi')
