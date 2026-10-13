@@ -9,7 +9,7 @@ export const FORMAT_SIZE: Record<VideoFormat, { width: number; height: number }>
 
 export function buildUserPrompt(input: {
   prompt: string; format: VideoFormat; tone: VideoTone; imageFiles: string[]; audio?: string[];
-  style?: VideoStyle; duration?: VideoDuration; target?: VideoTarget;
+  style?: VideoStyle; duration?: VideoDuration; target?: VideoTarget; still?: boolean;
 }): string {
   const { width, height } = FORMAT_SIZE[input.format];
   const images = input.imageFiles.length
@@ -83,6 +83,21 @@ export function buildUserPrompt(input: {
       '- As fotos enviadas são as protagonistas e ocupam a tela toda, com zoom lento (Ken Burns) e cortes no ritmo da fala.',
       '- Texto curto por cima, com faixa ou sombra para garantir o contraste.',
     );
+  }
+
+  if (input.still) {
+    return [
+      'Crie a ARTE ESTÁTICA de um post de foto do Instagram, em português do Brasil, para o negócio do briefing. Siga o Playbook da Concept Digital.',
+      '',
+      brief,
+      `Tela: ${width}x${height}. Composição HyperFrames de 2 segundos, sem animação: tudo já visível e parado desde o frame 0, porque só o frame 0 vira a imagem do post.`,
+      'Uma mensagem só: título grande (3 a 8 palavras), no máximo uma linha de apoio e um elemento visual forte. Contraste mínimo 4.5:1.',
+      'Fotos disponíveis (caminhos relativos ao projeto):',
+      images,
+      'Sem áudio. Sem fontes ou imagens externas além das fotos e assets locais listados.',
+      'Todo texto na tela em português do Brasil. Preços, endereços e nomes exatamente como no briefing.',
+      'Responda com UM bloco ```html contendo o index.html completo da composição HyperFrames, e nada mais.',
+    ].join('\n');
   }
 
   const seconds = input.duration;

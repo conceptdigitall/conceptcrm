@@ -1,0 +1,12 @@
+{
+  "_doc": "Biblioteca de trilhas do worker. Só entram faixas com licença que permite uso comercial no Instagram sem atribuição obrigatória. 'tones' usa os mesmos valores do tom do vídeo (default, polished, app-store, cinematic).",
+  "tracks": [
+    {
+      "file": "institucional.mp3",
+      "title": "Trilha institucional Concept",
+      "tones": ["default", "polished", "app-store", "cinematic"],
+      "source": "trilha original do scaffold do worker",
+      "license": "uso interno Concept Digital"
+    }
+  ]
+}

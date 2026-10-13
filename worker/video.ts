@@ -13,6 +13,7 @@ import { audioPromptLines, buildScriptPrompt, cleanScript, synthesize, type Narr
 import { failJob, finishJob } from './queue';
 import { defaultRenderDeps } from './hf-render';
 import { runTemplatedJob } from './video-template';
+import { MUSIC_DIR, loadTracks, pickTrack } from './music';
 
 const BUCKET = 'marketing';
 const MAX_FIX_ROUNDS = 2;
@@ -128,6 +129,15 @@ export async function composeViaGemini(messages: ChatMessage[], system?: Promise
   return text;
 }
 
+/** Texto curto (roteiro, pauta) com o mesmo motor de IA do worker. */
+export async function generateText(system: string, content: string, maxTokens = 2000): Promise<string> {
+  const msg: ChatMessage[] = [{ role: 'user', content }];
+  if (ENGINE === 'gemini') return composeViaGemini(msg, system);
+  if (ENGINE === 'cli') return composeViaCli(msg, system);
+  const r = await new Anthropic().messages.create({ model: MODEL, max_tokens: maxTokens, system, messages: msg });
+  return r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+}
+
 const defaultDeps: VideoDeps = {
   async compose(messages) {
     if (ENGINE === 'gemini') return composeViaGemini(messages);
@@ -153,11 +163,7 @@ const defaultDeps: VideoDeps = {
   },
   async script(brief, duration) {
     const system = 'Você é redator de locução publicitária em português do Brasil. Responda só com o texto a ser falado.';
-    const msg: ChatMessage[] = [{ role: 'user', content: buildScriptPrompt(brief, duration) }];
-    if (ENGINE === 'gemini') return composeViaGemini(msg, system);
-    if (ENGINE === 'cli') return composeViaCli(msg, system);
-    const r = await new Anthropic().messages.create({ model: MODEL, max_tokens: 600, system, messages: msg });
-    return r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
+    return generateText(system, buildScriptPrompt(brief, duration), 600);
   },
   narrate: (text) => synthesize(text),
   ...defaultRenderDeps,
@@ -196,15 +202,24 @@ export async function runVideoJob(
       imageFiles.push(rel);
     }
 
+    // Arte estática (post de foto) não tem áudio: sem narração nem trilha.
+    if (options.still) await rm(join(dir, 'assets', 'music.mp3'), { force: true });
+    else {
+      const track = pickTrack(await loadTracks(), video.tone, video.id);
+      if (track) await cp(join(MUSIC_DIR, track.file), join(dir, 'assets', 'music.mp3'));
+    }
+
     // Narração (ElevenLabs, voz Matilda). Falha aqui não derruba o job: o vídeo sai só com a trilha.
     let narration: Narration | null = null;
-    try {
-      const text = cleanScript(await deps.script(video.prompt, options.duration), narrationWordLimit(options.duration));
-      narration = text ? await deps.narrate(text) : null;
-      if (narration) await writeFile(join(dir, 'assets', 'narration.mp3'), narration.audio);
-    } catch (err) {
-      console.warn(`Narração ignorada (vídeo ${video.id}): ${err instanceof Error ? err.message : err}`);
-      narration = null;
+    if (!options.still) {
+      try {
+        const text = cleanScript(await deps.script(video.prompt, options.duration), narrationWordLimit(options.duration));
+        narration = text ? await deps.narrate(text) : null;
+        if (narration) await writeFile(join(dir, 'assets', 'narration.mp3'), narration.audio);
+      } catch (err) {
+        console.warn(`Narração ignorada (vídeo ${video.id}): ${err instanceof Error ? err.message : err}`);
+        narration = null;
+      }
     }
     const hasMusic = await access(join(dir, 'assets', 'music.mp3')).then(() => true, () => false);
 
@@ -212,7 +227,7 @@ export async function runVideoJob(
       role: 'user',
       content: buildUserPrompt({
         prompt: video.prompt, format: video.format, tone: video.tone, imageFiles,
-        style: options.style, duration: options.duration, target: options.target,
+        style: options.style, duration: options.duration, target: options.target, still: options.still,
         audio: audioPromptLines(narration, hasMusic, options.duration),
       }),
     }];
