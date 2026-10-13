@@ -18,7 +18,7 @@ export async function ensureDeal(
     title: string
   },
 ): Promise<string> {
-  const { data: existing } = await db
+  const { data: existing, error: lookupError } = await db
     .from('deals')
     .select('id')
     .eq('account_id', a.accountId)
@@ -28,6 +28,7 @@ export async function ensureDeal(
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
+  if (lookupError) fail('ensureDeal(lookup)', lookupError)
   if (existing?.id) return existing.id as string
 
   const { data, error } = await db
@@ -95,10 +96,10 @@ export async function pauseAi(db: SupabaseClient, conversationId: string, summar
 
 export async function addNote(
   db: SupabaseClient,
-  a: { contactId: string; userId: string; text: string },
+  a: { accountId: string; contactId: string; userId: string; text: string },
 ): Promise<void> {
   const { error } = await db
     .from('contact_notes')
-    .insert({ contact_id: a.contactId, user_id: a.userId, note_text: a.text })
+    .insert({ account_id: a.accountId, contact_id: a.contactId, user_id: a.userId, note_text: a.text })
   if (error) fail('addNote', error)
 }

@@ -26,7 +26,8 @@ const STAGE_KEYS = ['novo', 'agendado', 'morno', 'curioso', 'humano'] as const
 
 /** Returns null when the row is missing OR not fully configured. */
 export async function loadSettings(db: SupabaseClient, accountId: string): Promise<ReceptionSettings | null> {
-  const { data } = await db.from('reception_settings').select('*').eq('account_id', accountId).maybeSingle()
+  const { data, error } = await db.from('reception_settings').select('*').eq('account_id', accountId).maybeSingle()
+  if (error) throw new Error(`[reception/store] loadSettings: ${error.message}`)
   if (!data) return null
   const ids = (data.stage_ids ?? {}) as Record<string, string | undefined>
   const missing = STAGE_KEYS.filter((k) => !ids[k])
@@ -51,7 +52,8 @@ export async function loadSettings(db: SupabaseClient, accountId: string): Promi
 }
 
 export async function loadSession(db: SupabaseClient, conversationId: string): Promise<ReceptionSession | null> {
-  const { data } = await db.from('reception_sessions').select('*').eq('conversation_id', conversationId).maybeSingle()
+  const { data, error } = await db.from('reception_sessions').select('*').eq('conversation_id', conversationId).maybeSingle()
+  if (error) throw new Error(`[reception/store] loadSession: ${error.message}`)
   return data ? toSession(data) : null
 }
 

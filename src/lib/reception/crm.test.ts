@@ -56,6 +56,8 @@ describe('ensureDeal', () => {
       accountId: 'acc', userId: 'u', contactId: 'c', conversationId: 'cv', settings, title: 'T',
     })
     expect(id).toBe('deal-1')
+    const sel = calls.find((c) => c.table === 'deals' && c.op === 'select')!
+    expect(sel.filters).toEqual(expect.arrayContaining([['account_id', 'acc'], ['contact_id', 'c'], ['pipeline_id', 'pipe'], ['status', 'active']]))
     expect(calls.some((c) => c.op === 'insert')).toBe(false)
   })
 
@@ -69,6 +71,16 @@ describe('ensureDeal', () => {
     expect(ins.payload).toMatchObject({
       stage_id: 's-novo', pipeline_id: 'pipe', currency: 'BRL', value: 0, status: 'active',
     })
+  })
+})
+
+describe('ensureDeal lookup error', () => {
+  it('throws instead of creating a duplicate', async () => {
+    const { db, calls } = fakeDb({ 'deals:select': { error: { message: 'boom' } } })
+    await expect(
+      ensureDeal(db, { accountId: 'acc', userId: 'u', contactId: 'c', conversationId: 'cv', settings, title: 'T' }),
+    ).rejects.toThrow(/boom/)
+    expect(calls.some((c) => c.op === 'insert')).toBe(false)
   })
 })
 
@@ -87,8 +99,8 @@ describe('moveDeal / pauseAi / addNote', () => {
   })
   it('addNote inserts contact note', async () => {
     const { db, calls } = fakeDb()
-    await addNote(db, { contactId: 'c', userId: 'u', text: 'oi' })
-    expect(calls[0].payload).toEqual({ contact_id: 'c', user_id: 'u', note_text: 'oi' })
+    await addNote(db, { accountId: 'acc', contactId: 'c', userId: 'u', text: 'oi' })
+    expect(calls[0].payload).toEqual({ account_id: 'acc', contact_id: 'c', user_id: 'u', note_text: 'oi' })
   })
 })
 
@@ -149,6 +161,11 @@ describe('store', () => {
     expect(s.stage).toBe('nicho')
   })
 
+  it('loadSession throws on db error', async () => {
+    const { db } = fakeDb({ 'reception_sessions:select': { error: { message: 'down' } } })
+    await expect(loadSession(db, 'cv')).rejects.toThrow(/down/)
+  })
+
   it('loadSession returns null when missing', async () => {
     const { db } = fakeDb()
     expect(await loadSession(db, 'cv')).toBeNull()
@@ -167,6 +184,10 @@ describe('store', () => {
       account_id: 'acc', enabled: true, pipeline_id: 'pipe',
       stage_ids: settings.stageIds, plans_url: 'https://x.com/planos', last_health_alert_at: null,
     }
+    it('throws on db error', async () => {
+      const { db } = fakeDb({ 'reception_settings:select': { error: { message: 'down' } } })
+      await expect(loadSettings(db, 'acc')).rejects.toThrow(/down/)
+    })
     it('returns null when the row is missing', async () => {
       const { db } = fakeDb()
       expect(await loadSettings(db, 'acc')).toBeNull()
