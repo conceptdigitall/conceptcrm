@@ -13,6 +13,7 @@ const h = vi.hoisted(() => ({
   loadSettings: vi.fn(),
   runReception: vi.fn(),
   buildReceptionDeps: vi.fn(),
+  shouldStart: vi.fn(),
   transcribe: vi.fn(),
   paused: false,
   duplicate: false,
@@ -24,7 +25,11 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }))
 vi.mock('@/lib/reception/store', () => ({ loadSettings: h.loadSettings }))
-vi.mock('@/lib/reception/run', () => ({ runReception: h.runReception, buildReceptionDeps: h.buildReceptionDeps }))
+vi.mock('@/lib/reception/run', () => ({
+  runReception: h.runReception,
+  buildReceptionDeps: h.buildReceptionDeps,
+  shouldStartReception: h.shouldStart,
+}))
 vi.mock('@/lib/reception/audio', () => ({ transcribeEvolutionAudio: h.transcribe }))
 
 type Call = { table: string; op: string; args: unknown[] }
@@ -124,6 +129,7 @@ describe('POST /api/whatsapp/evolution-webhook: recepcionista', () => {
     h.buildReceptionDeps.mockReturnValue({ fake: 'deps' })
     h.runReception.mockResolvedValue('Oi Ana! Qual o seu nicho?')
     h.loadSettings.mockResolvedValue(SETTINGS)
+    h.shouldStart.mockResolvedValue(true)
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'info').mockImplementation(() => {})
@@ -167,6 +173,28 @@ describe('POST /api/whatsapp/evolution-webhook: recepcionista', () => {
     )
     // presença humana mantida
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/chat/sendPresence/'))).toBe(true)
+  })
+
+  it('conversa antiga (já teve resposta do robô/humano) segue com o robô antigo', async () => {
+    h.shouldStart.mockResolvedValue(false)
+
+    const res = await run(inbound())
+
+    expect(res.status).toBe(200)
+    expect(h.shouldStart).toHaveBeenCalledWith(fakeDb, CONV)
+    expect(h.runReception).not.toHaveBeenCalled()
+    expect(h.create).toHaveBeenCalled()
+    expect(sentTexts()).toEqual(['Resposta do robô antigo'])
+  })
+
+  it('shouldStartReception lançando erro: robô antigo, sem 500', async () => {
+    h.shouldStart.mockRejectedValue(new Error('db fora'))
+
+    const res = await run(inbound())
+
+    expect(res.status).toBe(200)
+    expect(h.runReception).not.toHaveBeenCalled()
+    expect(h.create).toHaveBeenCalled()
   })
 
   it('enabled: false segue o caminho antigo', async () => {

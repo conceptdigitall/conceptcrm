@@ -304,6 +304,24 @@ async function book(ctx: Ctx, claimed: ReceptionSession, slot: OfferedSlot): Pro
   return result.replyMessage
 }
 
+/**
+ * Only conversations that never had a non-customer message (bot or human agent) enter the triage;
+ * older ones stay with the legacy robot. An existing session always continues. The "send it in writing"
+ * audio reply does not count: it can be the very first bot message of a brand-new lead.
+ */
+export async function shouldStartReception(db: SupabaseClient, conversationId: string): Promise<boolean> {
+  if (await loadSession(db, conversationId)) return true
+  const { data, error } = await db
+    .from('messages')
+    .select('id')
+    .eq('conversation_id', conversationId)
+    .neq('sender_type', 'customer')
+    .neq('content_text', COPY.audioUnreadable)
+    .limit(1)
+  if (error) throw new Error(`[reception/run] shouldStartReception: ${error.message}`)
+  return !data || data.length === 0
+}
+
 /** Text to send to the lead, or null to stay quiet. Never throws. */
 export async function runReception(input: ReceptionInput, deps: ReceptionDeps): Promise<string | null> {
   const masked = maskPhone(input.senderPhone)

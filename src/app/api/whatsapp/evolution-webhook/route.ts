@@ -11,7 +11,8 @@ import {
   type HistoryRow,
 } from '@/lib/whatsapp/evolution-history';
 import { loadSettings } from '@/lib/reception/store';
-import { buildReceptionDeps, runReception } from '@/lib/reception/run';
+import { buildReceptionDeps, runReception, shouldStartReception } from '@/lib/reception/run';
+import { COPY } from '@/lib/reception/compose';
 import { maskPhone } from '@/lib/reception/ops';
 import { transcribeEvolutionAudio } from '@/lib/reception/audio';
 import type { ReceptionSettings } from '@/lib/reception/types';
@@ -58,7 +59,7 @@ const EVOLUTION_URL = process.env.EVOLUTION_API_URL || 'https://evolution-api-pr
 const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
 
-const AUDIO_UNREADABLE_REPLY = 'Não consegui ouvir o áudio, pode me mandar por escrito?';
+const AUDIO_UNREADABLE_REPLY = COPY.audioUnreadable;
 const AUDIO_PLACEHOLDER = '[áudio]';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -429,7 +430,20 @@ export async function POST(req: Request) {
       }
     }
 
-    const useReception = !!(receptionEnabled && contact?.id && conversationId);
+    // Conversa que já teve resposta do robô ou de um humano fica com o robô antigo;
+    // só conversa nova entra na triagem. Se a checagem falhar, robô antigo.
+    let useReception = !!(receptionEnabled && contact?.id && conversationId);
+    if (useReception && conversationId) {
+      try {
+        useReception = await shouldStartReception(supabaseAdmin(), conversationId);
+      } catch (err) {
+        console.error(
+          `[Evolution Webhook] Falha ao checar conversa existente (lead ${maskPhone(senderNumber)}); usando o robô antigo:`,
+          err instanceof Error ? err.message : err
+        );
+        useReception = false;
+      }
+    }
 
     // ========================================================
     // 2. REGRAS HUMANAS & RESPOSTA INTELIGENTE (CLAUDE)

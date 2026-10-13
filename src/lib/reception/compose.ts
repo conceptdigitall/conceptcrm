@@ -14,6 +14,7 @@ export const COPY = {
   morno: 'Fechado! Os nossos planos estão aqui: {plansUrl}. Se bater alguma dúvida, é só me chamar.',
   handoff: 'Combinado, vou passar a conversa para o João. Ele te responde por aqui em breve.',
   calendarFail: 'Já te mando os horários disponíveis.',
+  audioUnreadable: 'Não consegui ouvir o áudio, pode me mandar por escrito?',
   meetPending: 'Horário reservado! O link do Google Meet chega por aqui em seguida.',
   guardrail: 'Os valores e condições estão nos planos: {plansUrl}. Prazos o João confirma com você na call.',
   lembrete: 'Oi, {firstName}! Passando pra lembrar da nossa call hoje às {hora}. Link: {meetUrl}',

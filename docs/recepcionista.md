@@ -18,6 +18,8 @@ Faça `enabled = false`. O robô antigo volta a responder na hora.
 
 O robô antigo também continua respondendo quando `enabled = false` ou quando as configurações estão incompletas.
 
+Mesmo com `enabled = true`, só conversa nova entra na triagem. Conversa que já teve alguma mensagem do robô ou de um atendente continua com o robô antigo. Conversa que já tem sessão da recepcionista segue nela.
+
 ## Variáveis da Vercel
 
 Todas estão documentadas em `.env.local.example`.

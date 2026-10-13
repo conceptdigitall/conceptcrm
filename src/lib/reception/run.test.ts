@@ -4,7 +4,7 @@ import type { AvailableSlot } from '@/lib/calendar/rules'
 import type { LayaQuestion } from '@/lib/prospecting/columns'
 
 import { COPY, formatOffer } from './compose'
-import { runReception, type ReceptionDeps, type ReceptionInput } from './run'
+import { runReception, shouldStartReception, type ReceptionDeps, type ReceptionInput } from './run'
 import type { ReceptionSettings } from './types'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,8 +24,8 @@ function memoryDb() {
   function from(name: string) {
     let op: 'select' | 'insert' | 'update' | 'upsert' = 'select'
     let payload: any = null
-    const filters: [string, unknown][] = []
-    const matches = (r: Row) => filters.every(([k, v]) => r[k] === v)
+    const filters: [string, unknown, boolean][] = []
+    const matches = (r: Row) => filters.every(([k, v, neg]) => (neg ? r[k] !== v : r[k] === v))
 
     const exec = (): { data: any; error: any } => {
       if (op !== 'select') calls.push({ table: name, op, payload })
@@ -58,7 +58,8 @@ function memoryDb() {
       insert: (p: any) => ((op = 'insert'), (payload = p), b),
       update: (p: any) => ((op = 'update'), (payload = p), b),
       upsert: (p: any) => ((op = 'upsert'), (payload = p), b),
-      eq: (k: string, v: unknown) => (filters.push([k, v]), b),
+      eq: (k: string, v: unknown) => (filters.push([k, v, false]), b),
+      neq: (k: string, v: unknown) => (filters.push([k, v, true]), b),
       order: () => b,
       limit: () => b,
       single: async () => {
@@ -452,5 +453,35 @@ describe('runReception', () => {
     t.deps.phrase = phrase
     expect(await t.say('oi')).toBe('Qual é o seu nicho?')
     expect(phrase).toHaveBeenCalledWith(expect.stringContaining('nicho'), 'oi')
+  })
+})
+
+describe('shouldStartReception', () => {
+  const msg = (sender_type: string, content_text = 'x') => ({ conversation_id: 'conv-1', sender_type, content_text })
+
+  it('conversa nova (só mensagens do lead): começa a triagem', async () => {
+    const { mem } = setup()
+    mem.table('messages').set('m1', msg('customer'))
+    expect(await shouldStartReception(mem.db, 'conv-1')).toBe(true)
+  })
+
+  it.each(['bot', 'agent'])('conversa antiga com mensagem de %s: fica com o robô antigo', async (sender) => {
+    const { mem } = setup()
+    mem.table('messages').set('m1', msg('customer'))
+    mem.table('messages').set('m2', msg(sender))
+    expect(await shouldStartReception(mem.db, 'conv-1')).toBe(false)
+  })
+
+  it('o pedido de áudio por escrito não conta como conversa antiga', async () => {
+    const { mem } = setup()
+    mem.table('messages').set('m1', msg('bot', COPY.audioUnreadable))
+    expect(await shouldStartReception(mem.db, 'conv-1')).toBe(true)
+  })
+
+  it('sessão já existente continua na recepcionista', async () => {
+    const t = setup()
+    await t.say('oi')
+    t.mem.table('messages').set('m1', msg('bot'))
+    expect(await shouldStartReception(t.mem.db, 'conv-1')).toBe(true)
   })
 })
