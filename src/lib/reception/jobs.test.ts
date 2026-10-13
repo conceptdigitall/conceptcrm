@@ -161,6 +161,21 @@ describe('drainReceptionJobs', () => {
     expect(t('messages').filter((m) => m.sender_type === 'bot')).toHaveLength(1)
   })
 
+  it('follow-up com a IA pausada na conversa: não envia, sem nota, job done', async () => {
+    const { db, t } = memoryDb(
+      baseSeed({
+        conversations: [{ id: 'v1', ai_autoreply_disabled: true }],
+        reception_jobs: [{ id: 'j1', account_id: 'a1', kind: 'followup', run_at: past, status: 'pending', attempts: 0, session_id: 's1' }],
+        messages: [{ id: 'm1', conversation_id: 'v1', sender_type: 'customer', created_at: '2026-10-13T10:00:00Z' }],
+      }),
+    )
+    const deps = mkDeps()
+    expect(await drainReceptionJobs(db, NOW, deps)).toEqual({ done: 1, failed: 0 })
+    expect(deps.send).not.toHaveBeenCalled()
+    expect(t('contact_notes')).toHaveLength(0)
+    expect(t('reception_jobs')[0].status).toBe('done')
+  })
+
   it('follow-up is skipped when the session already has an appointment', async () => {
     const { db } = memoryDb(
       baseSeed({

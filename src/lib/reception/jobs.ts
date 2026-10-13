@@ -131,6 +131,13 @@ async function runFollowup(db: SupabaseClient, job: any, now: Date, deps: JobDep
   )
   if (!s || s.stage !== 'concluida' || s.outcome !== 'morno' || s.appointment_id) return
 
+  // IA pausada (João assumiu a conversa): nada de follow-up automático.
+  const conv: any = await must(
+    'conversation',
+    db.from('conversations').select('ai_autoreply_disabled').eq('id', s.conversation_id).maybeSingle() as any,
+  )
+  if (conv?.ai_autoreply_disabled === true) return
+
   const contact = await getContact(db, s.contact_id)
   const last: any = await must(
     'last message',
