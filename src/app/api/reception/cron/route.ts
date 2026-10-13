@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 import { supabaseAdmin } from '@/lib/automations/admin-client'
 import { deploymentAccountScope } from '@/lib/deployment-account'
-import { checkEvolutionHealth, drainReceptionJobs } from '@/lib/reception/jobs'
+import { alertStuckHotLeads, checkEvolutionHealth, drainReceptionJobs } from '@/lib/reception/jobs'
 import { notifyOps } from '@/lib/reception/ops'
 
 /**
@@ -68,6 +68,7 @@ export async function GET(request: Request) {
         const r = await drainReceptionJobs(db, now, { send: sendEvolution, notify, accountId })
         done += r.done
         failed += r.failed
+        await alertStuckHotLeads(db, now, { notify, accountId })
         health[accountId] = await checkEvolutionHealth(db, accountId, now, { notify })
       } catch (err) {
         const msg = (err as Error).message.replace(/\d{8,}/g, '***')

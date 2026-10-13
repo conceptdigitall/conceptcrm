@@ -2,9 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const drain = vi.fn()
 const health = vi.fn()
+const watchdog = vi.fn()
 vi.mock('@/lib/reception/jobs', () => ({
   drainReceptionJobs: (...a: unknown[]) => drain(...a),
   checkEvolutionHealth: (...a: unknown[]) => health(...a),
+  alertStuckHotLeads: (...a: unknown[]) => watchdog(...a),
 }))
 vi.mock('@/lib/reception/ops', () => ({ notifyOps: vi.fn() }))
 vi.mock('@/lib/automations/admin-client', () => ({
@@ -23,6 +25,7 @@ const req = (secret?: string) =>
 beforeEach(() => {
   drain.mockResolvedValue({ done: 1, failed: 0 })
   health.mockResolvedValue('open')
+  watchdog.mockResolvedValue(0)
 })
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -49,6 +52,8 @@ describe('GET /api/reception/cron', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ done: 1, failed: 0, errors: 0, health: { 'acc-1': 'open' } })
     expect(drain.mock.calls[0][2]).toMatchObject({ accountId: 'acc-1' })
+    expect(watchdog).toHaveBeenCalledTimes(1)
+    expect(watchdog.mock.calls[0][2]).toMatchObject({ accountId: 'acc-1' })
   })
 
   it('iterates enabled settings rows when there is no scope', async () => {

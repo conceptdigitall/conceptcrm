@@ -89,3 +89,26 @@ describe('slotLabel', () => {
     expect(slotLabel(new Date('2026-10-14T13:30:00Z'))).toBe('qua, 14/10 às 10h30')
   })
 })
+
+describe('pickOfferSlots em paralelo', () => {
+  it('carrega os dias ao mesmo tempo e mantém a mesma seleção', async () => {
+    const map: Record<string, string[]> = {
+      '2026-10-13': ['10:00'],
+      '2026-10-14': ['09:00', '13:00', '15:00'],
+      '2026-10-15': ['09:00'],
+    }
+    const sequential = await pickOfferSlots(NOW, fakeLoadDay(map))
+    let inFlight = 0
+    let maxInFlight = 0
+    const slow = async (d: string) => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((r) => setTimeout(r, 5))
+      inFlight--
+      return fakeLoadDay(map)(d)
+    }
+    const parallel = await pickOfferSlots(NOW, slow)
+    expect(maxInFlight).toBe(5)
+    expect(parallel).toEqual(sequential)
+  })
+})

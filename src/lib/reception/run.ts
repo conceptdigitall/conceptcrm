@@ -4,7 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AvailableSlot } from '@/lib/calendar/rules'
 import { executeScheduleAppointment } from '@/lib/calendar/ai-calendar-tools'
 import { layaBatch } from '@/lib/laya/client'
-import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator'
+import { arbitrateWithClient } from '@/lib/laya/claude-arbitrator'
 
 import { makeClassify, readAnswer, type Classify, type StageReading } from './classify'
 import { COPY, composeReply, formatOffer, makePhrase, type Phrase } from './compose'
@@ -48,6 +48,8 @@ export function buildReceptionDeps(
   sendWhatsApp: (n: string, t: string) => Promise<unknown>,
 ): ReceptionDeps {
   const layaUrl = process.env.LAYA_URL
+  // Short timeout + 1 retry for every Haiku call: the webhook has 60 s in total.
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 8000, maxRetries: 1 })
   const classify = makeClassify({
     ...(layaUrl
       ? {
@@ -55,9 +57,8 @@ export function buildReceptionDeps(
             (await layaBatch(layaUrl, [text], question, { timeoutMs: 2500, maxAttempts: 1 }))[0],
         }
       : {}),
-    haiku: (text, question, options) => arbitrateWithClaude(text, question, options),
+    haiku: (text, question, options) => arbitrateWithClient(anthropic, text, question, options),
   })
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 8000 })
   return {
     db,
     classify,

@@ -25,6 +25,7 @@ export async function notifyOps(text: string, deps: NotifyDeps = {}): Promise<vo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
+        signal: AbortSignal.timeout(8000),
       })
       if (res && (res as Response).ok === false) {
         console.warn('[reception/ops] Telegram respondeu com erro', (res as Response).status)

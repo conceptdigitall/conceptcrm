@@ -32,6 +32,7 @@ describe('notifyOps', () => {
     const [url, init] = fetchImpl.mock.calls[0]
     expect(url).toBe('https://api.telegram.org/bottok/sendMessage')
     expect(JSON.parse(init.body)).toEqual({ chat_id: '42', text: 'oi' })
+    expect(init.signal).toBeInstanceOf(AbortSignal)
   })
 
   it('falls back to WhatsApp without Telegram', async () => {

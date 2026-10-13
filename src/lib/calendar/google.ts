@@ -101,6 +101,9 @@ export interface CreateEventResult {
   meetCreated: boolean;
 }
 
+/** Cada chamada ao Google tem no máximo 8 s (o webhook inteiro tem 60 s). */
+const GOOGLE_TIMEOUT_MS = 8000;
+
 /**
  * Cria evento real com Google Meet via OAuth (refresh token da conta do João).
  * Escopo: https://www.googleapis.com/auth/calendar.events
@@ -121,6 +124,7 @@ export async function createMeetEvent(
       refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN || '',
       grant_type: 'refresh_token',
     }).toString(),
+    signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
   });
   if (!tokenRes.ok) {
     throw new Error(`oauth_token_failed_${tokenRes.status}`);
@@ -161,6 +165,7 @@ export async function createMeetEvent(
           },
         },
       }),
+      signal: AbortSignal.timeout(GOOGLE_TIMEOUT_MS),
     }
   );
   if (!eventRes.ok) {

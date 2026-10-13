@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 import { COPY } from './compose'
-import { checkEvolutionHealth, drainReceptionJobs, formatHora } from './jobs'
+import { alertStuckHotLeads, checkEvolutionHealth, drainReceptionJobs, formatHora } from './jobs'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
@@ -41,6 +41,7 @@ function memoryDb(seed: Record<string, Row[]>, failOn?: (table: string, op: stri
       update: (p: any) => ((op = 'update'), (payload = p), b),
       eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), b),
       lt: (k: string, v: any) => (filters.push((r) => r[k] < v), b),
+      is: (k: string, v: unknown) => (filters.push((r) => (r[k] ?? null) === v), b),
       lte: (k: string, v: any) => (filters.push((r) => r[k] <= v), b),
       order: (k: string, o?: { ascending?: boolean }) => ((ord = { k, asc: o?.ascending !== false }), b),
       limit: (n: number) => ((lim = n), b),
@@ -306,5 +307,42 @@ describe('checkEvolutionHealth', () => {
     const r = await checkEvolutionHealth(db, 'a1', new Date(NOW.getTime() + 61 * 60000), { fetchImpl: f as any, notify })
     expect(r).toBe('down')
     expect(notify).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('alertStuckHotLeads (watchdog)', () => {
+  const old = '2026-10-13T11:40:00Z' // 20 min antes de NOW
+  const recent = '2026-10-13T11:55:00Z' // 5 min antes
+  const hot = (over: Row = {}) => ({
+    id: 's1', account_id: 'a1', contact_id: 'c1', conversation_id: 'v1',
+    stage: 'concluida', outcome: 'quente', appointment_id: null, alerted_at: null, updated_at: old, ...over,
+  })
+
+  it('avisa uma vez o lead quente preso em concluida sem reunião há mais de 10 min e grava alerted_at', async () => {
+    const { db, t } = memoryDb({ reception_sessions: [hot()] })
+    const notify = vi.fn().mockResolvedValue(undefined)
+    expect(await alertStuckHotLeads(db, NOW, { notify })).toBe(1)
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(notify.mock.calls[0][0]).toMatch(/sem reunião/)
+    expect(t('reception_sessions')[0].alerted_at).toBe(NOW.toISOString())
+
+    expect(await alertStuckHotLeads(db, NOW, { notify })).toBe(0)
+    expect(notify).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignora sessão recente, com reunião, já avisada, morna ou de outra conta', async () => {
+    const { db } = memoryDb({
+      reception_sessions: [
+        hot({ id: 'r', updated_at: recent }),
+        hot({ id: 'ap', appointment_id: 'ap1' }),
+        hot({ id: 'al', alerted_at: old }),
+        hot({ id: 'mo', outcome: 'morno' }),
+        hot({ id: 'ag', stage: 'agendando' }),
+        hot({ id: 'ot', account_id: 'a2' }),
+      ],
+    })
+    const notify = vi.fn().mockResolvedValue(undefined)
+    expect(await alertStuckHotLeads(db, NOW, { notify, accountId: 'a1' })).toBe(0)
+    expect(notify).not.toHaveBeenCalled()
   })
 })

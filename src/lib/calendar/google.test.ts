@@ -149,6 +149,17 @@ describe('Google Calendar service & unified integration', () => {
       expect(result.meetUrl).toBe('https://meet.google.com/new');
     });
 
+    it('createMeetEvent limita OAuth e Calendar com AbortSignal', async () => {
+      setOauth();
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'at' }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'evt-3', hangoutLink: 'https://meet.google.com/a-b-c' }) });
+      await createMeetEvent(baseParams, { fetchImpl: fetchImpl as unknown as typeof fetch });
+      expect(fetchImpl.mock.calls[0][1].signal).toBeInstanceOf(AbortSignal);
+      expect(fetchImpl.mock.calls[1][1].signal).toBeInstanceOf(AbortSignal);
+    });
+
     it('createMeetEvent throws when hangoutLink is missing', async () => {
       setOauth();
       const fetchImpl = vi

@@ -56,17 +56,20 @@ export async function pickOfferSlots(
   const earliest = now.getTime() + MIN_LEAD_MS
   const skipSet = new Set(skip)
 
-  const days: AvailableSlot[][] = []
+  const dates: string[] = []
   let cursor = saoPauloDateStr(now)
-  let businessDays = 0
-  for (let i = 0; i < MAX_SCAN_DAYS && businessDays < BUSINESS_DAYS; i++, cursor = addDays(cursor, 1)) {
-    if (!isWeekday(cursor)) continue
-    businessDays++
-    const slots = (await loadDay(cursor))
-      .filter((s) => s.dateObj.getTime() >= earliest && !skipSet.has(s.iso))
-      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime())
-    if (slots.length > 0) days.push(slots)
+  for (let i = 0; i < MAX_SCAN_DAYS && dates.length < BUSINESS_DAYS; i++, cursor = addDays(cursor, 1)) {
+    if (isWeekday(cursor)) dates.push(cursor)
   }
+  // All days at once (the webhook has 60 s); the order of `dates` keeps the same selection.
+  const loaded = await Promise.all(dates.map((d) => loadDay(d)))
+  const days: AvailableSlot[][] = loaded
+    .map((slots) =>
+      slots
+        .filter((s) => s.dateObj.getTime() >= earliest && !skipSet.has(s.iso))
+        .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime()),
+    )
+    .filter((slots) => slots.length > 0)
 
   const picked: AvailableSlot[] = []
   const first = days[0]

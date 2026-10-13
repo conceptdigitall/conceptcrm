@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS reception_sessions (
   offered_slots JSONB NOT NULL DEFAULT '[]',
   slot_rounds INT NOT NULL DEFAULT 0,
   appointment_id UUID REFERENCES appointments(id) ON DELETE SET NULL,
+  -- watchdog do cron: lead quente em concluida sem reunião já avisado ao João
+  alerted_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -29,7 +29,16 @@ export async function arbitrateWithClaude(
   if (!client) {
     throw new Error('ANTHROPIC_API_KEY não configurada para escalonamento');
   }
+  return arbitrateWithClient(client, leadContext, question, allowedOptions);
+}
 
+/** Mesmo árbitro, com um cliente Anthropic do chamador (ex.: timeout curto na recepcionista). */
+export async function arbitrateWithClient(
+  client: Anthropic,
+  leadContext: string,
+  question: LayaQuestion,
+  allowedOptions: string[],
+): Promise<string> {
   const optionsList = allowedOptions.length > 0 ? allowedOptions.join(' | ') : 'sim | não';
 
   const prompt = [

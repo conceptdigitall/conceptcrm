@@ -11,6 +11,7 @@ const STUCK_MS = 30 * 60 * 1000
 const RETRY_MS = 5 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 const HEALTH_REALERT_MS = 60 * 60 * 1000
+const HOT_STUCK_MS = 10 * 60 * 1000
 
 export interface JobDeps {
   send: (phone: string, text: string) => Promise<unknown>
@@ -236,6 +237,45 @@ export async function drainReceptionJobs(
     }
   }
   return { done, failed }
+}
+
+/**
+ * Watchdog: lead quente em `concluida` sem reunião há mais de 10 min (agendamento caiu no meio,
+ * ex.: timeout da função). Avisa o João uma vez por sessão (marca `alerted_at`).
+ */
+export async function alertStuckHotLeads(
+  db: SupabaseClient,
+  now: Date,
+  deps: { notify: (text: string) => Promise<void>; accountId?: string },
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - HOT_STUCK_MS).toISOString()
+  let q = db
+    .from('reception_sessions')
+    .select('id, contact_id')
+    .eq('stage', 'concluida')
+    .eq('outcome', 'quente')
+    .is('appointment_id', null)
+    .is('alerted_at', null)
+    .lt('updated_at', cutoff)
+  if (deps.accountId) q = q.eq('account_id', deps.accountId)
+  const { data, error } = await q
+  if (error) throw new Error(`[reception/jobs] watchdog: ${error.message}`)
+
+  let alerted = 0
+  for (const s of (data ?? []) as any[]) {
+    const { data: claimed } = await db
+      .from('reception_sessions')
+      .update({ alerted_at: now.toISOString() })
+      .eq('id', s.id)
+      .is('alerted_at', null)
+      .select('id')
+    if (!claimed || claimed.length === 0) continue
+    alerted++
+    await deps.notify(
+      `Recepcionista: lead quente (contato ${String(s.contact_id).slice(0, 8)}) ficou sem reunião marcada. Confira a agenda e chame o lead.`,
+    )
+  }
+  return alerted
 }
 
 export async function checkEvolutionHealth(
