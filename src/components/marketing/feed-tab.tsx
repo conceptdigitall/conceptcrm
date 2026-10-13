@@ -70,10 +70,10 @@ export function FeedTab({
           </span>
           <Button
             onClick={onOpenCreate}
-            className="bg-[#FCE026] hover:bg-[#e5ca1f] text-[#04081E] font-bold text-sm h-10 px-4 rounded-xl gap-1.5 shadow-sm"
+            className="hidden lg:inline-flex bg-[#FCE026] hover:bg-[#e5ca1f] text-[#04081E] font-bold text-sm h-10 px-4 rounded-xl gap-1.5 shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            + Criar post
+            Criar post
           </Button>
         </div>
 

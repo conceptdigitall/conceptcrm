@@ -42,7 +42,7 @@ export function MarketingTabsHeader({
             </Badge>
           </div>
           <p className="text-sm text-[#9FB0E6]">
-            @{instagramUsername} · 5 dias seguidos postando
+            @{instagramUsername}
           </p>
         </div>
 
@@ -58,7 +58,7 @@ export function MarketingTabsHeader({
         )}
       </header>
 
-      <nav className="flex items-center gap-2 overflow-x-auto scrollbar-none" aria-label="Subabas de marketing">
+      <nav className="grid grid-cols-5 gap-1 md:flex md:gap-2" aria-label="Subabas de marketing">
         {TABS.map((t) => {
           const isActive = currentTab === t.id;
           return (
@@ -66,7 +66,7 @@ export function MarketingTabsHeader({
               key={t.id}
               type="button"
               onClick={() => onTabChange(t.id)}
-              className={`flex items-center h-10 px-4 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+              className={`flex items-center justify-center h-10 px-1 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
                 isActive
                   ? 'bg-[#0624C7] text-white shadow-sm border border-[#14245C]'
                   : 'text-[#9FB0E6] hover:text-white hover:bg-[#0D1948]'
