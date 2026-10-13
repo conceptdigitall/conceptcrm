@@ -433,6 +433,29 @@ describe('runReception', () => {
     expect(t.mem.table('reception_sessions').size).toBe(1)
   })
 
+  it('rajada de 1ªs mensagens: só quem cria a sessão cria o deal', async () => {
+    const t = setup()
+    const replies = await Promise.all([t.say('oi'), t.say('tudo bem?'), t.say('sou dentista')])
+    expect(replies.filter((r) => r !== null)).toHaveLength(1)
+    expect(t.mem.table('deals').size).toBe(1)
+    expect(t.session().deal_id).toBe(t.deal().id)
+  })
+
+  it('ensureDeal falha depois de criar a sessão: avisa e segue cumprimentando', async () => {
+    const t = setup()
+    const from = t.mem.db.from
+    t.deps.db = {
+      from: (name: string) => {
+        if (name === 'deals') throw new Error('deals fora')
+        return from(name)
+      },
+    } as unknown as SupabaseClient
+    expect(await t.say('oi')).toBe(COPY.ask.nicho)
+    expect(t.session()).toMatchObject({ stage: 'nicho' })
+    expect(t.session().deal_id ?? null).toBeNull()
+    expect(t.sendWhatsApp).toHaveBeenCalledWith(OPS, expect.stringContaining('***7777'))
+  })
+
   it('agenda sem Meet: responde meetPending e avisa o João', async () => {
     const t = setup()
     t.schedule.mockImplementation(async () => ({

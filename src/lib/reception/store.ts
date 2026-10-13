@@ -77,6 +77,12 @@ export async function createSession(
   return toSession(data)
 }
 
+/** Records the deal on the session without touching anything else (the stage may already have moved on). */
+export async function setSessionDeal(db: SupabaseClient, sessionId: string, dealId: string): Promise<void> {
+  const { error } = await db.from('reception_sessions').update({ deal_id: dealId }).eq('id', sessionId)
+  if (error) throw new Error(`[reception/store] setSessionDeal: ${error.message}`)
+}
+
 /** Optimistic save: only applies if the stored stage is still `prevStage`. False = lost the race. */
 export async function saveSession(
   db: SupabaseClient,

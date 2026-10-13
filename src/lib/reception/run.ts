@@ -12,7 +12,7 @@ import { ensureDeal, moveDeal, pauseAi, tagContact } from './crm'
 import { advance, type Action } from './machine'
 import { maskPhone, notifyOps, parseOrigin } from './ops'
 import { isSlotStillFree, makeLoadDay, pickOfferSlots } from './slots'
-import { createSession, enqueueJob, loadSession, saveSession } from './store'
+import { createSession, enqueueJob, loadSession, saveSession, setSessionDeal } from './store'
 import type { Answers, OfferedSlot, ReceptionSession, ReceptionSettings } from './types'
 
 
@@ -127,21 +127,15 @@ function fallbackReply(s: ReceptionSession): string | null {
 
 async function startSession(ctx: Ctx): Promise<string | null> {
   const { input, deps } = ctx
-  const dealId = await ensureDeal(deps.db, {
-    accountId: input.accountId,
-    userId: input.userId,
-    contactId: input.contactId,
-    conversationId: input.conversationId,
-    settings: input.settings,
-    title: input.senderName?.trim() || 'Novo Lead',
-  })
+  // Session first: the UNIQUE(conversation_id) picks one winner in a burst of first messages,
+  // and only the winner creates the deal (no duplicate deals).
   let session: ReceptionSession
   try {
     session = await createSession(deps.db, {
       accountId: input.accountId,
       contactId: input.contactId,
       conversationId: input.conversationId,
-      dealId,
+      dealId: null,
       origin: parseOrigin(input.text),
     })
   } catch (err) {
@@ -149,6 +143,19 @@ async function startSession(ctx: Ctx): Promise<string | null> {
     if (await loadSession(deps.db, input.conversationId)) return null
     throw err
   }
+
+  await bestEffort(ctx, 'criar deal', async () => {
+    const dealId = await ensureDeal(deps.db, {
+      accountId: input.accountId,
+      userId: input.userId,
+      contactId: input.contactId,
+      conversationId: input.conversationId,
+      settings: input.settings,
+      title: input.senderName?.trim() || 'Novo Lead',
+    })
+    await setSessionDeal(deps.db, session.id, dealId)
+    session = { ...session, dealId }
+  })
 
   // The 1st message never counts as an answer nor as "unclear": only a request for a human matters.
   // `concluida` makes readAnswer ask the human question alone.
