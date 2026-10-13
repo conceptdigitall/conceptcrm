@@ -33,6 +33,8 @@ Todas estão documentadas em `.env.local.example`.
 | `ADMIN_WHATSAPP_NUMBERS` | números de administradores |
 | `AUTOMATION_CRON_SECRET` | segredo do cron |
 
+Áudio só é transcrito com `enabled = true`. Desligada (ou com as configurações incompletas), a mensagem de áudio é ignorada como antes. A transcrição roda depois da checagem de duplicada e da pausa da IA, com orçamento total de 15 s. A mensagem fica gravada como `[áudio]` e depois recebe o texto transcrito.
+
 Sem a chave Groq ou OpenAI, todo áudio recebe: "Não consegui ouvir o áudio, pode me mandar por escrito?".
 
 A instância da Evolution precisa guardar as mensagens. Sem isso, o download do áudio falha.

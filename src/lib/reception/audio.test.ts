@@ -101,4 +101,17 @@ describe('transcribeEvolutionAudio', () => {
     }) as unknown as typeof fetch
     expect(await transcribeEvolutionAudio('MSG123', { fetchImpl: f })).toBeNull()
   })
+
+  it('download e Whisper dividem um único orçamento de tempo (mesmo AbortSignal)', async () => {
+    process.env.GROQ_API_KEY = 'groq-key'
+    const timeout = vi.spyOn(AbortSignal, 'timeout')
+    const { f, calls } = fakeFetch()
+
+    await transcribeEvolutionAudio('MSG123', { fetchImpl: f })
+
+    expect(timeout).toHaveBeenCalledTimes(1)
+    expect(timeout.mock.calls[0][0]).toBeLessThanOrEqual(15000)
+    expect(calls[0].init.signal).toBeInstanceOf(AbortSignal)
+    expect(calls[1].init.signal).toBe(calls[0].init.signal)
+  })
 })

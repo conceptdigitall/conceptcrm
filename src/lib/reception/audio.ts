@@ -5,7 +5,8 @@
 
 const DEFAULT_EVOLUTION_URL = 'https://evolution-api-production-0d4c.up.railway.app'
 const DEFAULT_INSTANCE = 'concept-atendimento'
-const TIMEOUT_MS = 20000
+/** Orçamento total (download + Whisper) dentro dos 60 s do webhook. */
+const TOTAL_BUDGET_MS = 15000
 
 export interface TranscribeDeps {
   fetchImpl?: typeof fetch
@@ -40,6 +41,8 @@ export async function transcribeEvolutionAudio(messageKeyId: string, deps: Trans
       return null
     }
     const f = deps.fetchImpl ?? fetch
+    // Um único sinal para as duas chamadas: o tempo do download conta no da transcrição.
+    const signal = AbortSignal.timeout(TOTAL_BUDGET_MS)
     const evolutionUrl = process.env.EVOLUTION_API_URL || DEFAULT_EVOLUTION_URL
     const instance = process.env.EVOLUTION_INSTANCE_NAME || DEFAULT_INSTANCE
 
@@ -47,7 +50,7 @@ export async function transcribeEvolutionAudio(messageKeyId: string, deps: Trans
       method: 'POST',
       headers: { apikey: evolutionKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: { key: { id: messageKeyId } }, convertToMp4: false }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal,
     })
     if (!mediaRes.ok) {
       console.warn('[reception/audio] Evolution não devolveu o áudio:', mediaRes.status)
@@ -70,7 +73,7 @@ export async function transcribeEvolutionAudio(messageKeyId: string, deps: Trans
       method: 'POST',
       headers: { Authorization: `Bearer ${provider.key}` },
       body: form,
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal,
     })
     if (!sttRes.ok) {
       console.warn('[reception/audio] Transcrição falhou:', sttRes.status)

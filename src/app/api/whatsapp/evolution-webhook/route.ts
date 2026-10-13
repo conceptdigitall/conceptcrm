@@ -59,6 +59,7 @@ const EVOLUTION_KEY = process.env.EVOLUTION_API_KEY;
 const INSTANCE = process.env.EVOLUTION_INSTANCE_NAME || 'concept-atendimento';
 
 const AUDIO_UNREADABLE_REPLY = 'Não consegui ouvir o áudio, pode me mandar por escrito?';
+const AUDIO_PLACEHOLDER = '[áudio]';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -216,21 +217,10 @@ export async function POST(req: Request) {
       data?.message?.extendedTextMessage?.text ||
       '';
 
-    // Áudio: transcreve (Whisper). Sem transcrição, grava '[áudio]' e pede por escrito.
-    let contentType: 'text' | 'audio' = 'text';
-    let audioUnreadable = false;
-    if (!messageText.trim() && data?.message?.audioMessage) {
-      contentType = 'audio';
-      const transcript = key?.id ? await transcribeEvolutionAudio(String(key.id)) : null;
-      if (transcript && transcript.trim()) {
-        messageText = transcript.trim();
-      } else {
-        messageText = '[áudio]';
-        audioUnreadable = true;
-      }
-    }
-
-    if (!messageText.trim()) {
+    // Áudio sem texto: só a recepcionista (reception_settings.enabled) transcreve.
+    // Desligada (ou settings com erro) → igual à main: ignored_empty_text.
+    const isAudio = !messageText.trim() && !!data?.message?.audioMessage;
+    if (!messageText.trim() && !isAudio) {
       return NextResponse.json({ status: 'ignored_empty_text' });
     }
 
@@ -243,14 +233,38 @@ export async function POST(req: Request) {
     const senderNumber = rawNumber.replace(/\D/g, '') || rawNumber;
     const senderName = data?.pushName || 'Novo Lead';
 
-    console.log(
-      `[Nova Mensagem] ${maskPhone(senderNumber)}: ${contentType === 'audio' ? `[áudio, ${messageText.length} chars]` : messageText}`
-    );
-
     // ========================================================
     // 1. GRAVAR NO BANCO DO CRM (SUPABASE) PARA MOSTRAR NA INBOX
     // ========================================================
-    const { accountId, userId } = await getAccountAndUser();
+    let account: { accountId: string; userId: string };
+    try {
+      account = await getAccountAndUser();
+    } catch (err) {
+      if (isAudio) return NextResponse.json({ status: 'ignored_empty_text' });
+      throw err;
+    }
+    const { accountId, userId } = account;
+
+    // Recepcionista (funil fase 1): só quando reception_settings.enabled nesta conta.
+    // Se a leitura falhar, o robô antigo segue respondendo como antes.
+    let settings: ReceptionSettings | null = null;
+    try {
+      settings = await loadSettings(supabaseAdmin(), accountId);
+    } catch (err) {
+      console.error(
+        `[Evolution Webhook] Falha ao ler reception_settings (lead ${maskPhone(senderNumber)}); usando o robô antigo:`,
+        err instanceof Error ? err.message : err
+      );
+    }
+    const receptionEnabled = settings?.enabled === true;
+
+    if (isAudio && !receptionEnabled) {
+      return NextResponse.json({ status: 'ignored_empty_text' });
+    }
+    const contentType: 'text' | 'audio' = isAudio ? 'audio' : 'text';
+    if (isAudio) messageText = AUDIO_PLACEHOLDER;
+
+    console.log(`[Nova Mensagem] ${maskPhone(senderNumber)}: ${isAudio ? AUDIO_PLACEHOLDER : messageText}`);
 
     // 2. Localizar ou criar o contato de forma segura
     let contact: { id: string } | null = null;
@@ -300,6 +314,7 @@ export async function POST(req: Request) {
 
     // 3. Localizar ou criar a conversa (conversation) para aparecer na Inbox
     let conversationId: string | null = null;
+    let savedMessageRowId: string | null = null;
     if (contact?.id) {
       const { data: conv, error: convFetchErr } = await supabaseAdmin()
         .from('conversations')
@@ -386,6 +401,7 @@ export async function POST(req: Request) {
           console.info('[Evolution Webhook] Mensagem duplicada ignorada (idempotente):', messageId);
           return NextResponse.json({ status: 'duplicate_ignored' });
         }
+        savedMessageRowId = (insertedRows?.[0]?.id as string | undefined) ?? null;
       }
     }
 
@@ -395,24 +411,25 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'ai_paused' });
     }
 
-    // Áudio que não deu para transcrever: pede por escrito (só com a IA ativa, checado acima).
-    if (audioUnreadable) {
-      await sendAndRecordBotReply(remoteJid, conversationId, AUDIO_UNREADABLE_REPLY);
-      return NextResponse.json({ status: 'audio_unreadable' });
+    // Áudio (só com a recepcionista ligada): transcreve DEPOIS do dedup e da pausa,
+    // então retentativas e conversas pausadas não chamam o Whisper.
+    if (isAudio) {
+      const transcript = key?.id ? await transcribeEvolutionAudio(String(key.id)) : null;
+      if (!transcript || !transcript.trim()) {
+        await sendAndRecordBotReply(remoteJid, conversationId, AUDIO_UNREADABLE_REPLY);
+        return NextResponse.json({ status: 'audio_unreadable' });
+      }
+      messageText = transcript.trim();
+      if (savedMessageRowId) {
+        const { error: updErr } = await supabaseAdmin()
+          .from('messages')
+          .update({ content_text: messageText })
+          .eq('id', savedMessageRowId);
+        if (updErr) console.error('[Evolution Webhook] Erro ao gravar a transcrição do áudio:', updErr.message);
+      }
     }
 
-    // Recepcionista (funil fase 1): só quando reception_settings.enabled nesta conta.
-    // Se a leitura falhar, o robô antigo segue respondendo como antes.
-    let settings: ReceptionSettings | null = null;
-    try {
-      settings = await loadSettings(supabaseAdmin(), accountId);
-    } catch (err) {
-      console.error(
-        `[Evolution Webhook] Falha ao ler reception_settings (lead ${maskPhone(senderNumber)}); usando o robô antigo:`,
-        err instanceof Error ? err.message : err
-      );
-    }
-    const useReception = !!(settings?.enabled && contact?.id && conversationId);
+    const useReception = !!(receptionEnabled && contact?.id && conversationId);
 
     // ========================================================
     // 2. REGRAS HUMANAS & RESPOSTA INTELIGENTE (CLAUDE)

@@ -15,6 +15,7 @@ const h = vi.hoisted(() => ({
   buildReceptionDeps: vi.fn(),
   transcribe: vi.fn(),
   paused: false,
+  duplicate: false,
 }))
 
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -37,7 +38,7 @@ function result(table: string, ops: string[]) {
     return { data: { id: CONV, unread_count: 0, ai_autoreply_disabled: h.paused }, error: null }
   }
   if (table === 'messages') {
-    if (ops.includes('upsert')) return { data: [{ id: 'm1' }], error: null }
+    if (ops.includes('upsert')) return { data: h.duplicate ? [] : [{ id: 'm1' }], error: null }
     if (ops.includes('order')) return { data: [], error: null } // histórico do robô antigo
     return { data: null, error: null }
   }
@@ -99,6 +100,7 @@ const sentTexts = () =>
     .filter(([url]) => String(url).includes('/message/sendText/'))
     .map(([, init]) => JSON.parse(String((init as RequestInit).body)).text as string)
 const inserts = (table: string) => calls.filter((c) => c.table === table && c.op === 'insert').map((c) => c.args[0])
+const updates = (table: string) => calls.filter((c) => c.table === table && c.op === 'update').map((c) => c.args[0])
 const upserts = (table: string) => calls.filter((c) => c.table === table && c.op === 'upsert').map((c) => c.args[0])
 
 async function run(req: Request) {
@@ -113,6 +115,7 @@ describe('POST /api/whatsapp/evolution-webhook: recepcionista', () => {
   beforeEach(() => {
     calls.length = 0
     h.paused = false
+    h.duplicate = false
     process.env = { ...originalEnv, EVOLUTION_WEBHOOK_SECRET: 's3cret', CRM_ACCOUNT_ID: ACCOUNT, ANTHROPIC_API_KEY: 'sk-test' }
     vi.useFakeTimers()
     fetchMock = vi.fn(async () => Response.json({ ok: true }))
@@ -210,27 +213,45 @@ describe('POST /api/whatsapp/evolution-webhook: recepcionista', () => {
     expect(h.create).not.toHaveBeenCalled()
   })
 
-  it('áudio transcrito: grava como audio com a transcrição e a recepcionista recebe o texto', async () => {
+  it('áudio transcrito: grava [áudio] primeiro, atualiza com a transcrição e a recepcionista recebe o texto', async () => {
     h.transcribe.mockResolvedValue('sou dentista em Santos')
 
     await run(inbound({ audioMessage: { seconds: 4, mimetype: 'audio/ogg; codecs=opus' } }))
 
     expect(h.transcribe).toHaveBeenCalledWith('WAMSG1')
     expect(upserts('messages')).toContainEqual(
-      expect.objectContaining({ content_type: 'audio', content_text: 'sou dentista em Santos', sender_type: 'customer' }),
+      expect.objectContaining({ content_type: 'audio', content_text: '[áudio]', sender_type: 'customer' }),
     )
+    expect(updates('messages')).toContainEqual({ content_text: 'sou dentista em Santos' })
     expect(h.runReception.mock.calls[0][0].text).toBe('sou dentista em Santos')
   })
 
-  it('áudio transcrito também vale para o robô antigo', async () => {
-    h.loadSettings.mockResolvedValue(null)
+  it.each([
+    ['enabled: false', () => h.loadSettings.mockResolvedValue({ ...SETTINGS, enabled: false })],
+    ['sem configuração', () => h.loadSettings.mockResolvedValue(null)],
+    ['loadSettings com erro', () => h.loadSettings.mockRejectedValue(new Error('db fora'))],
+  ])('recepcionista desligada (%s): áudio é ignorado como na main, sem transcrever nem gravar', async (_, arrange) => {
+    arrange()
     h.transcribe.mockResolvedValue('quanto custa um site?')
 
-    await run(inbound({ audioMessage: { seconds: 4 } }))
+    const res = await run(inbound({ audioMessage: { seconds: 4 } }))
 
-    expect(h.create).toHaveBeenCalled()
-    const msgs = h.create.mock.calls[0][0].messages as { role: string; content: string }[]
-    expect(JSON.stringify(msgs)).toContain('quanto custa um site?')
+    expect(await res.json()).toEqual({ status: 'ignored_empty_text' })
+    expect(h.transcribe).not.toHaveBeenCalled()
+    expect(upserts('messages')).toEqual([])
+    expect(sentTexts()).toEqual([])
+    expect(h.create).not.toHaveBeenCalled()
+  })
+
+  it('retentativa duplicada de áudio não chama o Whisper', async () => {
+    h.duplicate = true
+    h.transcribe.mockResolvedValue('sou dentista')
+
+    const res = await run(inbound({ audioMessage: { seconds: 4 } }))
+
+    expect(await res.json()).toEqual({ status: 'duplicate_ignored' })
+    expect(h.transcribe).not.toHaveBeenCalled()
+    expect(h.runReception).not.toHaveBeenCalled()
   })
 
   it('áudio sem transcrição: grava [áudio] e pede por escrito, sem chamar recepcionista nem Claude', async () => {
@@ -257,6 +278,7 @@ describe('POST /api/whatsapp/evolution-webhook: recepcionista', () => {
     expect(await res.json()).toEqual({ status: 'ai_paused' })
     expect(upserts('messages')).toContainEqual(expect.objectContaining({ content_type: 'audio', content_text: '[áudio]' }))
     expect(sentTexts()).toEqual([])
+    expect(h.transcribe).not.toHaveBeenCalled()
   })
 
   it('não loga telefone completo nem a transcrição', async () => {
