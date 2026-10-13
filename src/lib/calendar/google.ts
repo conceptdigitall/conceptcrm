@@ -97,12 +97,85 @@ export interface CreateEventResult {
   eventId: string;
   meetUrl: string;
   calendarUrl: string;
+  /** true quando o link é de uma reunião Meet real (não o link genérico /new) */
+  meetCreated: boolean;
+}
+
+/**
+ * Cria evento real com Google Meet via OAuth (refresh token da conta do João).
+ * Escopo: https://www.googleapis.com/auth/calendar.events
+ */
+export async function createMeetEvent(
+  p: CreateEventParams,
+  deps: { fetchImpl?: typeof fetch } = {}
+): Promise<{ eventId: string; meetUrl: string }> {
+  const doFetch = deps.fetchImpl ?? fetch;
+  const duration = p.durationMinutes ?? 30;
+
+  const tokenRes = await doFetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+      client_secret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+      refresh_token: process.env.GOOGLE_OAUTH_REFRESH_TOKEN || '',
+      grant_type: 'refresh_token',
+    }).toString(),
+  });
+  if (!tokenRes.ok) {
+    throw new Error(`oauth_token_failed_${tokenRes.status}`);
+  }
+  const tokenJson = (await tokenRes.json()) as { access_token?: string };
+  if (!tokenJson.access_token) throw new Error('oauth_token_missing');
+
+  const calendarId = process.env.GOOGLE_CALENDAR_ID || 'primary';
+  const end = new Date(p.startDate.getTime() + duration * 60000);
+  const description = [
+    p.clientName ? `Reunião com: ${p.clientName}` : null,
+    p.clientPhone ? `WhatsApp: ${p.clientPhone}` : null,
+    p.company ? `Empresa: ${p.company}` : null,
+    p.clientEmail ? `E-mail: ${p.clientEmail}` : null,
+    p.notes ? `Notas: ${p.notes}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const eventRes = await doFetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?conferenceDataVersion=1&sendUpdates=all`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${tokenJson.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        summary: p.title,
+        description,
+        start: { dateTime: p.startDate.toISOString(), timeZone: 'America/Sao_Paulo' },
+        end: { dateTime: end.toISOString(), timeZone: 'America/Sao_Paulo' },
+        attendees: p.clientEmail ? [{ email: p.clientEmail }] : [],
+        conferenceData: {
+          createRequest: {
+            requestId: crypto.randomUUID(),
+            conferenceSolutionKey: { type: 'hangoutsMeet' },
+          },
+        },
+      }),
+    }
+  );
+  if (!eventRes.ok) {
+    throw new Error(`calendar_insert_failed_${eventRes.status}`);
+  }
+  const json = (await eventRes.json()) as { id?: string; hangoutLink?: string };
+  if (!json.hangoutLink) throw new Error('calendar_missing_hangout_link');
+
+  return { eventId: json.id || `gcal-${Date.now()}`, meetUrl: json.hangoutLink };
 }
 
 /**
  * Cria o evento no Google Calendar utilizando o melhor canal disponível:
- * 1. Webhook n8n (se configurado)
- * 2. Service Account do Google Cloud (se configurado)
+ * 1. OAuth (refresh token) com Meet real (se configurado)
+ * 2. Webhook n8n (se configurado)
  * 3. Link universal de calendário + Google Meet padrão (modo resiliente)
  */
 export async function createCalendarEvent(params: CreateEventParams): Promise<CreateEventResult> {
@@ -140,6 +213,23 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<Cr
     location: defaultMeetUrl,
   });
 
+  // 1. OAuth: evento real com Google Meet
+  if (
+    process.env.GOOGLE_OAUTH_CLIENT_ID &&
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET &&
+    process.env.GOOGLE_OAUTH_REFRESH_TOKEN
+  ) {
+    try {
+      const meet = await createMeetEvent(params);
+      return { eventId: meet.eventId, meetUrl: meet.meetUrl, calendarUrl, meetCreated: true };
+    } catch (err) {
+      console.warn(
+        '[GoogleCalendar] Falha ao criar Meet via OAuth:',
+        err instanceof Error ? err.message : 'erro desconhecido'
+      );
+    }
+  }
+
   // Se houver Webhook (ex: n8n) configurado
   if (status.hasWebhook && process.env.GOOGLE_CALENDAR_WEBHOOK_URL) {
     try {
@@ -165,6 +255,7 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<Cr
           eventId: data.eventId || `gcal-webhook-${Date.now()}`,
           meetUrl: data.meetUrl || defaultMeetUrl,
           calendarUrl,
+          meetCreated: Boolean(data.meetUrl),
         };
       }
     } catch (err) {
@@ -177,6 +268,7 @@ export async function createCalendarEvent(params: CreateEventParams): Promise<Cr
     eventId: `concept-appt-${Date.now()}`,
     meetUrl: defaultMeetUrl,
     calendarUrl,
+    meetCreated: false,
   };
 }
 

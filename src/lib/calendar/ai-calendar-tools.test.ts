@@ -110,5 +110,17 @@ describe('AI Calendar Tools (WhatsApp integration)', () => {
       expect(result.replyMessage).toContain(result.meetUrl);
       expect(result.replyMessage).not.toContain('**'); // Regra sem markdown/asteriscos
     });
+
+    it('stores deal_id on the appointment insert and exposes meetCreated', async () => {
+      const result = await executeScheduleAppointment({
+        datetimeIso: '2026-10-12T14:30:00-03:00',
+        clientName: 'Dr. Leonardo',
+        accountId: 'acc-uuid-1',
+        dealId: 'deal-uuid-1',
+      });
+
+      expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ deal_id: 'deal-uuid-1' }));
+      expect(typeof result.meetCreated).toBe('boolean');
+    });
   });
 });

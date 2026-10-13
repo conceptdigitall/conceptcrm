@@ -135,6 +135,7 @@ export interface ScheduleAppointmentToolParams {
   accountId?: string | null;
   userId?: string | null;
   conversationId?: string | null;
+  dealId?: string | null;
   sendEvolutionMessage?: (toPhone: string, text: string) => Promise<unknown>;
 }
 
@@ -143,6 +144,7 @@ export interface ScheduleAppointmentToolResult {
   appointmentId?: string;
   meetUrl: string;
   calendarUrl: string;
+  meetCreated: boolean;
   replyMessage: string;
 }
 
@@ -163,6 +165,7 @@ export async function executeScheduleAppointment(
     contactId,
     accountId,
     userId,
+    dealId,
     sendEvolutionMessage,
   } = params;
 
@@ -250,6 +253,7 @@ export async function executeScheduleAppointment(
     if (contactId) appointmentPayload.contact_id = contactId;
     if (accountId) appointmentPayload.account_id = accountId;
     if (userId) appointmentPayload.user_id = userId;
+    if (dealId) appointmentPayload.deal_id = dealId;
 
     const { data: createdAppt, error: insErr } = await db
       .from('appointments')
@@ -306,6 +310,7 @@ export async function executeScheduleAppointment(
     appointmentId: createdId,
     meetUrl: gcalResult.meetUrl,
     calendarUrl: gcalResult.calendarUrl,
+    meetCreated: gcalResult.meetCreated,
     replyMessage,
   };
 }

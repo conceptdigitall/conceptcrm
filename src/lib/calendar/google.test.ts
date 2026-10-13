@@ -3,6 +3,7 @@ import {
   isGoogleCalendarConfigured,
   generateDirectGoogleCalendarUrl,
   createCalendarEvent,
+  createMeetEvent,
   getCalendarAvailability,
 } from './google';
 
@@ -96,6 +97,80 @@ describe('Google Calendar service & unified integration', () => {
 
       expect(global.fetch).toHaveBeenCalled();
       expect(result.eventId).toBe('n8n-evt-123');
+    });
+  });
+
+  describe('OAuth Google Meet', () => {
+    const setOauth = () => {
+      process.env.GOOGLE_OAUTH_CLIENT_ID = 'cid';
+      process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'csecret';
+      process.env.GOOGLE_OAUTH_REFRESH_TOKEN = 'rtoken';
+      delete process.env.GOOGLE_CALENDAR_WEBHOOK_URL;
+    };
+    const baseParams = {
+      title: 'Sessão',
+      startDate: new Date('2026-10-12T15:00:00-03:00'),
+      durationMinutes: 30,
+      clientName: 'Dr. André',
+      clientEmail: 'andre@clinica.com.br',
+    };
+
+    it('creates a real Meet event via OAuth with conferenceDataVersion=1', async () => {
+      setOauth();
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'at' }) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ id: 'evt-1', hangoutLink: 'https://meet.google.com/abc-defg-hij' }),
+        });
+      global.fetch = fetchImpl as unknown as typeof fetch;
+
+      const result = await createCalendarEvent(baseParams);
+
+      expect(result.meetCreated).toBe(true);
+      expect(result.meetUrl).toBe('https://meet.google.com/abc-defg-hij');
+      expect(result.eventId).toBe('evt-1');
+      const [url, init] = fetchImpl.mock.calls[1];
+      expect(String(url)).toContain('conferenceDataVersion=1');
+      const body = JSON.parse(init.body);
+      expect(body.conferenceData.createRequest.conferenceSolutionKey.type).toBe('hangoutsMeet');
+      expect(body.attendees).toEqual([{ email: 'andre@clinica.com.br' }]);
+      expect(body.start.timeZone).toBe('America/Sao_Paulo');
+    });
+
+    it('falls back with meetCreated=false when token exchange returns 400', async () => {
+      setOauth();
+      global.fetch = vi.fn().mockResolvedValue({ ok: false, status: 400, json: async () => ({}) }) as unknown as typeof fetch;
+
+      const result = await createCalendarEvent(baseParams);
+
+      expect(result.meetCreated).toBe(false);
+      expect(result.meetUrl).toBe('https://meet.google.com/new');
+    });
+
+    it('createMeetEvent throws when hangoutLink is missing', async () => {
+      setOauth();
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'at' }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'evt-2' }) });
+      await expect(createMeetEvent(baseParams, { fetchImpl: fetchImpl as unknown as typeof fetch })).rejects.toThrow();
+    });
+
+    it('webhook counts as meetCreated only when it returns meetUrl', async () => {
+      delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+      process.env.GOOGLE_CALENDAR_WEBHOOK_URL = 'https://n8n.example.com/hook';
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ eventId: 'e', meetUrl: 'https://meet.google.com/xyz-xyzx-xyz' }),
+      } as Response);
+      const withLink = await createCalendarEvent(baseParams);
+      expect(withLink.meetCreated).toBe(true);
+
+      global.fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ eventId: 'e' }) } as Response);
+      const withoutLink = await createCalendarEvent(baseParams);
+      expect(withoutLink.meetCreated).toBe(false);
     });
   });
 
