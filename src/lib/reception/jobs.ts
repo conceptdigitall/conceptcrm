@@ -7,6 +7,7 @@ import { addNote } from './crm'
 
 const BATCH = 20
 const MAX_ATTEMPTS = 3
+const STUCK_MS = 30 * 60 * 1000
 const RETRY_MS = 5 * 60 * 1000
 const DAY_MS = 24 * 60 * 60 * 1000
 const HEALTH_REALERT_MS = 60 * 60 * 1000
@@ -53,19 +54,34 @@ async function must<T>(op: string, p: PromiseLike<{ data: T; error: { message?: 
   return data
 }
 
-async function recordBotMessage(db: SupabaseClient, conversationId: string | null, text: string, now: Date) {
+/** Depois do envio: nunca relança (senão o retry reenviaria a mensagem). */
+async function recordBotMessage(
+  db: SupabaseClient,
+  conversationId: string | null,
+  text: string,
+  now: Date,
+  deps: JobDeps,
+) {
   if (!conversationId) return
-  await db.from('messages').insert({
-    conversation_id: conversationId,
-    content_text: text,
-    content_type: 'text',
-    sender_type: 'bot',
-    status: 'sent',
-  })
-  await db
-    .from('conversations')
-    .update({ last_message_text: text, last_message_at: now.toISOString(), updated_at: now.toISOString() })
-    .eq('id', conversationId)
+  try {
+    const ins = await db.from('messages').insert({
+      conversation_id: conversationId,
+      content_text: text,
+      content_type: 'text',
+      sender_type: 'bot',
+      status: 'sent',
+    })
+    if (ins.error) throw new Error(ins.error.message)
+    const upd = await db
+      .from('conversations')
+      .update({ last_message_text: text, last_message_at: now.toISOString(), updated_at: now.toISOString() })
+      .eq('id', conversationId)
+    if (upd.error) throw new Error(upd.error.message)
+  } catch (err) {
+    const msg = safeError(err)
+    console.warn(`[reception/jobs] mensagem enviada mas não gravada no inbox: ${msg}`)
+    try { await deps.notify(`Recepção: mensagem enviada, mas falhou ao gravar no inbox (${msg})`) } catch {}
+  }
 }
 
 async function getContact(db: SupabaseClient, contactId: string) {
@@ -94,12 +110,12 @@ async function runLembrete(db: SupabaseClient, job: any, now: Date, deps: JobDep
       meetUrl: appt.meeting_url,
     }),
   )
-  await deps.send(contact.phone, text)
   const session: any = await must(
     'session',
     db.from('reception_sessions').select('conversation_id').eq('appointment_id', appt.id).maybeSingle() as any,
   )
-  await recordBotMessage(db, session?.conversation_id ?? null, text, now)
+  await deps.send(contact.phone, text)
+  await recordBotMessage(db, session?.conversation_id ?? null, text, now, deps)
 }
 
 async function runFollowup(db: SupabaseClient, job: any, now: Date, deps: JobDeps): Promise<void> {
@@ -141,7 +157,24 @@ async function runFollowup(db: SupabaseClient, job: any, now: Date, deps: JobDep
   if (!contact.phone) throw new Error('contato sem telefone')
   const text = tidy(fill(COPY.followup, { firstName: firstNameOf(contact.name) }))
   await deps.send(contact.phone, text)
-  await recordBotMessage(db, s.conversation_id, text, now)
+  await recordBotMessage(db, s.conversation_id, text, now, deps)
+}
+
+/** Jobs presos em `running` há mais de 30 min (a 053 não tem started_at: usa run_at) viram failed; nunca reenvia. */
+async function sweepStuck(db: SupabaseClient, now: Date, deps: JobDeps): Promise<void> {
+  const cutoff = new Date(now.getTime() - STUCK_MS).toISOString()
+  let q = db.from('reception_jobs').select('id, kind').eq('status', 'running').lte('run_at', cutoff)
+  if (deps.accountId) q = q.eq('account_id', deps.accountId)
+  const { data, error } = await q
+  if (error || !data || data.length === 0) return
+  const ids = (data as any[]).map((r) => r.id as string)
+  for (const id of ids) {
+    await db
+      .from('reception_jobs')
+      .update({ status: 'failed', error: 'travado em running por mais de 30 min; não reenviado' })
+      .eq('id', id)
+  }
+  await deps.notify(`Recepção: ${ids.length} job(s) travado(s) em running por mais de 30 min, marcados como failed sem reenvio (ids: ${ids.map((i) => i.slice(0, 8)).join(', ')})`)
 }
 
 export async function drainReceptionJobs(
@@ -149,6 +182,8 @@ export async function drainReceptionJobs(
   now: Date,
   deps: JobDeps,
 ): Promise<{ done: number; failed: number }> {
+  await sweepStuck(db, now, deps)
+
   let q = db
     .from('reception_jobs')
     .select('*')
@@ -172,8 +207,13 @@ export async function drainReceptionJobs(
     try {
       if (row.kind === 'lembrete') await runLembrete(db, row, now, deps)
       else if (row.kind === 'followup') await runFollowup(db, row, now, deps)
-      await db.from('reception_jobs').update({ status: 'done', error: null }).eq('id', row.id)
-      done++
+      const fin = await db.from('reception_jobs').update({ status: 'done', error: null }).eq('id', row.id)
+      if (fin.error) {
+        console.warn(`[reception/jobs] job ${row.id} concluído mas não marcado done: ${fin.error.message}`)
+        try { await deps.notify(`Recepção: job ${row.kind} ${row.id} concluído, mas não consegui marcá-lo como done`) } catch {}
+      } else {
+        done++
+      }
     } catch (err) {
       const attempts = (row.attempts ?? 0) + 1
       const message = safeError(err)

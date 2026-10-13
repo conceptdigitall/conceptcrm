@@ -7,7 +7,7 @@ import { checkEvolutionHealth, drainReceptionJobs, formatHora } from './jobs'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Row = Record<string, any>
 
-function memoryDb(seed: Record<string, Row[]>) {
+function memoryDb(seed: Record<string, Row[]>, failOn?: (table: string, op: string, payload: any) => boolean) {
   const tables = new Map<string, Row[]>(Object.entries(seed).map(([k, v]) => [k, v.map((r) => ({ ...r }))]))
   let seq = 0
   const t = (n: string) => {
@@ -20,7 +20,8 @@ function memoryDb(seed: Record<string, Row[]>) {
     const filters: ((r: Row) => boolean)[] = []
     let ord: { k: string; asc: boolean } | null = null
     let lim = Infinity
-    const exec = () => {
+    const exec = (): any => {
+      if (failOn?.(name, op, payload)) return { data: null, error: { message: 'db down' } }
       if (op === 'insert') {
         const row = { id: `${name}-${++seq}`, ...payload }
         t(name).push(row)
@@ -39,6 +40,7 @@ function memoryDb(seed: Record<string, Row[]>) {
       insert: (p: any) => ((op = 'insert'), (payload = p), b),
       update: (p: any) => ((op = 'update'), (payload = p), b),
       eq: (k: string, v: unknown) => (filters.push((r) => r[k] === v), b),
+      lt: (k: string, v: any) => (filters.push((r) => r[k] < v), b),
       lte: (k: string, v: any) => (filters.push((r) => r[k] <= v), b),
       order: (k: string, o?: { ascending?: boolean }) => ((ord = { k, asc: o?.ascending !== false }), b),
       limit: (n: number) => ((lim = n), b),
@@ -210,6 +212,70 @@ describe('drainReceptionJobs', () => {
     const deps = mkDeps()
     expect(await drainReceptionJobs(db, NOW, deps)).toEqual({ done: 0, failed: 0 })
     expect(deps.send).not.toHaveBeenCalled()
+  })
+})
+
+describe('hardening', () => {
+  it('post-send DB failure does not resend; job ends done', async () => {
+    const { db, t } = memoryDb(
+      baseSeed({
+        reception_jobs: [{ id: 'j1', account_id: 'a1', kind: 'followup', run_at: past, status: 'pending', attempts: 0, session_id: 's1' }],
+        messages: [{ id: 'm1', conversation_id: 'v1', sender_type: 'customer', created_at: '2026-10-13T10:00:00Z' }],
+      }),
+      (table, op) => table === 'messages' && op === 'insert',
+    )
+    const deps = mkDeps()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const r = await drainReceptionJobs(db, NOW, deps)
+    expect(deps.send).toHaveBeenCalledTimes(1)
+    expect(r).toEqual({ done: 1, failed: 0 })
+    expect(t('reception_jobs')[0].status).toBe('done')
+    expect(deps.notify).toHaveBeenCalledTimes(1)
+  })
+
+  it('session lookup failing before send prevents the send', async () => {
+    const { db } = memoryDb(
+      baseSeed({
+        reception_jobs: [{ id: 'j1', account_id: 'a1', kind: 'lembrete', run_at: past, status: 'pending', attempts: 0, appointment_id: 'ap1' }],
+      }),
+      (table) => table === 'reception_sessions',
+    )
+    const deps = mkDeps()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await drainReceptionJobs(db, NOW, deps)
+    expect(deps.send).not.toHaveBeenCalled()
+  })
+
+  it('sweeps jobs stuck in running > 30 min to failed, once, without sending', async () => {
+    const { db, t } = memoryDb(
+      baseSeed({
+        reception_jobs: [
+          { id: 'jstuck-1', account_id: 'a1', kind: 'lembrete', run_at: '2026-10-13T11:00:00Z', status: 'running', attempts: 0, appointment_id: 'ap1' },
+          { id: 'jfresh-2', account_id: 'a1', kind: 'lembrete', run_at: '2026-10-13T11:50:00Z', status: 'running', attempts: 0, appointment_id: 'ap1' },
+        ],
+      }),
+    )
+    const deps = mkDeps()
+    await drainReceptionJobs(db, NOW, deps)
+    expect(t('reception_jobs').find((j) => j.id === 'jstuck-1')!.status).toBe('failed')
+    expect(t('reception_jobs').find((j) => j.id === 'jfresh-2')!.status).toBe('running')
+    expect(deps.notify).toHaveBeenCalledTimes(1)
+    expect(deps.send).not.toHaveBeenCalled()
+  })
+
+  it('notifies when the done update fails', async () => {
+    const { db } = memoryDb(
+      baseSeed({
+        appointments: [{ id: 'ap1', status: 'cancelled', scheduled_at: past, meeting_url: 'x', contact_id: 'c1' }],
+        reception_jobs: [{ id: 'j1', account_id: 'a1', kind: 'lembrete', run_at: past, status: 'pending', attempts: 0, appointment_id: 'ap1' }],
+      }),
+      (table, op, p) => table === 'reception_jobs' && op === 'update' && p?.status === 'done',
+    )
+    const deps = mkDeps()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const r = await drainReceptionJobs(db, NOW, deps)
+    expect(r.done).toBe(0)
+    expect(deps.notify).toHaveBeenCalledTimes(1)
   })
 })
 

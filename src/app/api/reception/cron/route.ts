@@ -61,14 +61,24 @@ export async function GET(request: Request) {
     const now = new Date()
     let done = 0
     let failed = 0
+    let errors = 0
     const health: Record<string, 'open' | 'down'> = {}
     for (const accountId of accountIds) {
-      const r = await drainReceptionJobs(db, now, { send: sendEvolution, notify, accountId })
-      done += r.done
-      failed += r.failed
-      health[accountId] = await checkEvolutionHealth(db, accountId, now, { notify })
+      try {
+        const r = await drainReceptionJobs(db, now, { send: sendEvolution, notify, accountId })
+        done += r.done
+        failed += r.failed
+        health[accountId] = await checkEvolutionHealth(db, accountId, now, { notify })
+      } catch (err) {
+        const msg = (err as Error).message.replace(/\d{8,}/g, '***')
+        console.error(`[reception/cron] conta ${accountId.slice(0, 8)} falhou: ${msg}`)
+        try {
+          await notify(`Cron da recepção falhou para a conta ${accountId.slice(0, 8)}: ${msg}`)
+        } catch {}
+        errors++
+      }
     }
-    return NextResponse.json({ done, failed, health })
+    return NextResponse.json({ done, failed, errors, health })
   } catch (err) {
     console.error('[reception/cron] falhou:', (err as Error).message)
     return NextResponse.json({ error: (err as Error).message }, { status: 500 })

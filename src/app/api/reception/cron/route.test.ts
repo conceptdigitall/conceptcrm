@@ -47,7 +47,7 @@ describe('GET /api/reception/cron', () => {
     vi.stubEnv('CRM_ACCOUNT_ID', 'acc-1')
     const res = await GET(req('segredo'))
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ done: 1, failed: 0, health: { 'acc-1': 'open' } })
+    expect(await res.json()).toEqual({ done: 1, failed: 0, errors: 0, health: { 'acc-1': 'open' } })
     expect(drain.mock.calls[0][2]).toMatchObject({ accountId: 'acc-1' })
   })
 
@@ -57,5 +57,16 @@ describe('GET /api/reception/cron', () => {
     const res = await GET(req('segredo'))
     expect((await res.json()).done).toBe(2)
     expect(health).toHaveBeenCalledTimes(2)
+  })
+
+  it('isolates a throwing account: the next one still drains', async () => {
+    vi.stubEnv('AUTOMATION_CRON_SECRET', 'segredo')
+    vi.stubEnv('CRM_ACCOUNT_ID', '')
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    drain.mockRejectedValueOnce(new Error('boom 5513999991234')).mockResolvedValueOnce({ done: 3, failed: 1 })
+    const res = await GET(req('segredo'))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ done: 3, failed: 1, errors: 1 })
+    expect(drain).toHaveBeenCalledTimes(2)
   })
 })
