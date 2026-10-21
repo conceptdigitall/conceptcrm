@@ -3,6 +3,7 @@ import {
   MAX_CAPTION_CHARS, MAX_HASHTAGS, validateDirectorOutput,
   type DirectorOutput, type Pack, type PackButton, type TemplateSpec,
 } from '@/lib/marketing/packs/types';
+import { directorModel, serverFallback } from './video-models';
 
 export interface DirectorDeps {
   ask(system: string, user: string): Promise<string>;
@@ -24,7 +25,7 @@ export class DirectorError extends Error {
   }
 }
 
-const MODEL = process.env.VIDEO_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL = directorModel();
 const MAX_ATTEMPTS = 2;
 const HTML_TAG = /<\s*[a-z!/]/i;
 
@@ -112,11 +113,13 @@ export async function runDirector(deps: DirectorDeps, input: DirectorInput): Pro
 export const defaultDirectorDeps: DirectorDeps = {
   async ask(system, user) {
     const client = new Anthropic();
-    const response = await client.messages.create({
+    // Opus 5.5 pensa sempre e o pensamento conta no max_tokens: 1500 cortava o JSON.
+    const response = await client.beta.messages.create({
       model: MODEL,
-      max_tokens: 1500,
+      max_tokens: 16000,
       system,
       messages: [{ role: 'user', content: user }],
+      ...serverFallback(MODEL),
     });
     if (response.stop_reason === 'refusal') throw new Error('A IA recusou o pedido');
     return response.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
