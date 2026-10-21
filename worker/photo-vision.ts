@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import sharp from 'sharp';
+import { visionModel } from './video-models';
 
 export type PhotoVerdict = 'ok' | 'escura' | 'borrada';
 
@@ -7,7 +8,7 @@ export interface VisionDeps {
   classify(images: Buffer[]): Promise<PhotoVerdict[]>;
 }
 
-const MODEL = process.env.VIDEO_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL = visionModel();
 const MAX_SIDE = 1024;
 const VERDICTS: PhotoVerdict[] = ['ok', 'escura', 'borrada'];
 
