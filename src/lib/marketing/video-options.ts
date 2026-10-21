@@ -12,6 +12,8 @@ export interface VideoOptions {
   style: VideoStyle;
   duration: VideoDuration;
   target: VideoTarget;
+  /** Arte estática (post de foto): o worker renderiza e usa só o frame 0, sem áudio. */
+  still?: boolean;
 }
 
 export const VIDEO_STYLES: { value: VideoStyle; label: string; hint: string }[] = [
@@ -37,7 +39,7 @@ export function parseVideoOptions(raw: unknown): VideoOptions {
     ? (Number(o.duration) as VideoDuration)
     : DEFAULT_VIDEO_OPTIONS.duration;
   const target: VideoTarget = o.target === 'story' ? 'story' : 'reels';
-  return { style, duration, target };
+  return o.still === true ? { style, duration, target, still: true } : { style, duration, target };
 }
 
 /** Palavras de narração que cabem na duração (~2,4 palavras/s, com respiro no fim). */

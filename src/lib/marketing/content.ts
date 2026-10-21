@@ -22,6 +22,8 @@ export const DEFAULT_HASHTAGS: HashtagGroup[] = [
 ];
 
 export const DEFAULT_SETTINGS: Omit<MarketingSettings, 'account_id'> = {
+  business_name: '',
+  business_niche: 'geral',
   caption_style: 'direto',
   caption_size: 'media',
   emoji_level: 'poucos',
@@ -29,6 +31,10 @@ export const DEFAULT_SETTINGS: Omit<MarketingSettings, 'account_id'> = {
   never_use: 'promessas de resultado garantido, preço',
   hashtags: DEFAULT_HASHTAGS,
   require_approval: true,
+  approver_whatsapp: '',
+  daily_schedule_time: '08:30',
+  autopilot_frequency: 'diario',
+  tutorial_completed: false,
   instagram_username: 'conceptdigita.l',
 };
 
@@ -51,14 +57,19 @@ function firstSentence(text: string): string {
 }
 
 export function buildCaption(
-  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'hashtags'>,
+  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'hashtags' | 'business_name'>,
   idea: string,
   size: CaptionSize = s.caption_size,
 ): string {
   let body = STYLE_WRAP[s.caption_style](idea.trim());
   if (size === 'curta') body = firstSentence(body);
   const parts = [body + EMOJI[s.emoji_level]];
-  if (size === 'longa') parts.push('Na Concept, site, CRM e automação trabalham juntos.');
+  if (size === 'longa') {
+    const brandLine = s.business_name?.trim()
+      ? `Aqui em ${s.business_name.trim()}, cuidamos de cada detalhe para você ter a melhor experiência.`
+      : 'Na Concept, site, CRM e automação trabalham juntos.';
+    parts.push(brandLine);
+  }
   if (s.cta.trim()) parts.push(s.cta.trim());
   const tags = activeHashtags(s.hashtags).join(' ');
   if (tags) parts.push(tags);
@@ -116,7 +127,7 @@ export const IDEA_PRESETS: { label: string; idea: string }[] = [
 
 /** Três legendas locais (sem IA), uma por estilo, começando pelo estilo salvo nos Ajustes. */
 export function buildCaptionOptions(
-  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'hashtags'>,
+  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'hashtags' | 'business_name'>,
   idea: string,
 ): string[] {
   const order = [s.caption_style, ...CAPTION_STYLES.map((c) => c.value).filter((v) => v !== s.caption_style)];
@@ -126,11 +137,14 @@ export function buildCaptionOptions(
 export const CAPTION_OPTION_SEPARATOR = '---';
 
 export function captionSystemPrompt(
-  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'never_use' | 'hashtags'>,
+  s: Pick<MarketingSettings, 'caption_style' | 'caption_size' | 'emoji_level' | 'cta' | 'never_use' | 'hashtags' | 'business_name' | 'business_niche'>,
 ): string {
   const tags = activeHashtags(s.hashtags).join(' ');
+  const brand = s.business_name?.trim()
+    ? `para a empresa "${s.business_name.trim()}" (ramo: ${s.business_niche || 'geral'})`
+    : 'para a Concept Digital (sites, CRM e automação com IA)';
   return [
-    'Você escreve legendas de Instagram em português do Brasil para a Concept Digital (sites, CRM e automação com IA).',
+    `Você escreve legendas de Instagram em português do Brasil ${brand}.`,
     'Escreva exatamente 3 legendas diferentes para a ideia recebida, cada uma com um gancho distinto na primeira linha.',
     `Estilo preferido: ${s.caption_style}. Tamanho: ${s.caption_size}. Emojis: ${s.emoji_level}.`,
     s.cta.trim() ? `Termine cada legenda com esta chamada: "${s.cta.trim()}".` : '',

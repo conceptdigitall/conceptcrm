@@ -27,6 +27,14 @@ export interface PublishResult {
   publishedAt: string;
 }
 
+function mediaPath(url: string): string {
+  try {
+    return new URL(url).pathname.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
 export class InstagramApiError extends Error {
   code?: number;
   constructor(message: string, code?: number) {
@@ -120,7 +128,8 @@ export async function publishToInstagram(params: PublishParams): Promise<Publish
   if (params.kind === 'story') {
     // Stories: Imagem JPEG ou Vídeo MP4. Meta não aceita legenda visível em stories via API.
     const mediaUrl = urls[0];
-    const isVideo = mediaUrl.toLowerCase().endsWith('.mp4');
+    // URL assinada termina em ?token=...: olha só o caminho.
+    const isVideo = params.mediaType === 'video' || mediaPath(mediaUrl).endsWith('.mp4');
     const body: Record<string, unknown> = {
       media_type: 'STORIES',
       [isVideo ? 'video_url' : 'image_url']: mediaUrl,
@@ -136,7 +145,7 @@ export async function publishToInstagram(params: PublishParams): Promise<Publish
 
     const childIds: string[] = [];
     for (const itemUrl of urls) {
-      const isVideo = itemUrl.toLowerCase().endsWith('.mp4');
+      const isVideo = mediaPath(itemUrl).endsWith('.mp4');
       const itemBody: Record<string, unknown> = {
         is_carousel_item: true,
         [isVideo ? 'video_url' : 'image_url']: itemUrl,

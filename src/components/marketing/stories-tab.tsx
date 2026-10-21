@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Send, Check, Smartphone, Link as LinkIcon } from 'lucide-react';
+import { Plus, Send, Check, Smartphone, Link as LinkIcon, Megaphone } from 'lucide-react';
 import type { MarketingPost, StoryInteraction } from '@/types';
 import { Button } from '@/components/ui/button';
 
@@ -10,12 +10,14 @@ interface StoriesTabProps {
   stories: MarketingPost[];
   onOpenCreateStory: () => void;
   onStoryUpdated: (updated: MarketingPost) => void;
+  onConvertToAd?: (story: MarketingPost) => void;
 }
 
 export function StoriesTab({
   stories,
   onOpenCreateStory,
   onStoryUpdated,
+  onConvertToAd,
 }: StoriesTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => stories[0]?.id || '');
   const [publishing, setPublishing] = useState(false);
@@ -106,6 +108,17 @@ export function StoriesTab({
         <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start justify-center p-6 rounded-2xl border border-border bg-card">
           {/* Frame Vertical 9:16 */}
           <div className="relative w-64 md:w-72 aspect-[9/16] rounded-[28px] border-4 border-border bg-gradient-to-b from-primary to-primary-hover p-4 flex flex-col justify-between shadow-2xl overflow-hidden">
+            {/* Story pronto (piloto ou gerador): o vídeo real ocupa a tela; os textos abaixo ficam por cima. */}
+            {selectedStory.media_urls?.[0] && (
+              <video
+                src={selectedStory.media_urls[0]}
+                className="absolute inset-0 h-full w-full object-cover"
+                muted
+                playsInline
+                controls
+                preload="metadata"
+              />
+            )}
             {/* Barras de progresso do story */}
             <div className="flex gap-1.5 w-full pt-1">
               <div className="flex-1 h-1 rounded-full bg-white" />
@@ -123,7 +136,7 @@ export function StoriesTab({
             </div>
 
             {/* Texto Central */}
-            <div className="my-auto text-center px-3 py-6">
+            <div className={`my-auto text-center px-3 py-6 ${selectedStory.media_urls?.[0] ? 'hidden' : ''}`}>
               <h2 className="font-heading font-bold text-lg md:text-xl text-white leading-snug drop-shadow-md">
                 {selectedStory.title}
               </h2>
@@ -135,7 +148,7 @@ export function StoriesTab({
             </div>
 
             {/* Elemento Interativo Mockup */}
-            {interaction === 'enquete' && (
+            {interaction === 'enquete' && !selectedStory.media_urls?.[0] && (
               <div className="w-full bg-black/60 backdrop-blur-md border border-white/20 rounded-xl p-3 flex flex-col gap-2 mb-3">
                 <span className="text-[11px] font-semibold text-center text-white">
                   Sua empresa perde leads hoje?
@@ -151,7 +164,7 @@ export function StoriesTab({
               </div>
             )}
 
-            {interaction === 'link' && (
+            {interaction === 'link' && !selectedStory.media_urls?.[0] && (
               <div className="self-center bg-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-full flex items-center gap-1.5 shadow-lg mb-4">
                 <LinkIcon className="w-3.5 h-3.5" />
                 <span>conceptdigital.com.br</span>
@@ -203,6 +216,17 @@ export function StoriesTab({
                   <Check className="w-4 h-4" />
                   Story Publicado no Instagram
                 </div>
+              )}
+
+              {onConvertToAd && (
+                <Button
+                  type="button"
+                  onClick={() => onConvertToAd(selectedStory)}
+                  className="bg-[#FCE026] hover:bg-[#f2d313] text-slate-950 font-bold text-xs h-10 rounded-xl gap-1.5 shadow-sm"
+                >
+                  <Megaphone className="w-4 h-4" />
+                  Transformar Story em Anúncio IA (1 Clique)
+                </Button>
               )}
             </div>
           </div>

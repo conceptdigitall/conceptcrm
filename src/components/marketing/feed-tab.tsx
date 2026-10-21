@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, ExternalLink, Plus, Send, Sparkles } from 'lucide-react';
+import { Check, ExternalLink, Megaphone, Plus, Send, Sparkles } from 'lucide-react';
 import type { MarketingPost } from '@/types';
 import { Button } from '@/components/ui/button';
 import { STATUS_LABEL } from '@/lib/marketing/content';
@@ -12,6 +12,7 @@ interface FeedTabProps {
   onOpenCreate: () => void;
   onPostUpdated: (updated: MarketingPost) => void;
   onNavigateToLibrary: (post: MarketingPost) => void;
+  onConvertToAd?: (post: MarketingPost) => void;
 }
 
 const GRADIENTS = [
@@ -26,6 +27,7 @@ export function FeedTab({
   onOpenCreate,
   onPostUpdated,
   onNavigateToLibrary,
+  onConvertToAd,
 }: FeedTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => posts[0]?.id || '');
   const [publishing, setPublishing] = useState(false);
@@ -105,10 +107,16 @@ export function FeedTab({
                   <div
                     className={`w-full aspect-[4/5] rounded-lg p-3 flex flex-col justify-between relative overflow-hidden ${grad}`}
                   >
-                    <span className="self-start text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/40 text-white backdrop-blur-sm">
+                    {p.media_urls?.[0] && (
+                      <>
+                        <PostMediaView url={p.media_urls[0]} isVideo={p.media_type === 'video'} className="absolute inset-0 h-full w-full object-cover" />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                      </>
+                    )}
+                    <span className="relative self-start text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/40 text-white backdrop-blur-sm">
                       {p.media_type === 'video' ? 'Vídeo' : p.media_type === 'carrossel' ? 'Carrossel' : 'Foto'}
                     </span>
-                    <span className="font-heading font-semibold text-xs leading-snug line-clamp-3">
+                    <span className={`relative font-heading font-semibold text-xs leading-snug line-clamp-3 ${p.media_urls?.[0] ? 'text-white' : ''}`}>
                       {p.title}
                     </span>
                   </div>
@@ -154,11 +162,20 @@ export function FeedTab({
               <span className="text-xs font-bold text-foreground">conceptdigita.l</span>
             </div>
 
-            <div className="aspect-[4/5] w-full bg-primary p-5 flex items-center justify-center text-center">
-              <span className="font-heading font-bold text-lg md:text-xl text-primary-foreground leading-tight">
-                {selectedPost.title}
-              </span>
-            </div>
+            {selectedPost.media_urls?.[0] ? (
+              <PostMediaView
+                url={selectedPost.media_urls[0]}
+                isVideo={selectedPost.media_type === 'video'}
+                controls
+                className="aspect-[4/5] w-full bg-black object-cover"
+              />
+            ) : (
+              <div className="aspect-[4/5] w-full bg-primary p-5 flex items-center justify-center text-center">
+                <span className="font-heading font-bold text-lg md:text-xl text-primary-foreground leading-tight">
+                  {selectedPost.title}
+                </span>
+              </div>
+            )}
 
             <div className="p-3 text-xs leading-relaxed text-foreground/90 flex flex-col gap-1.5">
               <p>
@@ -195,6 +212,17 @@ export function FeedTab({
               </div>
             )}
 
+            {onConvertToAd && (
+              <Button
+                type="button"
+                onClick={() => onConvertToAd(selectedPost)}
+                className="w-full bg-[#FCE026] hover:bg-[#f2d313] text-slate-950 font-bold text-xs h-10 rounded-xl gap-1.5 shadow-sm"
+              >
+                <Megaphone className="w-4 h-4" />
+                Transformar em Anúncio IA (1 Clique)
+              </Button>
+            )}
+
             <Button
               variant="outline"
               onClick={() => onNavigateToLibrary(selectedPost)}
@@ -217,4 +245,15 @@ export function FeedTab({
       </button>
     </div>
   );
+}
+
+// Mídia real do post (arte ou vídeo do piloto, ou URL colada no modal).
+function PostMediaView({ url, isVideo, controls = false, className }: {
+  url: string; isVideo: boolean; controls?: boolean; className?: string;
+}) {
+  if (isVideo) {
+    return <video src={url} className={className} muted playsInline preload="metadata" controls={controls} />;
+  }
+  // eslint-disable-next-line @next/next/no-img-element -- URL assinada e externa, sem otimização do Next.
+  return <img src={url} alt="" className={className} loading="lazy" />;
 }

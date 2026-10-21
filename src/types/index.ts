@@ -889,8 +889,13 @@ export interface HashtagGroup {
   tags: { t: string; on: boolean }[];
 }
 
+export type BusinessNiche = 'barbearia' | 'clinica' | 'adega' | 'advocacia' | 'estetica' | 'comercio' | 'agencia' | 'geral';
+export type AutopilotFrequency = 'diario' | '3x_semana' | 'manual';
+
 export interface MarketingSettings {
   account_id: string;
+  business_name?: string;
+  business_niche?: BusinessNiche;
   caption_style: CaptionStyle;
   caption_size: CaptionSize;
   emoji_level: EmojiLevel;
@@ -898,6 +903,10 @@ export interface MarketingSettings {
   never_use: string;
   hashtags: HashtagGroup[];
   require_approval: boolean;
+  approver_whatsapp?: string | null;
+  daily_schedule_time?: string;
+  autopilot_frequency?: AutopilotFrequency;
+  tutorial_completed?: boolean;
   instagram_user_id?: string | null;
   instagram_username?: string | null;
   updated_at?: string;
