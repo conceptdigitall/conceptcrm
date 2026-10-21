@@ -10,6 +10,7 @@ import type { MarketingVideo } from '@/types';
 import { runCommand } from './exec';
 import { parseVideoOptions, narrationWordLimit } from '@/lib/marketing/video-options';
 import { audioPromptLines, buildScriptPrompt, cleanScript, synthesize, type Narration } from './narration';
+import { narrationProvider, synthesizeGemini } from './narration-gemini';
 import { failJob, finishJob } from './queue';
 import { defaultRenderDeps } from './hf-render';
 import { runTemplatedJob } from './video-template';
@@ -165,7 +166,7 @@ const defaultDeps: VideoDeps = {
     const system = 'Você é redator de locução publicitária em português do Brasil. Responda só com o texto a ser falado.';
     return generateText(system, buildScriptPrompt(brief, duration), 600);
   },
-  narrate: (text) => synthesize(text),
+  narrate: (text) => (narrationProvider() === 'gemini' ? synthesizeGemini(text) : synthesize(text)),
   ...defaultRenderDeps,
 };
 
@@ -209,7 +210,7 @@ export async function runVideoJob(
       if (track) await cp(join(MUSIC_DIR, track.file), join(dir, 'assets', 'music.mp3'));
     }
 
-    // Narração (ElevenLabs, voz Matilda). Falha aqui não derruba o job: o vídeo sai só com a trilha.
+    // Narração (ElevenLabs ou Gemini TTS, ver NARRATION_PROVIDER). Falha aqui não derruba o job: o vídeo sai só com a trilha.
     let narration: Narration | null = null;
     if (!options.still) {
       try {
