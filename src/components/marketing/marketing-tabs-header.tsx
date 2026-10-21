@@ -3,7 +3,7 @@
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-export type MarketingSubtab = 'feed' | 'stories' | 'videos' | 'projects' | 'library' | 'settings';
+export type MarketingSubtab = 'feed' | 'stories' | 'videos' | 'ads' | 'projects' | 'library' | 'settings';
 
 interface MarketingTabsHeaderProps {
   currentTab: MarketingSubtab;
@@ -17,6 +17,7 @@ const TABS: { id: MarketingSubtab; label: string }[] = [
   { id: 'feed', label: 'Feed' },
   { id: 'stories', label: 'Stories' },
   { id: 'videos', label: 'Vídeos' },
+  { id: 'ads', label: 'Tráfego IA' },
   { id: 'projects', label: 'Projetos' },
   { id: 'library', label: 'Biblioteca' },
   { id: 'settings', label: 'Ajustes' },
@@ -40,15 +41,15 @@ export function MarketingTabsHeader({
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2.5">
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground font-heading">
-              Marketing
+              Concept Autopilot
             </h1>
             <Badge variant="outline" className="border-primary/30 text-primary bg-primary-soft text-xs gap-1">
               <Sparkles className="w-3 h-3" />
-              IA Ativa
+              Conteúdo + Tráfego IA
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
-            Posts e stories com IA para @{instagramUsername}
+            Posts, vídeos e Squad de Tráfego Pago com IA para @{instagramUsername}
           </p>
         </div>
 
@@ -65,7 +66,7 @@ export function MarketingTabsHeader({
       </header>
 
       <nav
-        className="grid grid-cols-3 gap-1 sm:grid-cols-6 rounded-xl border border-border bg-muted p-1 md:inline-flex md:self-start"
+        className="grid grid-cols-4 gap-1 sm:grid-cols-7 rounded-xl border border-border bg-muted p-1 md:inline-flex md:self-start"
         aria-label="Subabas de marketing"
       >
         {TABS.map((t) => {

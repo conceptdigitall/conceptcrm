@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Check, ExternalLink, Plus, Send, Sparkles } from 'lucide-react';
+import { Check, ExternalLink, Megaphone, Plus, Send, Sparkles } from 'lucide-react';
 import type { MarketingPost } from '@/types';
 import { Button } from '@/components/ui/button';
 import { STATUS_LABEL } from '@/lib/marketing/content';
@@ -12,6 +12,7 @@ interface FeedTabProps {
   onOpenCreate: () => void;
   onPostUpdated: (updated: MarketingPost) => void;
   onNavigateToLibrary: (post: MarketingPost) => void;
+  onConvertToAd?: (post: MarketingPost) => void;
 }
 
 const GRADIENTS = [
@@ -26,6 +27,7 @@ export function FeedTab({
   onOpenCreate,
   onPostUpdated,
   onNavigateToLibrary,
+  onConvertToAd,
 }: FeedTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => posts[0]?.id || '');
   const [publishing, setPublishing] = useState(false);
@@ -208,6 +210,17 @@ export function FeedTab({
                 <Check className="w-4 h-4" />
                 Publicado no Instagram
               </div>
+            )}
+
+            {onConvertToAd && (
+              <Button
+                type="button"
+                onClick={() => onConvertToAd(selectedPost)}
+                className="w-full bg-[#FCE026] hover:bg-[#f2d313] text-slate-950 font-bold text-xs h-10 rounded-xl gap-1.5 shadow-sm"
+              >
+                <Megaphone className="w-4 h-4" />
+                Transformar em Anúncio IA (1 Clique)
+              </Button>
             )}
 
             <Button

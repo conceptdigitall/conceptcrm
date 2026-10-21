@@ -44,6 +44,8 @@ export async function PUT(request: Request) {
     updated_at: new Date().toISOString(),
   };
 
+  if (body.business_name !== undefined) payload.business_name = body.business_name.trim();
+  if (body.business_niche !== undefined) payload.business_niche = body.business_niche;
   if (body.caption_style !== undefined) payload.caption_style = body.caption_style;
   if (body.caption_size !== undefined) payload.caption_size = body.caption_size;
   if (body.emoji_level !== undefined) payload.emoji_level = body.emoji_level;
@@ -51,6 +53,12 @@ export async function PUT(request: Request) {
   if (body.never_use !== undefined) payload.never_use = body.never_use.trim();
   if (body.hashtags !== undefined) payload.hashtags = body.hashtags;
   if (body.require_approval !== undefined) payload.require_approval = body.require_approval;
+  if (body.approver_whatsapp !== undefined) {
+    payload.approver_whatsapp = body.approver_whatsapp ? body.approver_whatsapp.trim() : null;
+  }
+  if (body.daily_schedule_time !== undefined) payload.daily_schedule_time = body.daily_schedule_time.trim();
+  if (body.autopilot_frequency !== undefined) payload.autopilot_frequency = body.autopilot_frequency;
+  if (body.tutorial_completed !== undefined) payload.tutorial_completed = body.tutorial_completed;
   if (body.instagram_username !== undefined) {
     payload.instagram_username = body.instagram_username ? body.instagram_username.trim() : null;
   }

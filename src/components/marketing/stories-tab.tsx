@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Send, Check, Smartphone, Link as LinkIcon } from 'lucide-react';
+import { Plus, Send, Check, Smartphone, Link as LinkIcon, Megaphone } from 'lucide-react';
 import type { MarketingPost, StoryInteraction } from '@/types';
 import { Button } from '@/components/ui/button';
 
@@ -10,12 +10,14 @@ interface StoriesTabProps {
   stories: MarketingPost[];
   onOpenCreateStory: () => void;
   onStoryUpdated: (updated: MarketingPost) => void;
+  onConvertToAd?: (story: MarketingPost) => void;
 }
 
 export function StoriesTab({
   stories,
   onOpenCreateStory,
   onStoryUpdated,
+  onConvertToAd,
 }: StoriesTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => stories[0]?.id || '');
   const [publishing, setPublishing] = useState(false);
@@ -214,6 +216,17 @@ export function StoriesTab({
                   <Check className="w-4 h-4" />
                   Story Publicado no Instagram
                 </div>
+              )}
+
+              {onConvertToAd && (
+                <Button
+                  type="button"
+                  onClick={() => onConvertToAd(selectedStory)}
+                  className="bg-[#FCE026] hover:bg-[#f2d313] text-slate-950 font-bold text-xs h-10 rounded-xl gap-1.5 shadow-sm"
+                >
+                  <Megaphone className="w-4 h-4" />
+                  Transformar Story em Anúncio IA (1 Clique)
+                </Button>
               )}
             </div>
           </div>
