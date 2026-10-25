@@ -5,6 +5,7 @@ import { attachPostMedia } from '@/lib/marketing/post-media';
 import { loadArtSettings, storePostArt } from '@/lib/marketing/post-art-store';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import { isInternalAccount } from '@/lib/internal-accounts';
+import { loadInstagramCredentials, recordInstagramError } from '@/lib/marketing/instagram-connection';
 import type { MarketingPost } from '@/types';
 
 export async function POST(request: Request) {
@@ -14,11 +15,21 @@ export async function POST(request: Request) {
   } catch (err) {
     return toErrorResponse(err);
   }
-  // O token da Meta vem do ambiente e é o Instagram da Concept: qualquer outra
-  // conta publicaria no perfil da Concept. Fica restrito até cada conta ter o seu.
-  if (!isInternalAccount(ctx.accountId)) {
+  // Cada conta publica no Instagram que conectou em Ajustes. O token do
+  // ambiente (META_ACCESS_TOKEN) é o da Concept: só a conta interna cai nele.
+  let credentials;
+  try {
+    credentials = await loadInstagramCredentials(supabaseAdmin(), ctx.accountId);
+  } catch (err) {
+    console.error('[instagram/publish] falha ao ler a conexão:', err);
     return NextResponse.json(
-      { error: 'Publicação no Instagram ainda não está liberada para esta conta.' },
+      { error: 'Não foi possível ler o Instagram conectado. Conecte de novo em Ajustes.' },
+      { status: 500 },
+    );
+  }
+  if (!credentials && !isInternalAccount(ctx.accountId)) {
+    return NextResponse.json(
+      { error: 'Conecte o Instagram da sua empresa em Marketing → Ajustes para publicar.' },
       { status: 403 },
     );
   }
@@ -74,7 +85,9 @@ export async function POST(request: Request) {
       mediaType,
       mediaUrls,
       caption,
+      ...(credentials && { accessToken: credentials.accessToken, igUserId: credentials.igUserId }),
     });
+    if (credentials) await recordInstagramError(supabaseAdmin(), ctx.accountId, null);
 
     await ctx.supabase
       .from('marketing_posts')
@@ -98,6 +111,9 @@ export async function POST(request: Request) {
     // Erro da Meta é útil pro usuário; erro interno não sai do servidor.
     const errorMsg = err instanceof InstagramApiError ? err.message : 'Falha na publicação do Instagram';
     if (!(err instanceof InstagramApiError)) console.error('[instagram/publish] falha:', err);
+    if (credentials && err instanceof InstagramApiError) {
+      await recordInstagramError(supabaseAdmin(), ctx.accountId, errorMsg);
+    }
     await ctx.supabase
       .from('marketing_posts')
       .update({ error_message: errorMsg })

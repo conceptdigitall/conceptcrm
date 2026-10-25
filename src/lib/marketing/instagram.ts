@@ -213,3 +213,13 @@ export async function publishToInstagram(params: PublishParams): Promise<Publish
     publishedAt: new Date().toISOString(),
   };
 }
+
+/** Confere token + ID da conta profissional na Graph API e devolve o @ dela. */
+export async function fetchInstagramProfile(
+  accessToken: string,
+  igUserId: string,
+): Promise<{ id: string; username?: string }> {
+  return graphRequest<{ id: string; username?: string }>(igUserId, accessToken, {
+    params: { fields: 'id,username' },
+  });
+}
