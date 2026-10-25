@@ -10,6 +10,7 @@ import type {
 import { CAPTION_STYLES, buildCaption } from '@/lib/marketing/content';
 import { BUSINESS_NICHES, getNichePreset } from '@/lib/marketing/niche-autopilot';
 import { Button } from '@/components/ui/button';
+import { InstagramConnectionCard } from '@/components/marketing/instagram-connection-card';
 
 interface SettingsTabProps {
   settings: MarketingSettings;
@@ -317,8 +318,11 @@ export function SettingsTab({ settings: initialSettings, onSettingsSaved }: Sett
         </Button>
       </div>
 
+      <div className="w-full lg:w-80 xl:w-96 flex flex-col gap-4">
+      <InstagramConnectionCard />
+
       {/* Prévia ao Vivo */}
-      <aside className="w-full lg:w-80 xl:w-96 rounded-2xl border border-border bg-card p-5 flex flex-col gap-4">
+      <aside className="w-full rounded-2xl border border-border bg-card p-5 flex flex-col gap-4">
         <div className="flex items-center gap-2 border-b border-border pb-3">
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="text-xs uppercase font-bold text-foreground">Como vai ficar no seu Instagram</span>
@@ -333,6 +337,7 @@ export function SettingsTab({ settings: initialSettings, onSettingsSaved }: Sett
           <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">{previewCaption}</p>
         </div>
       </aside>
+      </div>
     </div>
   );
 }

@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   post: null as unknown,
   filters: [] as [string, unknown][],
+  creds: null as null | { accessToken: string; igUserId: string },
+  recordError: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/account', () => ({
@@ -17,6 +19,10 @@ vi.mock('@/lib/marketing/instagram', () => ({
 }));
 vi.mock('@/lib/marketing/post-art-store', () => ({ loadArtSettings: vi.fn(), storePostArt: vi.fn() }));
 vi.mock('@/lib/ai/admin-client', () => ({ supabaseAdmin: vi.fn() }));
+vi.mock('@/lib/marketing/instagram-connection', () => ({
+  loadInstagramCredentials: vi.fn(async () => mocks.creds),
+  recordInstagramError: mocks.recordError,
+}));
 
 import { POST } from './route';
 
@@ -39,12 +45,32 @@ const req = (body: unknown) =>
 beforeEach(() => {
   mocks.filters = [];
   mocks.publish.mockReset();
+  mocks.creds = null;
   mocks.post = { id: 'p-1', account_id: 'acc-1', kind: 'feed', media_type: 'foto', media_urls: ['https://x/a.jpg'], caption: 'Oi', status: 'scheduled' };
   mocks.requireRole.mockResolvedValue({ accountId: 'acc-1', userId: 'u', supabase: supabase() });
 });
 
 describe('POST /api/marketing/instagram/publish', () => {
-  it('bloqueia conta que não é interna (token da Meta é o da Concept)', async () => {
+  it('conta de cliente publica com o token dela, nunca com o do ambiente', async () => {
+    mocks.creds = { accessToken: 'tok-cliente', igUserId: '1784100000001' };
+    mocks.requireRole.mockResolvedValue({ accountId: 'acc-cliente', userId: 'u', supabase: supabase() });
+    mocks.publish.mockResolvedValue({ mediaId: 'm-1', publishedAt: '2026-10-25T12:00:00Z' });
+    const res = await POST(req({ postId: 'p-1' }));
+    expect(res.status).toBe(200);
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: 'tok-cliente', igUserId: '1784100000001' }),
+    );
+  });
+
+  it('conta interna sem conexão usa o token do ambiente', async () => {
+    mocks.publish.mockResolvedValue({ mediaId: 'm-1', publishedAt: '2026-10-25T12:00:00Z' });
+    await POST(req({ postId: 'p-1' }));
+    const args = mocks.publish.mock.calls[0][0];
+    expect(args).not.toHaveProperty('accessToken');
+    expect(args).not.toHaveProperty('igUserId');
+  });
+
+  it('bloqueia conta de cliente sem Instagram conectado (token do ambiente é o da Concept)', async () => {
     mocks.requireRole.mockResolvedValue({ accountId: 'acc-cliente', userId: 'u', supabase: supabase() });
     const res = await POST(req({ postId: 'p-1' }));
     expect(res.status).toBe(403);
