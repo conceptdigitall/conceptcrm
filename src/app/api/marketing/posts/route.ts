@@ -3,6 +3,9 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import type { MarketingPost, PostKind, PostMediaType, PostStatus } from '@/types';
 import { nextVersionNumber } from '@/lib/marketing/content';
 import { attachPostMedia } from '@/lib/marketing/post-media';
+import { dbErrorResponse } from '@/lib/marketing/db-error';
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(request: Request) {
   let ctx;
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
   if (status) query = query.eq('status', status);
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('posts', error);
   return NextResponse.json({ posts: await attachPostMedia(ctx.supabase, (data ?? []) as MarketingPost[]) });
 }
 
@@ -55,6 +58,14 @@ export async function POST(request: Request) {
 
   if (!body || !body.kind || !body.title) {
     return NextResponse.json({ error: 'Campos obrigatórios ausentes (kind, title)' }, { status: 400 });
+  }
+  // parent_id entra num filtro `.or()` montado por texto: sem isso, dá pra
+  // injetar condições no filtro do PostgREST.
+  for (const field of ['parent_id', 'video_id'] as const) {
+    const value = body[field];
+    if (value != null && (typeof value !== 'string' || !UUID_RE.test(value))) {
+      return NextResponse.json({ error: `${field} inválido` }, { status: 400 });
+    }
   }
 
   let version = 1;
@@ -93,6 +104,6 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('posts', error);
   return NextResponse.json({ post: data as MarketingPost }, { status: 201 });
 }

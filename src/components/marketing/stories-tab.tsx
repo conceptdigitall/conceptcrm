@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Plus, Send, Check, Smartphone, Link as LinkIcon, Megaphone } from 'lucide-react';
-import type { MarketingPost, StoryInteraction } from '@/types';
+import { Plus, Send, Check, Smartphone, Megaphone } from 'lucide-react';
+import type { MarketingPost } from '@/types';
 import { Button } from '@/components/ui/button';
+import { PostVisual } from '@/components/marketing/post-visual';
 
 interface StoriesTabProps {
   stories: MarketingPost[];
@@ -21,7 +22,6 @@ export function StoriesTab({
 }: StoriesTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => stories[0]?.id || '');
   const [publishing, setPublishing] = useState(false);
-  const [interaction, setInteraction] = useState<StoryInteraction>('enquete');
 
   const selectedStory = stories.find((s) => s.id === selectedId) || stories[0] || null;
 
@@ -31,11 +31,8 @@ export function StoriesTab({
       const res = await fetch('/api/marketing/instagram/publish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          postId: story.id,
-          kind: 'story',
-          mediaUrls: story.media_urls?.length ? story.media_urls : ['https://conceptdigital.com.br/story-mockup.jpg'],
-        }),
+        // Sem mídia, o servidor gera a arte do story (antes ia uma imagem fixa de exemplo).
+        body: JSON.stringify({ postId: story.id, kind: 'story' }),
       });
 
       const data = await res.json();
@@ -59,44 +56,47 @@ export function StoriesTab({
   return (
     <div className="flex flex-col gap-6">
       {/* Fileira de Stories Circulares */}
-      <div className="flex items-center gap-4 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex items-start gap-4 overflow-x-auto px-1 pt-1 pb-2 scrollbar-none">
         <button
           type="button"
           onClick={onOpenCreateStory}
-          className="flex flex-col items-center gap-2 group flex-none"
+          className="flex w-[72px] flex-none flex-col items-center gap-1.5 group"
         >
-          <div className="w-16 h-16 rounded-full border-2 border-dashed border-primary flex items-center justify-center text-primary group-hover:scale-105 transition-transform bg-card">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-primary bg-card text-primary transition-transform group-hover:scale-105 group-active:scale-95">
             <Plus className="w-6 h-6" />
           </div>
-          <span className="text-xs font-bold text-primary">+ Criar story</span>
+          <span className="text-xs font-semibold text-primary">Novo</span>
         </button>
 
         {stories.map((s, idx) => {
           const isSelected = selectedStory?.id === s.id;
           const label = idx === 0 ? 'Hoje' : idx === 1 ? 'Amanhã' : `Dia ${idx + 1}`;
+          const published = s.status === 'published';
           return (
             <button
               key={s.id}
               type="button"
               onClick={() => setSelectedId(s.id)}
-              className="flex flex-col items-center gap-1.5 group flex-none"
+              aria-pressed={isSelected}
+              className="flex w-[72px] flex-none flex-col items-center gap-1.5 group"
             >
+              {/* Anel no estilo Instagram: colorido enquanto não foi ao ar */}
               <div
-                className={`w-16 h-16 rounded-full p-0.5 transition-transform ${
-                  isSelected ? 'ring-2 ring-primary scale-105' : 'hover:scale-102'
-                }`}
+                className={`h-16 w-16 rounded-full p-[3px] transition-transform group-active:scale-95 ${
+                  published ? 'bg-border' : 'bg-gradient-to-tr from-primary to-[#FCE026]'
+                } ${isSelected ? 'scale-105 shadow-lg shadow-primary/30' : ''}`}
               >
-                <div className="w-full h-full rounded-full bg-gradient-to-tr from-primary to-primary-hover flex items-center justify-center border border-border text-primary-foreground font-bold text-xs p-1 text-center line-clamp-2">
-                  {s.title.slice(0, 12)}
+                <div className="h-full w-full overflow-hidden rounded-full border-2 border-background bg-muted">
+                  <PostVisual post={s} className="h-full w-full object-cover" />
                 </div>
               </div>
-              <span className="text-xs text-foreground font-medium">{label}</span>
+              <span className={`text-xs ${isSelected ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{label}</span>
               <span
-                className={`text-[9px] px-1.5 rounded ${
-                  s.status === 'published' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'
+                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  published ? 'bg-emerald-500/10 text-emerald-600' : 'bg-muted text-muted-foreground'
                 }`}
               >
-                {s.status === 'published' ? 'No ar' : 'Pendente'}
+                {published ? 'No ar' : 'Pendente'}
               </span>
             </button>
           );
@@ -107,98 +107,23 @@ export function StoriesTab({
       {selectedStory ? (
         <div className="flex flex-col lg:flex-row gap-8 items-center lg:items-start justify-center p-6 rounded-2xl border border-border bg-card">
           {/* Frame Vertical 9:16 */}
-          <div className="relative w-64 md:w-72 aspect-[9/16] rounded-[28px] border-4 border-border bg-gradient-to-b from-primary to-primary-hover p-4 flex flex-col justify-between shadow-2xl overflow-hidden">
-            {/* Story pronto (piloto ou gerador): o vídeo real ocupa a tela; os textos abaixo ficam por cima. */}
-            {selectedStory.media_urls?.[0] && (
-              <video
-                src={selectedStory.media_urls[0]}
-                className="absolute inset-0 h-full w-full object-cover"
-                muted
-                playsInline
-                controls
-                preload="metadata"
-              />
-            )}
-            {/* Barras de progresso do story */}
-            <div className="flex gap-1.5 w-full pt-1">
+          <div className="relative w-64 md:w-72 aspect-[9/16] rounded-[32px] border-4 border-border bg-muted shadow-2xl overflow-hidden">
+            <PostVisual post={selectedStory} controls className="absolute inset-0 h-full w-full object-cover" />
+            {/* Barras de progresso por cima da arte, como no app do Instagram */}
+            <div className="absolute inset-x-3 top-3 flex gap-1.5">
               <div className="flex-1 h-1 rounded-full bg-white" />
               <div className="flex-1 h-1 rounded-full bg-white/40" />
               <div className="flex-1 h-1 rounded-full bg-white/40" />
             </div>
-
-            {/* Cabeçalho do perfil */}
-            <div className="flex items-center gap-2 pt-2">
-              <div className="w-6 h-6 rounded-full bg-white text-primary text-xs font-bold flex items-center justify-center">
-                C
-              </div>
-              <span className="text-xs font-bold text-white">conceptdigita.l</span>
-              <span className="text-[10px] text-white/60">3h</span>
-            </div>
-
-            {/* Texto Central */}
-            <div className={`my-auto text-center px-3 py-6 ${selectedStory.media_urls?.[0] ? 'hidden' : ''}`}>
-              <h2 className="font-heading font-bold text-lg md:text-xl text-white leading-snug drop-shadow-md">
-                {selectedStory.title}
-              </h2>
-              {selectedStory.idea && (
-                <p className="text-xs text-white/90 mt-2 opacity-90 line-clamp-3">
-                  {selectedStory.idea}
-                </p>
-              )}
-            </div>
-
-            {/* Elemento Interativo Mockup */}
-            {interaction === 'enquete' && !selectedStory.media_urls?.[0] && (
-              <div className="w-full bg-black/60 backdrop-blur-md border border-white/20 rounded-xl p-3 flex flex-col gap-2 mb-3">
-                <span className="text-[11px] font-semibold text-center text-white">
-                  Sua empresa perde leads hoje?
-                </span>
-                <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-                  <div className="py-2 bg-white/10 hover:bg-white/20 rounded-lg text-center text-white">
-                    Sim, muitos 😭
-                  </div>
-                  <div className="py-2 bg-primary/90 rounded-lg text-center text-primary-foreground">
-                    Não, temos IA 🚀
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {interaction === 'link' && !selectedStory.media_urls?.[0] && (
-              <div className="self-center bg-primary text-primary-foreground font-bold text-xs px-4 py-2 rounded-full flex items-center gap-1.5 shadow-lg mb-4">
-                <LinkIcon className="w-3.5 h-3.5" />
-                <span>conceptdigital.com.br</span>
-              </div>
-            )}
           </div>
 
           {/* Controles Laterais */}
           <div className="flex-1 max-w-md flex flex-col gap-5">
-            <div>
-              <h3 className="text-lg font-bold text-foreground">Configuração do Story</h3>
-              <p className="text-xs text-muted-foreground">
-                Stories verticais de alta retenção no Instagram da Concept Digital.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-muted-foreground">Tipo de Interação</label>
-              <div className="flex gap-2">
-                {(['nenhuma', 'enquete', 'link'] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    onClick={() => setInteraction(opt)}
-                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-medium border transition-colors capitalize ${
-                      interaction === opt
-                        ? 'bg-primary border-primary text-primary-foreground'
-                        : 'border-border bg-background text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-lg font-bold text-foreground font-heading">{selectedStory.title}</h3>
+              {selectedStory.idea && (
+                <p className="text-sm text-muted-foreground leading-relaxed">{selectedStory.idea}</p>
+              )}
             </div>
 
             <div className="flex flex-col gap-2.5 pt-4 border-t border-border">

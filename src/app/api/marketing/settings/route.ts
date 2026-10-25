@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { DEFAULT_SETTINGS } from '@/lib/marketing/content';
 import type { MarketingSettings } from '@/types';
+import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 export async function GET() {
   let ctx;
@@ -69,6 +70,6 @@ export async function PUT(request: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('settings', error);
   return NextResponse.json({ settings: data as MarketingSettings });
 }

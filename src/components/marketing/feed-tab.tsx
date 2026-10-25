@@ -6,6 +6,7 @@ import { Check, ExternalLink, Megaphone, Plus, Send, Sparkles } from 'lucide-rea
 import type { MarketingPost } from '@/types';
 import { Button } from '@/components/ui/button';
 import { STATUS_LABEL } from '@/lib/marketing/content';
+import { PostVisual } from '@/components/marketing/post-visual';
 
 interface FeedTabProps {
   posts: MarketingPost[];
@@ -14,13 +15,6 @@ interface FeedTabProps {
   onNavigateToLibrary: (post: MarketingPost) => void;
   onConvertToAd?: (post: MarketingPost) => void;
 }
-
-const GRADIENTS = [
-  'bg-primary text-primary-foreground',
-  'bg-primary-soft text-foreground',
-  'bg-card-2 text-foreground border border-border',
-  'bg-gradient-to-br from-primary to-primary-hover text-primary-foreground',
-];
 
 export function FeedTab({
   posts,
@@ -92,40 +86,30 @@ export function FeedTab({
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3.5">
-            {posts.map((p, idx) => {
+            {posts.map((p) => {
               const isSelected = selectedPost?.id === p.id;
-              const grad = GRADIENTS[idx % GRADIENTS.length];
               return (
                 <button
                   key={p.id}
                   type="button"
                   onClick={() => setSelectedId(p.id)}
-                  className={`flex flex-col gap-2 rounded-xl text-left transition-all p-1.5 ${
+                  aria-pressed={isSelected}
+                  className={`flex flex-col gap-2 rounded-2xl text-left transition-all p-1.5 active:scale-[0.98] ${
                     isSelected ? 'ring-2 ring-primary bg-muted/50' : 'hover:bg-muted/30'
                   }`}
                 >
-                  <div
-                    className={`w-full aspect-[4/5] rounded-lg p-3 flex flex-col justify-between relative overflow-hidden ${grad}`}
-                  >
-                    {p.media_urls?.[0] && (
-                      <>
-                        <PostMediaView url={p.media_urls[0]} isVideo={p.media_type === 'video'} className="absolute inset-0 h-full w-full object-cover" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                      </>
+                  <div className="relative w-full aspect-[4/5] rounded-xl overflow-hidden bg-muted">
+                    <PostVisual post={p} className="absolute inset-0 h-full w-full object-cover" />
+                    {p.media_type !== 'foto' && (
+                      <span className="absolute left-2 top-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/50 text-white backdrop-blur-sm">
+                        {p.media_type === 'video' ? 'Vídeo' : 'Carrossel'}
+                      </span>
                     )}
-                    <span className="relative self-start text-[10px] font-semibold px-2 py-0.5 rounded-full bg-black/40 text-white backdrop-blur-sm">
-                      {p.media_type === 'video' ? 'Vídeo' : p.media_type === 'carrossel' ? 'Carrossel' : 'Foto'}
-                    </span>
-                    <span className={`relative font-heading font-semibold text-xs leading-snug line-clamp-3 ${p.media_urls?.[0] ? 'text-white' : ''}`}>
-                      {p.title}
-                    </span>
                   </div>
-                  <div className="flex items-center justify-between px-1 text-[11px]">
-                    <span className="text-muted-foreground">
-                      {p.version > 1 ? `v${p.version}` : 'Hoje'}
-                    </span>
+                  <div className="flex flex-col gap-1 px-1">
+                    <span className="text-xs font-medium text-foreground line-clamp-1">{p.title}</span>
                     <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                      className={`self-start px-2 py-0.5 rounded-full text-[10px] font-medium ${
                         p.status === 'published'
                           ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/30'
                           : p.status === 'pending_approval'
@@ -162,20 +146,7 @@ export function FeedTab({
               <span className="text-xs font-bold text-foreground">conceptdigita.l</span>
             </div>
 
-            {selectedPost.media_urls?.[0] ? (
-              <PostMediaView
-                url={selectedPost.media_urls[0]}
-                isVideo={selectedPost.media_type === 'video'}
-                controls
-                className="aspect-[4/5] w-full bg-black object-cover"
-              />
-            ) : (
-              <div className="aspect-[4/5] w-full bg-primary p-5 flex items-center justify-center text-center">
-                <span className="font-heading font-bold text-lg md:text-xl text-primary-foreground leading-tight">
-                  {selectedPost.title}
-                </span>
-              </div>
-            )}
+            <PostVisual post={selectedPost} controls className="aspect-[4/5] w-full bg-black object-cover" />
 
             <div className="p-3 text-xs leading-relaxed text-foreground/90 flex flex-col gap-1.5">
               <p>
@@ -245,15 +216,4 @@ export function FeedTab({
       </button>
     </div>
   );
-}
-
-// Mídia real do post (arte ou vídeo do piloto, ou URL colada no modal).
-function PostMediaView({ url, isVideo, controls = false, className }: {
-  url: string; isVideo: boolean; controls?: boolean; className?: string;
-}) {
-  if (isVideo) {
-    return <video src={url} className={className} muted playsInline preload="metadata" controls={controls} />;
-  }
-  // eslint-disable-next-line @next/next/no-img-element -- URL assinada e externa, sem otimização do Next.
-  return <img src={url} alt="" className={className} loading="lazy" />;
 }

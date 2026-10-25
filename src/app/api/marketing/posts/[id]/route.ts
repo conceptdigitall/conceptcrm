@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import type { MarketingPost, PostStatus } from '@/types';
+import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 export async function PATCH(
   request: Request,
@@ -43,7 +44,7 @@ export async function PATCH(
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('post', error);
   if (!data) return NextResponse.json({ error: 'Post não encontrado' }, { status: 404 });
   return NextResponse.json({ post: data as MarketingPost });
 }
@@ -66,6 +67,6 @@ export async function DELETE(
     .eq('id', id)
     .eq('account_id', ctx.accountId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('post', error);
   return NextResponse.json({ success: true });
 }
