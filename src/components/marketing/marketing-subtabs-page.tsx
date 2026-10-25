@@ -7,6 +7,8 @@ import type { MarketingPost, MarketingProject, MarketingSettings } from '@/types
 import { DEFAULT_SETTINGS } from '@/lib/marketing/content';
 import { MarketingTabsHeader, type MarketingSubtab } from '@/components/marketing/marketing-tabs-header';
 import { MarketingTutorialBanner } from '@/components/marketing/marketing-tutorial-banner';
+import { MarketingTour, TOUR_STEPS } from '@/components/marketing/marketing-tour';
+import { getNichePreset } from '@/lib/marketing/niche-autopilot';
 import { QuickCreatorBar } from '@/components/marketing/quick-creator-bar';
 import { FeedTab } from '@/components/marketing/feed-tab';
 import { StoriesTab } from '@/components/marketing/stories-tab';
@@ -26,6 +28,8 @@ export function MarketingSubtabsPage() {
     ...DEFAULT_SETTINGS,
   });
   const [loading, setLoading] = useState(true);
+  // Passo atual do tour de primeiro uso; null = fechado.
+  const [tourStep, setTourStep] = useState<number | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createModalKind, setCreateModalKind] = useState<'feed' | 'story'>('feed');
   const [librarySelectedPostId, setLibrarySelectedPostId] = useState<string>('');
@@ -57,6 +61,9 @@ export function MarketingSubtabsPage() {
         const settingsData = await settingsRes.json();
         if (settingsData.settings) {
           setSettings(settingsData.settings);
+          if (!settingsData.settings.tutorial_completed) setTourStep(0);
+        } else {
+          setTourStep(0);
         }
       }
     } catch (err) {
@@ -107,7 +114,16 @@ export function MarketingSubtabsPage() {
     openVideoGenerator(prompt);
   }
 
-  async function handleDismissTutorial() {
+  function goToTourStep(step: number) {
+    setTourStep(step);
+    setCurrentTab(TOUR_STEPS[step].tab);
+  }
+
+  async function handleCloseTour(finished: boolean) {
+    setTourStep(null);
+    // No último passo o botão é "Configurar meu negócio": já deixa a pessoa em Ajustes.
+    if (finished) setCurrentTab('settings');
+    if (settings.tutorial_completed) return;
     setSettings((prev) => ({ ...prev, tutorial_completed: true }));
     try {
       await fetch('/api/marketing/settings', {
@@ -116,23 +132,7 @@ export function MarketingSubtabsPage() {
         body: JSON.stringify({ tutorial_completed: true }),
       });
     } catch {
-      // Silencioso caso offline
-    }
-  }
-
-  async function handleTutorialGenerateDaily() {
-    try {
-      const res = await fetch('/api/marketing/autopilot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'generate_daily' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao gerar pauta');
-      handlePostsCreated(data.posts || []);
-      toast.success('Pauta de hoje gerada com sucesso! Confira no Feed e nos Stories.');
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao gerar pauta');
+      // Offline: o tour volta a abrir na próxima visita, sem prejuízo.
     }
   }
 
@@ -154,16 +154,16 @@ export function MarketingSubtabsPage() {
         pendingCount={pendingCount}
         instagramUsername={settings.instagram_username || 'conceptdigita.l'}
         onFilterPending={() => setCurrentTab('feed')}
+        highlightTab={tourStep !== null && tourStep > 0 ? TOUR_STEPS[tourStep].tab : null}
       />
 
-      {/* Tutorial Passo a Passo para Leigos (sempre acessível) */}
+      {/* Resumo do negócio + atalho para reabrir o tour */}
       <MarketingTutorialBanner
-        completed={settings.tutorial_completed}
         businessName={settings.business_name}
+        nicheLabel={getNichePreset(settings.business_niche).label}
         requireApproval={settings.require_approval}
+        onOpenTour={() => goToTourStep(0)}
         onOpenSettings={() => setCurrentTab('settings')}
-        onGenerateDaily={handleTutorialGenerateDaily}
-        onDismissTutorial={handleDismissTutorial}
       />
 
       {/* Barra de Criação Rápida (Voz / Foto / Pauta Automática do Dia) no Feed e nos Stories */}
@@ -241,6 +241,10 @@ export function MarketingSubtabsPage() {
           />
         )}
       </main>
+
+      {tourStep !== null && (
+        <MarketingTour step={tourStep} onStepChange={goToTourStep} onClose={handleCloseTour} />
+      )}
 
       {/* Modal de Criação Detalhada */}
       <CreatePostModal

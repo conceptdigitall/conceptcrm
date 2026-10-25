@@ -2,9 +2,8 @@
 
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ImagePlus, Loader2, MessageCircle, Mic, MicOff, Send, Sparkles } from 'lucide-react';
+import { ImagePlus, LayoutGrid, Loader2, MessageCircle, Mic, MicOff, Send, Smartphone, Sparkles } from 'lucide-react';
 import type { MarketingPost, MarketingSettings } from '@/types';
-import { getNichePreset } from '@/lib/marketing/niche-autopilot';
 import { Button } from '@/components/ui/button';
 
 interface QuickCreatorBarProps {
@@ -33,8 +32,6 @@ export function QuickCreatorBar({ settings, onPostsCreated }: QuickCreatorBarPro
   const [creatingQuick, setCreatingQuick] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-
-  const nichePreset = getNichePreset(settings.business_niche);
 
   function toggleVoiceRecording() {
     if (recording && recognitionRef.current) {
@@ -162,114 +159,77 @@ export function QuickCreatorBar({ settings, onPostsCreated }: QuickCreatorBarPro
     }
   }
 
+  const isStory = quickKind === 'story';
+
   return (
-    <div className="rounded-2xl border border-border bg-card p-4 md:p-5 flex flex-col gap-4">
-      {/* Linha Superior: Pauta Automática do Dia + WhatsApp */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-primary">
-              Ramo: {nichePreset.label}
-            </span>
-            <span className="text-[11px] px-2 py-0.5 rounded-full border border-border bg-background text-muted-foreground font-semibold">
-              {settings.require_approval ? '🛡️ Você aprova antes' : '🚀 Piloto Automático'}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Gere os 3 Stories + 1 Post do dia automaticamente ou mande um áudio/foto rápida abaixo:
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            onClick={handleGenerateDaily}
-            disabled={generatingDaily}
-            className="bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-bold h-9 px-3.5 rounded-xl gap-1.5"
-          >
-            {generatingDaily ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Gerar Pauta de Hoje (3 Stories + 1 Post)
-          </Button>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleNotifyWhatsApp}
-            disabled={sendingWhatsApp}
-            className="text-xs font-semibold h-9 px-3 rounded-xl gap-1.5"
-          >
-            {sendingWhatsApp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5 text-primary" />}
-            Receber no WhatsApp
-          </Button>
+    <div className="rounded-2xl border border-border bg-card p-4 md:p-5 flex flex-col gap-3">
+      {/* Uma pergunta, uma ação principal (Lei de Hick). O resto fica discreto embaixo. */}
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm md:text-base font-heading font-semibold text-foreground">
+          O que vamos postar hoje?
+        </h2>
+        <div role="radiogroup" aria-label="Formato" className="flex rounded-full border border-border bg-background p-0.5 shrink-0">
+          {(['story', 'feed'] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={quickKind === k}
+              onClick={() => setQuickKind(k)}
+              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold transition-colors ${
+                quickKind === k ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {k === 'story' ? <Smartphone className="w-3.5 h-3.5" /> : <LayoutGrid className="w-3.5 h-3.5" />}
+              {k === 'story' ? 'Story' : 'Post'}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Linha Inferior: Input Rápido por Voz / Texto / Foto */}
-      <form onSubmit={handleQuickCreate} className="flex flex-col gap-2.5">
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="flex rounded-xl border border-border bg-background p-1 shrink-0 self-start">
-            {(['story', 'feed'] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => setQuickKind(k)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                  quickKind === k
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {k === 'story' ? '📱 Story Rápido' : '🖼️ Post Feed'}
-              </button>
-            ))}
-          </div>
+      <form onSubmit={handleQuickCreate} className="flex flex-col gap-2">
+        <div className="flex items-center gap-1.5 rounded-2xl border border-border bg-background p-1.5 transition-colors focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20">
+          <button
+            type="button"
+            onClick={toggleVoiceRecording}
+            aria-label={recording ? 'Parar gravação' : 'Falar pelo microfone'}
+            aria-pressed={recording}
+            className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${
+              recording ? 'bg-destructive/15 text-destructive animate-pulse' : 'text-primary hover:bg-muted'
+            }`}
+          >
+            {recording ? <MicOff className="w-[18px] h-[18px]" /> : <Mic className="w-[18px] h-[18px]" />}
+          </button>
 
-          <div className="flex-1 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={toggleVoiceRecording}
-              title={recording ? 'Parar gravação' : 'Falar pelo microfone'}
-              className={`h-10 px-3 rounded-xl border flex items-center gap-1.5 text-xs font-bold shrink-0 transition-colors ${
-                recording
-                  ? 'bg-destructive/15 border-destructive text-destructive animate-pulse'
-                  : 'bg-background border-border text-foreground hover:border-primary'
-              }`}
-            >
-              {recording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4 text-primary" />}
-              <span className="hidden md:inline">{recording ? 'Ouvindo...' : 'Falar'}</span>
-            </button>
+          <input
+            type="text"
+            value={quickText}
+            onChange={(e) => setQuickText(e.target.value)}
+            placeholder={recording ? 'Ouvindo… pode falar' : isStory ? 'Ex: promoção de hoje, corte + barba por R$ 65' : 'Ex: 3 dicas para manter a barba alinhada'}
+            aria-label="Ideia do conteúdo"
+            className="min-w-0 flex-1 h-10 bg-transparent px-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          />
 
-            <input
-              type="text"
-              value={quickText}
-              onChange={(e) => setQuickText(e.target.value)}
-              placeholder='Ex: "Promoção hoje de corte + barba por R$ 65, chama no zap!"'
-              className="flex-1 h-10 bg-background border border-border rounded-xl px-3.5 text-sm text-foreground focus:outline-none focus:border-primary"
-            />
+          <button
+            type="button"
+            onClick={() => setShowPhotoField((v) => !v)}
+            aria-label="Anexar foto"
+            aria-pressed={showPhotoField || Boolean(mediaUrl)}
+            className={`h-10 w-10 shrink-0 rounded-xl flex items-center justify-center transition-colors ${
+              showPhotoField || mediaUrl ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <ImagePlus className="w-[18px] h-[18px]" />
+          </button>
 
-            <button
-              type="button"
-              onClick={() => setShowPhotoField((v) => !v)}
-              title="Anexar link de foto do produto ou serviço"
-              className={`h-10 px-3 rounded-xl border flex items-center gap-1.5 text-xs font-semibold shrink-0 transition-colors ${
-                showPhotoField || mediaUrl
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'bg-background border-border text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <ImagePlus className="w-4 h-4" />
-              <span className="hidden md:inline">Foto</span>
-            </button>
-
-            <Button
-              type="submit"
-              disabled={creatingQuick}
-              className="h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-bold gap-1.5 shrink-0"
-            >
-              {creatingQuick ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-              Criar
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            disabled={creatingQuick}
+            className="h-10 px-4 rounded-xl bg-primary hover:bg-primary-hover text-primary-foreground text-sm font-semibold gap-1.5 shrink-0"
+          >
+            {creatingQuick ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            <span className="hidden sm:inline">Criar</span>
+          </Button>
         </div>
 
         {showPhotoField && (
@@ -277,11 +237,34 @@ export function QuickCreatorBar({ settings, onPostsCreated }: QuickCreatorBarPro
             type="url"
             value={mediaUrl}
             onChange={(e) => setMediaUrl(e.target.value)}
-            placeholder="Cole o link da foto do produto/serviço (opcional)..."
-            className="h-9 bg-background border border-border rounded-lg px-3 text-xs text-foreground focus:outline-none focus:border-primary"
+            placeholder="Link da foto (opcional). Sem foto, a IA cria a arte com a sua marca."
+            aria-label="Link da foto"
+            className="h-10 bg-background border border-border rounded-xl px-3.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary"
           />
         )}
       </form>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <span>Sem ideia?</span>
+        <button
+          type="button"
+          onClick={handleGenerateDaily}
+          disabled={generatingDaily}
+          className="inline-flex items-center gap-1.5 min-h-9 font-semibold text-primary hover:underline disabled:opacity-60"
+        >
+          {generatingDaily ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          Gerar pauta de hoje (3 stories + 1 post)
+        </button>
+        <button
+          type="button"
+          onClick={handleNotifyWhatsApp}
+          disabled={sendingWhatsApp}
+          className="inline-flex items-center gap-1.5 min-h-9 font-medium hover:text-foreground disabled:opacity-60 sm:ml-auto"
+        >
+          {sendingWhatsApp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageCircle className="w-3.5 h-3.5" />}
+          Resumo no WhatsApp
+        </button>
+      </div>
     </div>
   );
 }

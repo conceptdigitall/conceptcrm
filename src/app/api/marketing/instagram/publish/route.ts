@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { publishToInstagram, InstagramApiError } from '@/lib/marketing/instagram';
 import { attachPostMedia } from '@/lib/marketing/post-media';
+import { loadArtSettings, storePostArt } from '@/lib/marketing/post-art-store';
+import { supabaseAdmin } from '@/lib/ai/admin-client';
 import type { MarketingPost } from '@/types';
 
 export async function POST(request: Request) {
@@ -45,8 +47,18 @@ export async function POST(request: Request) {
 
   const kind = post?.kind ?? body.kind ?? 'feed';
   const mediaType = post?.media_type ?? body.mediaType ?? 'foto';
-  const mediaUrls = post?.media_urls ?? body.mediaUrls ?? [];
+  let mediaUrls = post ? post.media_urls ?? [] : body.mediaUrls ?? [];
   const caption = post?.caption ?? body.caption ?? '';
+
+  // Post só de texto: gera a arte da marca e publica ela.
+  if (mediaUrls.length === 0 && post && mediaType !== 'video') {
+    try {
+      const settings = await loadArtSettings(ctx.supabase, ctx.accountId);
+      mediaUrls = [await storePostArt(supabaseAdmin(), post, settings)];
+    } catch (err) {
+      console.error('[instagram/publish] falha ao gerar arte:', err);
+    }
+  }
 
   if (mediaUrls.length === 0) {
     return NextResponse.json(
