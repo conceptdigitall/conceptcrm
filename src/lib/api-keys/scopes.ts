@@ -45,7 +45,7 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'calendar:write': 'Create, reschedule and cancel appointments',
   'deals:read': 'List pipelines, stages and deals',
   'deals:write': 'Create deals, move stages and mark won/lost',
-  'marketing:generate': 'Queue marketing videos and read their status (internal accounts only)',
+  'marketing:generate': 'Queue marketing videos, read their status and approve or reject posts (internal accounts only)',
 };
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */
