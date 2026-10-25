@@ -14,14 +14,16 @@ export async function attachPostMedia(db: SupabaseClient, posts: MarketingPost[]
 
   const { data: videos } = await db
     .from('marketing_videos')
-    .select('id, status, video_path, poster_path')
+    .select('id, account_id, status, video_path, poster_path')
     .in('id', needs.map((p) => p.video_id as string));
   const byId = new Map((videos ?? []).map((v) => [v.id as string, v]));
 
-  // Foto usa a arte (frame 0); vídeo usa o mp4.
+  // Foto usa a arte (frame 0); vídeo usa o mp4. A API v1 lê com service role
+  // (sem RLS), então o vídeo precisa ser da mesma conta do post: um video_id
+  // de outra conta não pode virar link assinado.
   const pathFor = (p: MarketingPost): string | null => {
     const v = byId.get(p.video_id as string);
-    if (!v || v.status !== 'done') return null;
+    if (!v || v.status !== 'done' || v.account_id !== p.account_id) return null;
     return (p.media_type === 'video' ? v.video_path : v.poster_path) ?? null;
   };
   const paths = [...new Set(needs.map(pathFor).filter((x): x is string => Boolean(x)))];

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { checkRateLimit, rateLimitResponse, RATE_LIMITS } from '@/lib/rate-limit';
 import { buildArtContent } from '@/lib/marketing/post-art-content';
 import { renderPostArt } from '@/lib/marketing/post-art';
 import { artFormatFor, loadArtSettings } from '@/lib/marketing/post-art-store';
@@ -16,6 +17,8 @@ export async function GET(
   } catch (err) {
     return toErrorResponse(err);
   }
+  const limit = checkRateLimit(`mkt-art:${ctx.userId}`, RATE_LIMITS.marketingArt);
+  if (!limit.success) return rateLimitResponse(limit);
 
   const { id } = await params;
   const { data, error } = await ctx.supabase

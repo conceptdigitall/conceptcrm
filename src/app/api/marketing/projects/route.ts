@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
+import { isInternalAccount } from '@/lib/internal-accounts';
 import type { MarketingProject, ProjectCategory, ProjectStatus } from '@/types';
+import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 export const INITIAL_CONCEPT_PROJECTS: Omit<MarketingProject, 'id' | 'account_id' | 'created_at'>[] = [
   { name: 'Barbearia do Alemão', category: 'landing', url: 'https://barbeariadoalemao.com.br', status: 'live' },
@@ -24,9 +26,10 @@ export async function GET() {
     .eq('account_id', ctx.accountId)
     .order('created_at', { ascending: false });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('projects', error);
 
-  if (!data || data.length === 0) {
+  // Os projetos padrão são clientes da Concept: só a conta interna recebe.
+  if ((!data || data.length === 0) && isInternalAccount(ctx.accountId)) {
     // Semeia os projetos padrão da Concept se a conta não tiver nenhum ainda
     const toInsert = INITIAL_CONCEPT_PROJECTS.map((p) => ({
       ...p,
@@ -41,7 +44,7 @@ export async function GET() {
     return NextResponse.json({ projects: (inserted ?? toInsert) as MarketingProject[] });
   }
 
-  return NextResponse.json({ projects: data as MarketingProject[] });
+  return NextResponse.json({ projects: (data ?? []) as MarketingProject[] });
 }
 
 export async function POST(request: Request) {
@@ -75,6 +78,6 @@ export async function POST(request: Request) {
     .select()
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('projects', error);
   return NextResponse.json({ project: data as MarketingProject }, { status: 201 });
 }

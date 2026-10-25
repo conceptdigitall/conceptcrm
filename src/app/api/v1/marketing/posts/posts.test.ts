@@ -63,7 +63,7 @@ describe('GET /api/v1/marketing/posts', () => {
   it('lists pending posts of the account with a signed media url', async () => {
     useAccount('acc-1', (op) =>
       op.table === 'marketing_videos'
-        ? { data: [{ id: 'v-1', status: 'done', video_path: 'acc-1/v-1.mp4', poster_path: null }] }
+        ? { data: [{ id: 'v-1', account_id: 'acc-1', status: 'done', video_path: 'acc-1/v-1.mp4', poster_path: null }] }
         : { data: [row('pending_approval')] }
     );
     const res = await posts.GET(get());

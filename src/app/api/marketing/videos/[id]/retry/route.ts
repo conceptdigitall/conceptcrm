@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { isInternalAccount } from '@/lib/internal-accounts';
+import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   let ctx;
@@ -33,6 +34,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .eq('id', id)
     .select()
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return dbErrorResponse('videos-retry', error);
   return NextResponse.json({ video: data });
 }

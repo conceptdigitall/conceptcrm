@@ -173,6 +173,11 @@ export const RATE_LIMITS = {
    *  capping a stampede; excess inbounds simply don't get an auto-reply
    *  (they still land in the inbox for a human). */
   aiAutoReplyAccount: { limit: 30, windowMs: 60_000 },
+  /** Marketing post-art preview (server-side image render), per user.
+   *  The feed shows one thumbnail per post and the browser caches each
+   *  for 5 min, so 120/min covers scrolling while bounding CPU spent on
+   *  a script hammering the render. */
+  marketingArt: { limit: 120, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

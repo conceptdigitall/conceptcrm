@@ -77,7 +77,7 @@ export async function signedDownloadUrl(
 // ------------------------------------------------------------
 
 export const POST_SELECT =
-  'id, kind, media_type, title, caption, status, video_id, media_urls, error_message, created_at';
+  'id, account_id, kind, media_type, title, caption, status, video_id, media_urls, error_message, created_at';
 
 export const POST_STATUSES: readonly PostStatus[] = ['draft', 'pending_approval', 'scheduled', 'published', 'archived'];
 

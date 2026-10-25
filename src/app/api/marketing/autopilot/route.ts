@@ -7,6 +7,7 @@ import {
   generateDailyAutopilotDrafts,
 } from '@/lib/marketing/niche-autopilot';
 import type { MarketingPost, MarketingSettings } from '@/types';
+import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 interface AutopilotRequestBody {
   action: 'generate_daily' | 'quick_input' | 'notify_whatsapp';
@@ -52,7 +53,7 @@ export async function POST(request: Request) {
       .select();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return dbErrorResponse('autopilot', error);
     }
 
     const createdPosts = (data || []) as MarketingPost[];
@@ -82,7 +83,7 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return dbErrorResponse('autopilot', error);
     }
 
     const post = data as MarketingPost;

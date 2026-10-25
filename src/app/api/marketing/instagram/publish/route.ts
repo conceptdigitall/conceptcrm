@@ -4,6 +4,7 @@ import { publishToInstagram, InstagramApiError } from '@/lib/marketing/instagram
 import { attachPostMedia } from '@/lib/marketing/post-media';
 import { loadArtSettings, storePostArt } from '@/lib/marketing/post-art-store';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
+import { isInternalAccount } from '@/lib/internal-accounts';
 import type { MarketingPost } from '@/types';
 
 export async function POST(request: Request) {
@@ -13,45 +14,45 @@ export async function POST(request: Request) {
   } catch (err) {
     return toErrorResponse(err);
   }
-
-  const body = (await request.json().catch(() => null)) as {
-    postId?: string;
-    kind?: 'feed' | 'story';
-    mediaType?: 'foto' | 'carrossel' | 'video';
-    mediaUrls?: string[];
-    caption?: string;
-  } | null;
-
-  if (!body) {
-    return NextResponse.json({ error: 'Corpo da requisição inválido' }, { status: 400 });
+  // O token da Meta vem do ambiente e é o Instagram da Concept: qualquer outra
+  // conta publicaria no perfil da Concept. Fica restrito até cada conta ter o seu.
+  if (!isInternalAccount(ctx.accountId)) {
+    return NextResponse.json(
+      { error: 'Publicação no Instagram ainda não está liberada para esta conta.' },
+      { status: 403 },
+    );
   }
 
-  let post: MarketingPost | null = null;
+  const body = (await request.json().catch(() => null)) as { postId?: unknown } | null;
 
-  if (body.postId) {
-    const { data, error } = await ctx.supabase
-      .from('marketing_posts')
-      .select('*')
-      .eq('id', body.postId)
-      .eq('account_id', ctx.accountId)
-      .single();
-
-    if (error || !data) {
-      return NextResponse.json({ error: 'Post não encontrado' }, { status: 404 });
-    }
-    [post] = await attachPostMedia(ctx.supabase, [data as MarketingPost]);
-    if (post.status === 'published') {
-      return NextResponse.json({ error: 'Este post já foi publicado no Instagram.' }, { status: 400 });
-    }
+  // Só publica post salvo da própria conta: URL de mídia e legenda soltas no
+  // corpo deixariam publicar qualquer coisa sem passar pelo painel.
+  if (!body || typeof body.postId !== 'string' || !body.postId) {
+    return NextResponse.json({ error: 'Informe o post a publicar' }, { status: 400 });
   }
 
-  const kind = post?.kind ?? body.kind ?? 'feed';
-  const mediaType = post?.media_type ?? body.mediaType ?? 'foto';
-  let mediaUrls = post ? post.media_urls ?? [] : body.mediaUrls ?? [];
-  const caption = post?.caption ?? body.caption ?? '';
+  const { data, error } = await ctx.supabase
+    .from('marketing_posts')
+    .select('*')
+    .eq('id', body.postId)
+    .eq('account_id', ctx.accountId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return NextResponse.json({ error: 'Post não encontrado' }, { status: 404 });
+  }
+  const [post] = await attachPostMedia(ctx.supabase, [data as MarketingPost]);
+  if (post.status === 'published') {
+    return NextResponse.json({ error: 'Este post já foi publicado no Instagram.' }, { status: 400 });
+  }
+
+  const kind = post.kind ?? 'feed';
+  const mediaType = post.media_type ?? 'foto';
+  let mediaUrls = post.media_urls ?? [];
+  const caption = post.caption ?? '';
 
   // Post só de texto: gera a arte da marca e publica ela.
-  if (mediaUrls.length === 0 && post && mediaType !== 'video') {
+  if (mediaUrls.length === 0 && mediaType !== 'video') {
     try {
       const settings = await loadArtSettings(ctx.supabase, ctx.accountId);
       mediaUrls = [await storePostArt(supabaseAdmin(), post, settings)];
@@ -75,19 +76,17 @@ export async function POST(request: Request) {
       caption,
     });
 
-    if (post) {
-      await ctx.supabase
-        .from('marketing_posts')
-        .update({
-          status: 'published',
-          instagram_media_id: result.mediaId,
-          instagram_permalink: result.permalink ?? null,
-          posted_at: result.publishedAt,
-          error_message: null,
-        })
-        .eq('id', post.id)
-        .eq('account_id', ctx.accountId);
-    }
+    await ctx.supabase
+      .from('marketing_posts')
+      .update({
+        status: 'published',
+        instagram_media_id: result.mediaId,
+        instagram_permalink: result.permalink ?? null,
+        posted_at: result.publishedAt,
+        error_message: null,
+      })
+      .eq('id', post.id)
+      .eq('account_id', ctx.accountId);
 
     return NextResponse.json({
       success: true,
@@ -96,14 +95,14 @@ export async function POST(request: Request) {
       postedAt: result.publishedAt,
     });
   } catch (err: unknown) {
-    const errorMsg = err instanceof Error ? err.message : 'Falha na publicação do Instagram';
-    if (post) {
-      await ctx.supabase
-        .from('marketing_posts')
-        .update({ error_message: errorMsg })
-        .eq('id', post.id)
-        .eq('account_id', ctx.accountId);
-    }
+    // Erro da Meta é útil pro usuário; erro interno não sai do servidor.
+    const errorMsg = err instanceof InstagramApiError ? err.message : 'Falha na publicação do Instagram';
+    if (!(err instanceof InstagramApiError)) console.error('[instagram/publish] falha:', err);
+    await ctx.supabase
+      .from('marketing_posts')
+      .update({ error_message: errorMsg })
+      .eq('id', post.id)
+      .eq('account_id', ctx.accountId);
 
     const status = err instanceof InstagramApiError ? 400 : 500;
     return NextResponse.json({ error: errorMsg }, { status });

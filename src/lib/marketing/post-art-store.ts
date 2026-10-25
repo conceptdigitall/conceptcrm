@@ -31,7 +31,8 @@ export async function storePostArt(
   settings: ArtSettings,
 ): Promise<string> {
   const jpeg = await renderPostArtJpeg(buildArtContent(post, settings), artFormatFor(post));
-  const path = `art/${post.account_id}/${post.id}-v${post.version}.jpg`;
+  // Pasta `account-<id>/` é a que as policies do bucket isolam por conta.
+  const path = `account-${post.account_id}/art/${post.id}-v${post.version}.jpg`;
 
   const { error: upErr } = await admin.storage.from(BUCKET).upload(path, jpeg, {
     contentType: 'image/jpeg',
