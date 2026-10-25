@@ -55,7 +55,7 @@ it. Grant the minimum.
 | `calendar:write`     | Create, reschedule and cancel appointments |
 | `deals:read`         | List pipelines, stages and deals         |
 | `deals:write`        | Create deals, move stages, mark won/lost |
-| `marketing:generate` | Queue marketing videos (internal only)   |
+| `marketing:generate` | Queue marketing videos, approve posts (internal only) |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -343,6 +343,21 @@ Mac worker renders it. `GET` lists the latest (`?limit=`, max 50).
 
 Status of one video (`pending` / `running` / `done` / `failed`). When
 `done`, `download_url` is a signed link valid for one hour.
+
+### `GET /api/v1/marketing/posts`
+
+Posts newest first, by default only `pending_approval` (`?status=`,
+`?limit=` max 50). `media_url` is a signed link (one hour) to the mp4
+or the art, `null` while the media is not ready. Scope:
+`marketing:generate`, internal accounts only.
+
+### `PATCH /api/v1/marketing/posts/{id}`
+
+Body `{ "decision": "approve" | "reject", "reason"?: string }`. Only a
+`pending_approval` post changes: `approve` → `scheduled` (publishing
+stays in the dashboard), `reject` → `archived` with the reason. A post
+that is no longer pending gets `409`. Used by the Hermes bot to approve
+from Telegram.
 
 ## Pagination
 

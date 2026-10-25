@@ -32,6 +32,7 @@ export function recordingDb(respond: (op: RecordedOp) => Reply = () => ({})) {
       eq: (col: string, val: unknown) => ((op.filters[col] = val), builder),
       gte: (col: string, val: unknown) => ((op.filters[`${col}>=`] = val), builder),
       lte: (col: string, val: unknown) => ((op.filters[`${col}<=`] = val), builder),
+      in: (col: string, val: unknown) => ((op.filters[`${col} in`] = val), builder),
       order: () => builder,
       limit: () => builder,
       or: () => builder,
@@ -45,6 +46,9 @@ export function recordingDb(respond: (op: RecordedOp) => Reply = () => ({})) {
   const storage = {
     from: () => ({
       createSignedUrl: async () => ({ data: { signedUrl: 'https://signed.example/video.mp4' } }),
+      createSignedUrls: async (paths: string[]) => ({
+        data: paths.map((path) => ({ path, signedUrl: `https://signed.example/${path}` })),
+      }),
     }),
   };
 

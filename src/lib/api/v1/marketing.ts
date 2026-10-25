@@ -10,6 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { forbidden } from '@/lib/api/v1/respond';
 import { isInternalAccount } from '@/lib/internal-accounts';
 import { videoFileName } from '@/lib/marketing/download';
+import type { MarketingPost, PostStatus } from '@/types';
 
 const BUCKET = 'marketing';
 /** Long enough to forward the file (e.g. to Telegram), short enough to not linger. */
@@ -67,4 +68,56 @@ export async function signedDownloadUrl(
       download: videoFileName(row.prompt as string, row.created_at as string),
     });
   return data?.signedUrl ?? null;
+}
+
+// ------------------------------------------------------------
+// Posts — aprovação fora do painel (o Hermes manda no Telegram com
+// Aprovar/Recusar). Aprovar não publica: o post vira `scheduled` e a
+// publicação no Instagram segue pelo painel. Recusar arquiva com o motivo.
+// ------------------------------------------------------------
+
+export const POST_SELECT =
+  'id, kind, media_type, title, caption, status, video_id, media_urls, error_message, created_at';
+
+export const POST_STATUSES: readonly PostStatus[] = ['draft', 'pending_approval', 'scheduled', 'published', 'archived'];
+
+export interface ApiPost {
+  id: string;
+  kind: string;
+  media_type: string;
+  title: string;
+  caption: string;
+  status: string;
+  video_id: string | null;
+  /** Mp4 (vídeo) ou arte (foto), link assinado por 1 hora; null se a mídia não está pronta. */
+  media_url: string | null;
+  error: string | null;
+  created_at: string;
+}
+
+export function serializePost(p: MarketingPost): ApiPost {
+  return {
+    id: p.id,
+    kind: p.kind,
+    media_type: p.media_type,
+    title: p.title,
+    caption: p.caption,
+    status: p.status,
+    video_id: p.video_id ?? null,
+    media_url: p.media_urls?.[0] ?? null,
+    error: p.error_message ?? null,
+    created_at: p.created_at,
+  };
+}
+
+export type PostDecision = 'approve' | 'reject';
+
+export function isPostDecision(value: unknown): value is PostDecision {
+  return value === 'approve' || value === 'reject';
+}
+
+export function decisionPatch(decision: PostDecision, reason?: unknown): Record<string, unknown> {
+  if (decision === 'approve') return { status: 'scheduled', error_message: null };
+  const why = typeof reason === 'string' ? reason.trim().slice(0, 300) : '';
+  return { status: 'archived', error_message: why ? `Recusado na aprovação: ${why}` : 'Recusado na aprovação' };
 }
