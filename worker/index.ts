@@ -5,6 +5,7 @@ import { claimNext, requeueOrphaned } from './queue';
 import { runProspectingJob } from './prospecting';
 import { generateText, runVideoJob } from './video';
 import { runAutopilotTick, syncPostsForVideo } from './autopilot';
+import { generateTextHaiku, runPautaTick } from './pauta';
 import { autopilotConfigFromEnv } from '@/lib/marketing/autopilot';
 import { requeueColumnsForAccount, runColumnJob } from './columns';
 import { layaBatch, layaEmbed } from './laya-client';
@@ -14,6 +15,8 @@ import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator';
 const POLL_MS = 5000;
 // O piloto só olha a agenda de tempos em tempos; a fila de vídeos segue no ritmo normal.
 const AUTOPILOT_EVERY_MS = 15 * 60 * 1000;
+// A pauta semanal confere com mais frequência: o João espera a produção após aprovar no celular.
+const PAUTA_EVERY_MS = 2 * 60 * 1000;
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -36,6 +39,7 @@ if (autopilot) {
   console.log(`Piloto automático ligado: ${autopilot.feedPerWeek} posts e ${autopilot.storiesPerWeek} stories por semana (sempre com aprovação).`);
 }
 let lastAutopilotAt = 0;
+let lastPautaAt = 0;
 
 const db = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
   auth: { persistSession: false },
@@ -73,6 +77,15 @@ async function tick(): Promise<boolean> {
     await runVideoJob(db, video);
     await syncPostsForVideo(db, video.id);
     return true;
+  }
+  if (Date.now() - lastPautaAt > PAUTA_EVERY_MS) {
+    const worked = await runPautaTick(db, accountIds, {
+      now: () => new Date(),
+      generateText: generateTextHaiku,
+    });
+    // Fez algo: olha de novo logo (pode haver outro item); senão espera o intervalo.
+    if (!worked) lastPautaAt = Date.now();
+    return worked;
   }
   if (autopilot && Date.now() - lastAutopilotAt > AUTOPILOT_EVERY_MS) {
     const created = await runAutopilotTick(db, accountIds, autopilot, {
