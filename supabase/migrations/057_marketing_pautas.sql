@@ -22,6 +22,8 @@ CREATE TABLE IF NOT EXISTS marketing_pauta_itens (
   comentario TEXT,
   versao INT NOT NULL DEFAULT 1,
   post_id UUID REFERENCES marketing_posts(id) ON DELETE SET NULL,
+  -- Marca a produção (vídeo pago): sobrevive ao apagar o post, que zera post_id.
+  produzido_em TIMESTAMPTZ,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

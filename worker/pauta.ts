@@ -83,7 +83,9 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
     .select('*')
     .eq('account_id', accountId)
     .eq('status', 'aprovado')
-    .is('post_id', null)
+    // produzido_em (e não post_id): apagar o post zera post_id, e sem esta marca
+    // o worker compraria um vídeo novo a cada passe.
+    .is('produzido_em', null)
     .limit(1);
   if (error) throw new Error(`Não consegui ler os aprovados: ${error.message}`);
   const item = (data as MarketingPautaItem[] | null)?.[0];
@@ -102,17 +104,35 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
   // item segue aprovado sem post e o próximo passe produz de novo (janela mínima).
   const { data: ligado, error: uErr } = await db
     .from('marketing_pauta_itens')
-    .update({ post_id: postId, updated_at: now.toISOString() })
+    .update({ post_id: postId, produzido_em: now.toISOString(), updated_at: now.toISOString() })
     .eq('id', item.id)
     .is('post_id', null)
+    .is('produzido_em', null)
     .select('id');
   if (uErr || !ligado || ligado.length === 0) {
-    await db.from('marketing_posts').delete().eq('id', postId);
-    await db.from('marketing_videos').delete().eq('id', videoId);
+    await desfazerProducao(db, postId, videoId);
     throw new Error(`Não consegui ligar o post ao item: ${uErr?.message ?? 'nenhuma linha atualizada'}`);
   }
   console.log(`[pauta] aprovado em produção: ${item.tema}`);
   return true;
+}
+
+/** Desfaz post e vídeo; se o vídeo não sair, marca failed para o worker não renderizar (pago). */
+async function desfazerProducao(db: SupabaseClient, postId: string, videoId: string): Promise<void> {
+  const { error: pErr } = await db.from('marketing_posts').delete().eq('id', postId);
+  if (pErr) console.error('[pauta] rollback: não apaguei o post:', pErr.message);
+  await apagarVideoOuFalhar(db, videoId);
+}
+
+async function apagarVideoOuFalhar(db: SupabaseClient, videoId: string): Promise<void> {
+  const { error } = await db.from('marketing_videos').delete().eq('id', videoId);
+  if (!error) return;
+  console.error('[pauta] rollback: não apaguei o vídeo, marcando failed:', error.message);
+  const { error: fErr } = await db
+    .from('marketing_videos')
+    .update({ status: 'failed', error: 'Produção da pauta desfeita' })
+    .eq('id', videoId);
+  if (fErr) console.error('[pauta] rollback: não consegui marcar o vídeo como failed:', fErr.message);
 }
 
 async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: PautaDeps, now: Date): Promise<boolean> {
@@ -145,6 +165,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
     .select('id, semana_inicio')
     .eq('account_id', accountId)
     .eq('status', 'gerando')
+    .eq('semana_inicio', semanaInicioISO(now))
     .limit(1);
   let pauta = (pedidas as { id: string; semana_inicio: string }[] | null)?.[0] ?? null;
 
@@ -187,7 +208,8 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   const { error: pErr } = await db.from('marketing_pautas').update({ status: 'pending_approval' }).eq('id', pauta.id);
   if (pErr) {
     // Sem isso, a pauta seguiria `gerando` com itens e a próxima tentativa duplicaria tudo.
-    await db.from('marketing_pauta_itens').delete().eq('pauta_id', pauta.id);
+    const { error: dErr } = await db.from('marketing_pauta_itens').delete().eq('pauta_id', pauta.id);
+    if (dErr) console.error('[pauta] rollback: não apaguei os itens:', dErr.message);
     throw new Error(`Não consegui liberar a pauta: ${pErr.message}`);
   }
   console.log(`[pauta] semana ${pauta.semana_inicio}: ${itens.length} itens para aprovar`);
@@ -211,11 +233,13 @@ async function fecharPauta(db: SupabaseClient, accountId: string, now: Date): Pr
 
 /** Haiku para pauta e reescrita (mesma conta Anthropic do worker de vídeo). */
 export async function generateTextHaiku(system: string, content: string): Promise<string> {
+  // 3000 cortava o JSON de 5 a 7 itens (mesmo erro do diretor: 1500 cortava).
   const r = await new Anthropic().messages.create({
     model: HAIKU_MODEL,
-    max_tokens: 3000,
+    max_tokens: 8000,
     system,
     messages: [{ role: 'user', content }],
   });
+  if (r.stop_reason === 'max_tokens') console.error('[pauta] resposta da IA cortada por max_tokens');
   return r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
 }

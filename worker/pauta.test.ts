@@ -72,7 +72,7 @@ const deps = (now: Date, text: string | (() => string)) => {
 const item = (over: Row): Row => ({
   id: 'it-1', pauta_id: 'p-1', account_id: ACC, dia: '2026-10-27', formato: 'feed',
   tema: 'T', gancho: 'G', roteiro: 'R', legenda_base: 'L', status: 'pending_approval',
-  comentario: null, versao: 1, post_id: null, ...over,
+  comentario: null, versao: 1, post_id: null, produzido_em: null, ...over,
 });
 
 describe('runPautaTick', () => {
@@ -144,6 +144,24 @@ describe('runPautaTick', () => {
     const post = db.tables.marketing_posts[0];
     expect(post).toMatchObject({ status: 'draft', title: 'Meu tema', caption: 'Minha legenda', video_id: video.id });
     expect(db.tables.marketing_pauta_itens[0].post_id).toBe(post.id);
+    expect(typeof db.tables.marketing_pauta_itens[0].produzido_em).toBe('string');
+  });
+
+  it('post apagado no painel (post_id nulo, produzido_em gravado): não produz de novo', async () => {
+    const db = fakeDb({
+      marketing_pautas: [{ id: 'p-1', account_id: ACC, semana_inicio: '2026-10-26', status: 'pending_approval' }],
+      marketing_pauta_itens: [item({ status: 'aprovado', post_id: null, produzido_em: '2026-10-27T10:00:00Z' })],
+    });
+    await runPautaTick(db, [ACC], deps(QUA, ''));
+    expect(db.tables.marketing_videos).toHaveLength(0);
+    expect(db.tables.marketing_posts).toHaveLength(0);
+  });
+
+  it('pedido "gerando" de outra semana não é preenchido como se fosse desta', async () => {
+    const db = fakeDb({ marketing_pautas: [{ id: 'old', account_id: ACC, semana_inicio: '2026-10-19', status: 'gerando' }] });
+    await runPautaTick(db, [ACC], deps(QUA, pautaJson()));
+    expect(db.tables.marketing_pautas.find((r) => r.id === 'old')?.status).toBe('gerando');
+    expect(db.tables.marketing_pautas.find((r) => r.semana_inicio === '2026-10-26')).toBeTruthy();
   });
 
   it('item em ajuste é reescrito: versão 2, pending_approval, comentário nulo', async () => {
@@ -220,6 +238,16 @@ describe('falhas parciais', () => {
     expect(db.tables.marketing_videos).toHaveLength(0);
     expect(db.tables.marketing_posts).toHaveLength(0);
     expect(db.tables.marketing_pauta_itens[0].post_id ?? null).toBeNull();
+  });
+
+  it('rollback: se apagar o vídeo falha, ele vira failed (não renderiza)', async () => {
+    const db = fakeDb({
+      marketing_pautas: [{ ...pautaAberta, account_id: 'acc-f5' }],
+      marketing_pauta_itens: [item({ account_id: 'acc-f5', status: 'aprovado' })],
+    }, (t, op) => (t === 'marketing_pauta_itens' && op === 'update') || (t === 'marketing_videos' && op === 'delete'));
+    await runPautaTick(db, ['acc-f5'], deps(QUA, ''));
+    expect(db.tables.marketing_videos).toHaveLength(1);
+    expect(db.tables.marketing_videos[0].status).toBe('failed');
   });
 
   it('item já ligado por outro passe (zero linhas): desfaz também', async () => {

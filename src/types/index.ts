@@ -906,6 +906,7 @@ export interface MarketingPautaItem {
   comentario: string | null;
   versao: number;
   post_id: string | null;
+  produzido_em: string | null;
   updated_at: string;
 }
 
