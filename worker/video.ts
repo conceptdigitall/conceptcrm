@@ -20,8 +20,13 @@ const BUCKET = 'marketing';
 const MAX_FIX_ROUNDS = 2;
 // 'gemini' (usa @google/genai + GEMINI_API_KEY), 'cli' (Claude Code CLI logado), 'api' (Anthropic SDK + ANTHROPIC_API_KEY).
 export type EngineType = 'gemini' | 'cli' | 'api';
-export const ENGINE: EngineType = (process.env.VIDEO_ENGINE as EngineType) ||
-  (process.env.VIDEO_MODEL?.startsWith('gemini') ? 'gemini' : (process.env.GEMINI_API_KEY ? 'gemini' : 'cli'));
+// O motor vem do VIDEO_ENGINE explícito ou do VIDEO_MODEL. A chave do Gemini não decide sozinha:
+// com ela presente e VIDEO_MODEL em Claude, o vídeo continua no Opus pelo CLI.
+export function engineFromEnv(env: Record<string, string | undefined>): EngineType {
+  if (env.VIDEO_ENGINE) return env.VIDEO_ENGINE as EngineType;
+  return env.VIDEO_MODEL?.startsWith('gemini') ? 'gemini' : 'cli';
+}
+export const ENGINE: EngineType = engineFromEnv(process.env);
 export const CLAUDE_BIN = process.env.CLAUDE_PATH || 'claude';
 export const DEFAULT_MODEL = ENGINE === 'gemini' ? 'gemini-3.8-flash' : 'claude-opus-5-5';
 export const MODEL = process.env.VIDEO_MODEL || DEFAULT_MODEL;

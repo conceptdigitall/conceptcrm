@@ -3,7 +3,7 @@ import type { LeadColumn, LeadSearch, MarketingVideo } from '@/types';
 import { internalAccountIds } from '@/lib/internal-accounts';
 import { claimNext, requeueOrphaned } from './queue';
 import { runProspectingJob } from './prospecting';
-import { generateText, runVideoJob } from './video';
+import { ENGINE, MODEL, generateText, runVideoJob } from './video';
 import { runAutopilotTick, syncPostsForVideo } from './autopilot';
 import { generateTextHaiku, runPautaTick } from './pauta';
 import { autopilotConfigFromEnv } from '@/lib/marketing/autopilot';
@@ -104,6 +104,7 @@ async function main() {
   const b = await requeueOrphaned(db, 'marketing_videos');
   const c = await requeueOrphaned(db, 'lead_columns');
   if (a + b + c > 0) console.log(`Devolvidos à fila: ${a + b + c} job(s) travados`);
+  console.log(`Vídeo: motor ${ENGINE}, modelo ${MODEL}`);
   console.log('Worker rodando. Ctrl+C para parar.');
   while (!stopping) {
     try {
