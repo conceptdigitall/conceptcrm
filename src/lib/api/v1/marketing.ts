@@ -10,7 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { forbidden } from '@/lib/api/v1/respond';
 import { isInternalAccount } from '@/lib/internal-accounts';
 import { videoFileName } from '@/lib/marketing/download';
-import type { MarketingPost, PostStatus } from '@/types';
+import type { MarketingPauta, MarketingPautaItem, MarketingPost, PostStatus } from '@/types';
 
 const BUCKET = 'marketing';
 /** Long enough to forward the file (e.g. to Telegram), short enough to not linger. */
@@ -120,4 +120,60 @@ export function decisionPatch(decision: PostDecision, reason?: unknown): Record<
   if (decision === 'approve') return { status: 'scheduled', error_message: null };
   const why = typeof reason === 'string' ? reason.trim().slice(0, 300) : '';
   return { status: 'archived', error_message: why ? `Recusado na aprovação: ${why}` : 'Recusado na aprovação' };
+}
+
+// ------------------------------------------------------------
+// Pauta semanal — a IA propõe 5 a 7 itens por semana e o João decide
+// item a item pelo celular (aprovar, pedir ajuste ou recusar).
+// ------------------------------------------------------------
+
+export const PAUTA_SELECT = 'id, semana_inicio, status, created_at';
+
+export const PAUTA_ITEM_SELECT =
+  'id, pauta_id, dia, formato, tema, gancho, roteiro, legenda_base, status, comentario, versao, post_id, updated_at';
+
+export interface ApiPautaItem {
+  id: string;
+  dia: string;
+  formato: string;
+  tema: string;
+  gancho: string;
+  roteiro: string;
+  legenda_base: string;
+  status: string;
+  comentario: string | null;
+  versao: number;
+  post_id: string | null;
+}
+
+export interface ApiPauta {
+  id: string;
+  semana_inicio: string;
+  status: string;
+  itens: ApiPautaItem[];
+}
+
+export function serializePautaItem(i: MarketingPautaItem): ApiPautaItem {
+  return {
+    id: i.id,
+    dia: i.dia,
+    formato: i.formato,
+    tema: i.tema,
+    gancho: i.gancho,
+    roteiro: i.roteiro,
+    legenda_base: i.legenda_base,
+    status: i.status,
+    comentario: i.comentario ?? null,
+    versao: i.versao,
+    post_id: i.post_id ?? null,
+  };
+}
+
+export function serializePauta(p: MarketingPauta, itens: MarketingPautaItem[]): ApiPauta {
+  return {
+    id: p.id,
+    semana_inicio: p.semana_inicio,
+    status: p.status,
+    itens: itens.map(serializePautaItem),
+  };
 }
