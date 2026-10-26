@@ -4,7 +4,7 @@ import { runPautaTick, slotDoFormato } from './pauta';
 type Row = Record<string, unknown>;
 
 // Banco falso em memória: só o que o worker da pauta usa.
-function fakeDb(seed: Record<string, Row[]> = {}) {
+function fakeDb(seed: Record<string, Row[]> = {}, failOn: (table: string, op: string) => boolean = () => false) {
   const tables: Record<string, Row[]> = {
     marketing_pautas: [], marketing_pauta_itens: [], marketing_videos: [],
     marketing_posts: [], marketing_settings: [], marketing_projects: [], ...seed,
@@ -17,6 +17,7 @@ function fakeDb(seed: Record<string, Row[]> = {}) {
     let max = Infinity;
     const run = () => {
       const t = tables[name];
+      if (failOn(name, op)) return { data: null, error: { message: 'boom' } };
       if (op === 'insert') {
         const list = (Array.isArray(payload) ? payload : [payload]) as Row[];
         const made: Row[] = list.map((p) => ({ id: `id-${++seq}`, ...p }));
@@ -204,5 +205,58 @@ describe('slotDoFormato', () => {
     expect(story).toMatchObject({ kind: 'story', mediaType: 'video', format: 'vertical' });
     expect(story.options).toMatchObject({ duration: 15, target: 'story', pauta: true });
     expect('autopilot' in story.options).toBe(false);
+  });
+});
+
+describe('falhas parciais', () => {
+  const pautaAberta = { id: 'p-1', account_id: 'acc-f1', semana_inicio: '2026-10-26', status: 'pending_approval' };
+
+  it('post_id não gravado: desfaz vídeo e post (sem duplicar produção)', async () => {
+    const db = fakeDb({
+      marketing_pautas: [pautaAberta],
+      marketing_pauta_itens: [item({ account_id: 'acc-f1', status: 'aprovado' })],
+    }, (t, op) => t === 'marketing_pauta_itens' && op === 'update');
+    await runPautaTick(db, ['acc-f1'], deps(QUA, ''));
+    expect(db.tables.marketing_videos).toHaveLength(0);
+    expect(db.tables.marketing_posts).toHaveLength(0);
+    expect(db.tables.marketing_pauta_itens[0].post_id ?? null).toBeNull();
+  });
+
+  it('item já ligado por outro passe (zero linhas): desfaz também', async () => {
+    const it = item({ account_id: 'acc-f2', status: 'aprovado' });
+    const db = fakeDb({ marketing_pautas: [{ ...pautaAberta, account_id: 'acc-f2' }], marketing_pauta_itens: [it] });
+    // Simula corrida: o post_id aparece logo depois da leitura inicial.
+    const orig = db.from.bind(db);
+    let first = true;
+    (db as unknown as { from: unknown }).from = (n: string) => {
+      const q = orig(n);
+      if (n === 'marketing_pauta_itens' && !first) it.post_id = 'outro';
+      if (n === 'marketing_pauta_itens') first = false;
+      return q;
+    };
+    await runPautaTick(db, ['acc-f2'], deps(QUA, ''));
+    expect(db.tables.marketing_videos).toHaveLength(0);
+    expect(db.tables.marketing_posts).toHaveLength(0);
+  });
+
+  it('item aprovado que falha não bloqueia ajuste nem geração (sem backoff)', async () => {
+    const db = fakeDb({
+      marketing_pautas: [{ ...pautaAberta, account_id: 'acc-f3' }],
+      marketing_pauta_itens: [
+        item({ id: 'ap', account_id: 'acc-f3', status: 'aprovado' }),
+        item({ id: 'aj', account_id: 'acc-f3', status: 'ajuste', comentario: 'x' }),
+      ],
+    }, (t, op) => t === 'marketing_videos' && op === 'insert');
+    const d = deps(QUA, novoOk());
+    expect(await runPautaTick(db, ['acc-f3'], d)).toBe(true);
+    expect(d.generateText).toHaveBeenCalledTimes(1);
+    expect(db.tables.marketing_pauta_itens.find((r) => r.id === 'aj')).toMatchObject({ versao: 2 });
+  });
+
+  it('falha ao liberar a pauta apaga os itens inseridos', async () => {
+    const db = fakeDb({}, (t, op) => t === 'marketing_pautas' && op === 'update');
+    expect(await runPautaTick(db, ['acc-f4'], deps(QUA, pautaJson()))).toBe(false);
+    expect(db.tables.marketing_pauta_itens).toHaveLength(0);
+    expect(db.tables.marketing_pautas[0].status).toBe('gerando');
   });
 });

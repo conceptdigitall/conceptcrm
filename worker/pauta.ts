@@ -49,22 +49,35 @@ export function slotDoFormato(f: PautaFormato, n: number): PautaSlot {
 export async function runPautaTick(db: SupabaseClient, accountIds: string[], deps: PautaDeps): Promise<boolean> {
   const now = deps.now();
   for (const accountId of accountIds) {
+    const failedAt = lastFailure.get(accountId);
+    const blocked = failedAt !== undefined && now.getTime() - failedAt < RETRY_AFTER_MS;
+    // Produção e fechamento não usam IA: erro aqui só é registrado, sem backoff
+    // (um item aprovado "envenenado" não pode travar ajuste/geração da conta).
     try {
-      const failedAt = lastFailure.get(accountId);
-      const blocked = failedAt !== undefined && now.getTime() - failedAt < RETRY_AFTER_MS;
-      if (await produzirAprovado(db, accountId)) return true;
-      if (!blocked && await reescreverAjuste(db, accountId, deps, now)) return true;
-      if (!blocked && await gerarPauta(db, accountId, deps, now)) return true;
+      if (await produzirAprovado(db, accountId, now)) return true;
+    } catch (err) {
+      console.error(`[pauta] produção, conta ${accountId}:`, err instanceof Error ? err.message : err);
+    }
+    // Só falha de IA (ajuste/geração) liga a espera de 1 h.
+    if (!blocked) {
+      try {
+        if (await reescreverAjuste(db, accountId, deps, now)) return true;
+        if (await gerarPauta(db, accountId, deps, now)) return true;
+      } catch (err) {
+        lastFailure.set(accountId, now.getTime());
+        console.error(`[pauta] IA, conta ${accountId}:`, err instanceof Error ? err.message : err);
+      }
+    }
+    try {
       if (await fecharPauta(db, accountId, now)) return true;
     } catch (err) {
-      lastFailure.set(accountId, now.getTime());
-      console.error(`[pauta] conta ${accountId}:`, err instanceof Error ? err.message : err);
+      console.error(`[pauta] fechamento, conta ${accountId}:`, err instanceof Error ? err.message : err);
     }
   }
   return false;
 }
 
-async function produzirAprovado(db: SupabaseClient, accountId: string): Promise<boolean> {
+async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date): Promise<boolean> {
   const { data, error } = await db
     .from('marketing_pauta_itens')
     .select('*')
@@ -78,16 +91,26 @@ async function produzirAprovado(db: SupabaseClient, accountId: string): Promise<
 
   const { data: irmaos } = await db.from('marketing_pauta_itens').select('post_id').eq('pauta_id', item.pauta_id);
   const n = (irmaos ?? []).filter((r) => r.post_id).length;
-  const { postId } = await enqueuePostWithVideo(db, accountId, slotDoFormato(item.formato, n), {
+  const { postId, videoId } = await enqueuePostWithVideo(db, accountId, slotDoFormato(item.formato, n), {
     title: item.tema,
     brief: `${item.gancho}\n${item.roteiro}`.slice(0, 1000),
     caption: item.legenda_base,
   });
-  const { error: uErr } = await db
+  // `.is('post_id', null)` + `.select()`: zero linhas conta como falha, e então
+  // desfazemos post e vídeo para o próximo passe não duplicar a produção.
+  // Risco residual: se o processo cair entre criar o vídeo e gravar o post_id, o
+  // item segue aprovado sem post e o próximo passe produz de novo (janela mínima).
+  const { data: ligado, error: uErr } = await db
     .from('marketing_pauta_itens')
-    .update({ post_id: postId, updated_at: new Date().toISOString() })
-    .eq('id', item.id);
-  if (uErr) throw new Error(`Não consegui ligar o post ao item: ${uErr.message}`);
+    .update({ post_id: postId, updated_at: now.toISOString() })
+    .eq('id', item.id)
+    .is('post_id', null)
+    .select('id');
+  if (uErr || !ligado || ligado.length === 0) {
+    await db.from('marketing_posts').delete().eq('id', postId);
+    await db.from('marketing_videos').delete().eq('id', videoId);
+    throw new Error(`Não consegui ligar o post ao item: ${uErr?.message ?? 'nenhuma linha atualizada'}`);
+  }
   console.log(`[pauta] aprovado em produção: ${item.tema}`);
   return true;
 }
@@ -162,7 +185,11 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   );
   if (iErr) throw new Error(`Não consegui gravar os itens: ${iErr.message}`);
   const { error: pErr } = await db.from('marketing_pautas').update({ status: 'pending_approval' }).eq('id', pauta.id);
-  if (pErr) throw new Error(`Não consegui liberar a pauta: ${pErr.message}`);
+  if (pErr) {
+    // Sem isso, a pauta seguiria `gerando` com itens e a próxima tentativa duplicaria tudo.
+    await db.from('marketing_pauta_itens').delete().eq('pauta_id', pauta.id);
+    throw new Error(`Não consegui liberar a pauta: ${pErr.message}`);
+  }
   console.log(`[pauta] semana ${pauta.semana_inicio}: ${itens.length} itens para aprovar`);
   return true;
 }
