@@ -3,8 +3,9 @@ import type { LeadColumn, LeadSearch, MarketingVideo } from '@/types';
 import { internalAccountIds } from '@/lib/internal-accounts';
 import { claimNext, requeueOrphaned } from './queue';
 import { runProspectingJob } from './prospecting';
-import { generateText, runVideoJob } from './video';
+import { ENGINE, MODEL, generateText, runVideoJob } from './video';
 import { runAutopilotTick, syncPostsForVideo } from './autopilot';
+import { generateTextHaiku, runPautaTick } from './pauta';
 import { autopilotConfigFromEnv } from '@/lib/marketing/autopilot';
 import { requeueColumnsForAccount, runColumnJob } from './columns';
 import { layaBatch, layaEmbed } from './laya-client';
@@ -14,6 +15,8 @@ import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator';
 const POLL_MS = 5000;
 // O piloto só olha a agenda de tempos em tempos; a fila de vídeos segue no ritmo normal.
 const AUTOPILOT_EVERY_MS = 15 * 60 * 1000;
+// A pauta semanal confere com mais frequência: o João espera a produção após aprovar no celular.
+const PAUTA_EVERY_MS = 2 * 60 * 1000;
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -36,6 +39,7 @@ if (autopilot) {
   console.log(`Piloto automático ligado: ${autopilot.feedPerWeek} posts e ${autopilot.storiesPerWeek} stories por semana (sempre com aprovação).`);
 }
 let lastAutopilotAt = 0;
+let lastPautaAt = 0;
 
 const db = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
   auth: { persistSession: false },
@@ -74,6 +78,15 @@ async function tick(): Promise<boolean> {
     await syncPostsForVideo(db, video.id);
     return true;
   }
+  if (Date.now() - lastPautaAt > PAUTA_EVERY_MS) {
+    const worked = await runPautaTick(db, accountIds, {
+      now: () => new Date(),
+      generateText: generateTextHaiku,
+    });
+    // Fez algo: olha de novo logo (pode haver outro item); senão espera o intervalo.
+    if (!worked) lastPautaAt = Date.now();
+    return worked;
+  }
   if (autopilot && Date.now() - lastAutopilotAt > AUTOPILOT_EVERY_MS) {
     const created = await runAutopilotTick(db, accountIds, autopilot, {
       now: () => new Date(),
@@ -91,6 +104,7 @@ async function main() {
   const b = await requeueOrphaned(db, 'marketing_videos');
   const c = await requeueOrphaned(db, 'lead_columns');
   if (a + b + c > 0) console.log(`Devolvidos à fila: ${a + b + c} job(s) travados`);
+  console.log(`Vídeo: motor ${ENGINE}, modelo ${MODEL}`);
   console.log('Worker rodando. Ctrl+C para parar.');
   while (!stopping) {
     try {

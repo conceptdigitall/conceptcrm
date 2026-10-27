@@ -880,6 +880,36 @@ export interface MarketingPost {
   created_at: string;
 }
 
+export type PautaStatus = 'gerando' | 'pending_approval' | 'fechada';
+export type PautaItemStatus = 'pending_approval' | 'aprovado' | 'ajuste' | 'recusado';
+export type PautaFormato = 'feed' | 'story' | 'reel';
+
+export interface MarketingPauta {
+  id: string;
+  account_id: string;
+  semana_inicio: string;
+  status: PautaStatus;
+  created_at: string;
+}
+
+export interface MarketingPautaItem {
+  id: string;
+  pauta_id: string;
+  account_id: string;
+  dia: string;
+  formato: PautaFormato;
+  tema: string;
+  gancho: string;
+  roteiro: string;
+  legenda_base: string;
+  status: PautaItemStatus;
+  comentario: string | null;
+  versao: number;
+  post_id: string | null;
+  produzido_em: string | null;
+  updated_at: string;
+}
+
 export type CaptionStyle = 'direto' | 'educativo' | 'provocativo' | 'storytelling';
 export type CaptionSize = 'curta' | 'media' | 'longa';
 export type EmojiLevel = 'nenhum' | 'poucos' | 'muitos';

@@ -11,9 +11,12 @@ import {
   parseAutopilotIdea,
   weekStart,
   type AutopilotConfig,
+  type AutopilotIdea,
+  type AutopilotSlot,
 } from '@/lib/marketing/autopilot';
 import { DEFAULT_SETTINGS } from '@/lib/marketing/content';
-import type { MarketingSettings } from '@/types';
+import type { VideoOptions } from '@/lib/marketing/video-options';
+import type { MarketingSettings, PostKind, PostMediaType, VideoFormat, VideoTone } from '@/types';
 
 export interface AutopilotDeps {
   now(): Date;
@@ -73,6 +76,24 @@ async function planOne(
   const idea = parseAutopilotIdea(raw);
   if (!idea) throw new Error('A IA não devolveu uma pauta válida');
 
+  await enqueuePostWithVideo(db, accountId, slot, idea);
+  console.log(`[piloto] ${slot.kind}/${slot.mediaType}: ${idea.title}`);
+  return true;
+}
+
+/** Slot de um item da pauta aprovada: igual ao do piloto, mas marcado `pauta` (não conta na semana do piloto). */
+export interface PautaSlot {
+  kind: PostKind;
+  mediaType: PostMediaType;
+  format: VideoFormat;
+  tone: VideoTone;
+  options: VideoOptions & { pauta: true };
+}
+
+/** Pede a mídia (marketing_videos) e cria o post rascunho ligado a ela; apaga o pedido de vídeo se o post falhar. */
+export async function enqueuePostWithVideo(
+  db: SupabaseClient, accountId: string, slot: AutopilotSlot | PautaSlot, idea: AutopilotIdea,
+): Promise<{ postId: string; videoId: string }> {
   const { data: video, error: vErr } = await db
     .from('marketing_videos')
     .insert({
@@ -90,7 +111,7 @@ async function planOne(
     .single();
   if (vErr || !video) throw new Error(`Não consegui enfileirar a mídia: ${vErr?.message}`);
 
-  const { error: pErr } = await db.from('marketing_posts').insert({
+  const { data: post, error: pErr } = await db.from('marketing_posts').insert({
     account_id: accountId,
     created_by: null,
     kind: slot.kind,
@@ -101,13 +122,12 @@ async function planOne(
     media_urls: [],
     video_id: video.id,
     status: 'draft',
-  });
-  if (pErr) {
+  }).select('id').single();
+  if (pErr || !post) {
     await db.from('marketing_videos').delete().eq('id', video.id);
-    throw new Error(`Não consegui criar o post: ${pErr.message}`);
+    throw new Error(`Não consegui criar o post: ${pErr?.message}`);
   }
-  console.log(`[piloto] ${slot.kind}/${slot.mediaType}: ${idea.title}`);
-  return true;
+  return { postId: post.id as string, videoId: video.id as string };
 }
 
 /**

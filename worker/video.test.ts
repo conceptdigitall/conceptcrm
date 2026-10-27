@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { composeViaGemini, runVideoJob } from './video';
+import { composeViaGemini, engineFromEnv, runVideoJob } from './video';
 import { runTemplatedJob } from './video-template';
 import type { MarketingVideo } from '@/types';
 
@@ -165,5 +165,14 @@ describe('composeViaGemini', () => {
     process.env.GEMINI_API_KEY = 'test-key';
     await expect(composeViaGemini([{ role: 'user', content: 'force-error' }]))
       .rejects.toThrow('Gemini não retornou texto (motivo: SAFETY)');
+  });
+});
+
+describe('motor do vídeo', () => {
+  it('motor sai do VIDEO_MODEL, não da presença da chave do Gemini', () => {
+    expect(engineFromEnv({ VIDEO_MODEL: 'claude-opus-5-5', GEMINI_API_KEY: 'x' })).toBe('cli');
+    expect(engineFromEnv({ GEMINI_API_KEY: 'x' })).toBe('cli');
+    expect(engineFromEnv({ VIDEO_MODEL: 'gemini-3.8-flash' })).toBe('gemini');
+    expect(engineFromEnv({ VIDEO_ENGINE: 'api', VIDEO_MODEL: 'claude-opus-5-5' })).toBe('api');
   });
 });
