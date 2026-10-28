@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Check, ExternalLink, Megaphone, Plus, Send, Sparkles } from 'lucide-react';
 import type { MarketingPost } from '@/types';
 import { Button } from '@/components/ui/button';
 import { STATUS_LABEL } from '@/lib/marketing/content';
 import { PostVisual } from '@/components/marketing/post-visual';
+import { usePostPublisher } from '@/components/marketing/use-post-publisher';
 
 interface FeedTabProps {
   posts: MarketingPost[];
@@ -24,37 +24,13 @@ export function FeedTab({
   onConvertToAd,
 }: FeedTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => posts[0]?.id || '');
-  const [publishing, setPublishing] = useState(false);
 
   const selectedPost = posts.find((p) => p.id === selectedId) || posts[0] || null;
 
-  async function handlePublishInstagram(post: MarketingPost) {
-    setPublishing(true);
-    try {
-      const res = await fetch('/api/marketing/instagram/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: post.id }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao publicar no Instagram');
-
-      toast.success('Post publicado com sucesso no Instagram!');
-      onPostUpdated({
-        ...post,
-        status: 'published',
-        instagram_media_id: data.mediaId,
-        instagram_permalink: data.permalink,
-        posted_at: data.postedAt,
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha na publicação';
-      toast.error(msg);
-    } finally {
-      setPublishing(false);
-    }
-  }
+  const { publish: handlePublishInstagram, busy: publishing } = usePostPublisher(selectedPost, onPostUpdated, {
+    success: 'Post publicado com sucesso no Instagram!',
+    fallback: 'Falha na publicação',
+  });
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 items-start">
@@ -169,7 +145,7 @@ export function FeedTab({
           <div className="flex flex-col gap-2 pt-1">
             {selectedPost.status !== 'published' ? (
               <Button
-                onClick={() => handlePublishInstagram(selectedPost)}
+                onClick={handlePublishInstagram}
                 disabled={publishing}
                 className="w-full bg-primary hover:bg-primary-hover text-primary-foreground font-bold h-11 rounded-xl gap-2 shadow"
               >

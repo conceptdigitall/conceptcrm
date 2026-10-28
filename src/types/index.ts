@@ -844,7 +844,7 @@ export interface LeadColumnValue {
 
 export type PostKind = 'feed' | 'story';
 export type PostMediaType = 'foto' | 'carrossel' | 'video';
-export type PostStatus = 'draft' | 'pending_approval' | 'scheduled' | 'published' | 'archived';
+export type PostStatus = 'draft' | 'pending_approval' | 'scheduled' | 'publishing' | 'published' | 'archived';
 export type StoryInteraction = 'nenhuma' | 'enquete' | 'link';
 
 export interface StoryFrame {
@@ -877,6 +877,7 @@ export interface MarketingPost {
   instagram_permalink?: string | null;
   posted_at?: string | null;
   error_message?: string | null;
+  publish_started_at?: string | null;
   created_at: string;
 }
 

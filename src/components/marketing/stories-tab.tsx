@@ -1,11 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { toast } from 'sonner';
 import { Plus, Send, Check, Smartphone, Megaphone } from 'lucide-react';
 import type { MarketingPost } from '@/types';
 import { Button } from '@/components/ui/button';
 import { PostVisual } from '@/components/marketing/post-visual';
+import { usePostPublisher } from '@/components/marketing/use-post-publisher';
 
 interface StoriesTabProps {
   stories: MarketingPost[];
@@ -21,37 +21,15 @@ export function StoriesTab({
   onConvertToAd,
 }: StoriesTabProps) {
   const [selectedId, setSelectedId] = useState<string>(() => stories[0]?.id || '');
-  const [publishing, setPublishing] = useState(false);
 
   const selectedStory = stories.find((s) => s.id === selectedId) || stories[0] || null;
 
-  async function handlePublishStory(story: MarketingPost) {
-    setPublishing(true);
-    try {
-      const res = await fetch('/api/marketing/instagram/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        // Sem mídia, o servidor gera a arte do story (antes ia uma imagem fixa de exemplo).
-        body: JSON.stringify({ postId: story.id, kind: 'story' }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro ao publicar Story');
-
-      toast.success('Story publicado no Instagram com sucesso!');
-      onStoryUpdated({
-        ...story,
-        status: 'published',
-        instagram_media_id: data.mediaId,
-        posted_at: data.postedAt,
-      });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Falha na publicação do Story';
-      toast.error(msg);
-    } finally {
-      setPublishing(false);
-    }
-  }
+  const { publish: handlePublishStory, busy: publishing } = usePostPublisher(selectedStory, onStoryUpdated, {
+    success: 'Story publicado no Instagram com sucesso!',
+    fallback: 'Falha na publicação do Story',
+    // Sem mídia, o servidor gera a arte do story (antes ia uma imagem fixa de exemplo).
+    extra: { kind: 'story' },
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -129,7 +107,7 @@ export function StoriesTab({
             <div className="flex flex-col gap-2.5 pt-4 border-t border-border">
               {selectedStory.status !== 'published' ? (
                 <Button
-                  onClick={() => handlePublishStory(selectedStory)}
+                  onClick={handlePublishStory}
                   disabled={publishing}
                   className="bg-primary hover:bg-primary-hover text-primary-foreground font-bold h-11 rounded-xl gap-2 shadow"
                 >
