@@ -108,6 +108,7 @@ export const STATUS_LABEL: Record<PostStatus, string> = {
   draft: 'Rascunho',
   pending_approval: 'Aprovar',
   scheduled: 'Agendado',
+  publishing: 'Publicando',
   published: 'Publicado',
   archived: 'Arquivado',
 };
