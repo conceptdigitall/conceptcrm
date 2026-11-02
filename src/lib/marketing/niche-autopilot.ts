@@ -176,13 +176,12 @@ export interface GeneratedDraftInput {
 
 export function generateDailyAutopilotDrafts(settings: MarketingSettings): GeneratedDraftInput[] {
   const preset = getNichePreset(settings.business_niche);
-  const businessPrefix = settings.business_name?.trim() ? `[${settings.business_name.trim()}] ` : '';
   const status: PostStatus = settings.require_approval ? 'pending_approval' : 'scheduled';
   const now = new Date();
   const scheduledAt = settings.require_approval ? null : new Date(now.getTime() + 60 * 60 * 1000).toISOString();
 
   const stories: GeneratedDraftInput[] = preset.dailyStories.map((st) => {
-    const idea = `${businessPrefix}${st.idea}`;
+    const idea = st.idea;
     return {
       kind: 'story',
       media_type: 'foto',
@@ -196,7 +195,8 @@ export function generateDailyAutopilotDrafts(settings: MarketingSettings): Gener
     };
   });
 
-  const feedIdea = `${businessPrefix}${preset.dailyFeed.idea}`;
+  // A legenda vai ao ar como está: nada de "[Empresa]" colado na frente.
+  const feedIdea = preset.dailyFeed.idea;
   const feedPost: GeneratedDraftInput = {
     kind: 'feed',
     media_type: 'foto',

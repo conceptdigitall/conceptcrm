@@ -29,7 +29,7 @@ describe('marketing autopilot multi-negócio', () => {
     expect(drafts.filter((d) => d.kind === 'story')).toHaveLength(3);
     expect(drafts.filter((d) => d.kind === 'feed')).toHaveLength(1);
     expect(drafts.every((d) => d.status === 'pending_approval')).toBe(true);
-    expect(drafts[0].idea).toContain('[Barbearia do Alemão]');
+    expect(drafts.some((d) => /\[|\]/.test(d.caption))).toBe(false);
   });
 
   it('gera pauta já agendada (scheduled) quando Piloto Automático está ativo (require_approval = false)', () => {
