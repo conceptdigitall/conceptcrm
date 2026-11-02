@@ -42,7 +42,8 @@ const STYLE_WRAP: Record<CaptionStyle, (idea: string) => string> = {
   direto: (i) => i,
   educativo: (i) => `Passo a passo: ${i}`,
   provocativo: (i) => `Quantas vezes você ignorou isto? ${i}`,
-  storytelling: (i) => `Semana passada vimos acontecer: ${i}`,
+  // Sem "semana passada vimos": a ideia do piloto é genérica, não um caso que aconteceu.
+  storytelling: (i) => `Uma cena comum por aqui: ${i}`,
 };
 
 const EMOJI: Record<EmojiLevel, string> = { nenhum: '', poucos: ' 🚀', muitos: ' 🚀🔥✅' };
