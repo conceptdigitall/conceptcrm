@@ -111,3 +111,21 @@ describe("middleware — refreshed auth cookies survive redirects", () => {
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
   });
 });
+
+describe("middleware — módulo Loja", () => {
+  it("sends a logged-out visitor on /pedidos and /loja to login", async () => {
+    for (const path of ["/pedidos", "/loja"]) {
+      const res = await middleware(new NextRequest(`https://app.test${path}`));
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toContain("/login");
+    }
+  });
+
+  it("leaves the public store endpoints and script open", async () => {
+    for (const path of ["/api/loja/track", "/api/loja/checkout", "/api/loja/webhooks/stripe", "/store-track.js"]) {
+      const res = await middleware(new NextRequest(`https://app.test${path}`, { method: "POST" }));
+      expect(res.status).not.toBe(307);
+      expect(res.status).not.toBe(401);
+    }
+  });
+});
