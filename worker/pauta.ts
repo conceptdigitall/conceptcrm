@@ -14,8 +14,9 @@ import {
   pautaPrompt,
   semanaInicioISO,
 } from '@/lib/marketing/pauta';
+import { PLAYBOOK_SYSTEM, parsePlaybook, playbookPrompt, type PlaybookRef } from '@/lib/marketing/playbook';
 import type { VideoStyle } from '@/lib/marketing/video-options';
-import type { MarketingPautaItem, MarketingSettings, PautaFormato, VideoTone } from '@/types';
+import type { MarketingPautaItem, MarketingSettings, PautaFormato, Playbook, VideoTone } from '@/types';
 import { enqueuePostWithVideo, type PautaSlot } from './autopilot';
 import { HAIKU_MODEL } from './video-models';
 
@@ -158,6 +159,40 @@ async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: Pau
   return true;
 }
 
+const REFERENCIAS_DIAS = 30;
+const REFERENCIAS_MAX = 20;
+
+/** Referências analisadas (done) nos últimos 30 dias, as 20 mais recentes. */
+export async function carregarReferencias(db: SupabaseClient, accountId: string, now: Date): Promise<PlaybookRef[]> {
+  const desde = new Date(now.getTime() - REFERENCIAS_DIAS * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await db
+    .from('marketing_references')
+    .select('id, url, eixo, nicho, analise')
+    .eq('account_id', accountId)
+    .eq('status', 'done')
+    .gte('finished_at', desde)
+    .order('finished_at', { ascending: false })
+    .limit(REFERENCIAS_MAX);
+  if (error) throw new Error(`Não consegui ler as referências: ${error.message}`);
+  return ((data as (Omit<PlaybookRef, 'analise'> & { analise: PlaybookRef['analise'] | null })[] | null) ?? [])
+    .filter((r): r is PlaybookRef => !!r.analise);
+}
+
+/** Resume as referências em playbook. Qualquer falha só loga: a pauta sai sem playbook. */
+async function gerarPlaybook(db: SupabaseClient, accountId: string, deps: PautaDeps, now: Date): Promise<{ refs: PlaybookRef[]; playbook: Playbook | null }> {
+  let refs: PlaybookRef[] = [];
+  try {
+    refs = await carregarReferencias(db, accountId, now);
+    if (refs.length === 0) return { refs, playbook: null };
+    const playbook = parsePlaybook(await deps.generateText(PLAYBOOK_SYSTEM, playbookPrompt(refs)));
+    if (!playbook) console.error('[pauta] playbook: a IA não devolveu um JSON válido');
+    return { refs, playbook };
+  } catch (err) {
+    console.error('[pauta] playbook:', err instanceof Error ? err.message : err);
+    return { refs, playbook: null };
+  }
+}
+
 async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps, now: Date): Promise<boolean> {
   // Pedida pela API ("gerar agora"): já existe, status gerando, em qualquer horário.
   const { data: pedidas } = await db
@@ -191,6 +226,9 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   ]);
   const settings = (settingsRow as MarketingSettings | null) ?? { ...DEFAULT_SETTINGS, account_id: accountId };
 
+  // `refs` fica à mão para a pauta usar as referências no prompt.
+  const { playbook } = await gerarPlaybook(db, accountId, deps, now);
+
   const raw = await deps.generateText(PAUTA_SYSTEM, pautaPrompt({
     semanaInicio: pauta.semana_inicio,
     settings,
@@ -205,7 +243,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
     itens.map((i) => ({ ...i, pauta_id: pauta.id, account_id: accountId, status: 'pending_approval', versao: 1, updated_at: stamp })),
   );
   if (iErr) throw new Error(`Não consegui gravar os itens: ${iErr.message}`);
-  const { error: pErr } = await db.from('marketing_pautas').update({ status: 'pending_approval' }).eq('id', pauta.id);
+  const { error: pErr } = await db.from('marketing_pautas').update({ status: 'pending_approval', playbook }).eq('id', pauta.id);
   if (pErr) {
     // Sem isso, a pauta seguiria `gerando` com itens e a próxima tentativa duplicaria tudo.
     const { error: dErr } = await db.from('marketing_pauta_itens').delete().eq('pauta_id', pauta.id);

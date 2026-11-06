@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PLAYBOOK_SYSTEM } from '@/lib/marketing/playbook';
 import { runPautaTick, slotDoFormato } from './pauta';
 
 type Row = Record<string, unknown>;
@@ -7,7 +8,7 @@ type Row = Record<string, unknown>;
 function fakeDb(seed: Record<string, Row[]> = {}, failOn: (table: string, op: string) => boolean = () => false) {
   const tables: Record<string, Row[]> = {
     marketing_pautas: [], marketing_pauta_itens: [], marketing_videos: [],
-    marketing_posts: [], marketing_settings: [], marketing_projects: [], ...seed,
+    marketing_posts: [], marketing_references: [], marketing_settings: [], marketing_projects: [], ...seed,
   };
   let seq = 0;
   const from = (name: string) => {
@@ -39,6 +40,7 @@ function fakeDb(seed: Record<string, Row[]> = {}, failOn: (table: string, op: st
       delete: () => { op = 'delete'; return q; },
       eq: (c: string, v: unknown) => { filters.push((r) => r[c] === v); return q; },
       is: (c: string, v: unknown) => { filters.push((r) => (r[c] ?? null) === v); return q; },
+      gte: (c: string, v: string) => { filters.push((r) => String(r[c] ?? '') >= v); return q; },
       in: (c: string, v: unknown[]) => { filters.push((r) => v.includes(r[c])); return q; },
       order: () => q,
       limit: (n: number) => { max = n; return q; },
@@ -286,5 +288,61 @@ describe('falhas parciais', () => {
     expect(await runPautaTick(db, ['acc-f4'], deps(QUA, pautaJson()))).toBe(false);
     expect(db.tables.marketing_pauta_itens).toHaveLength(0);
     expect(db.tables.marketing_pautas[0].status).toBe('gerando');
+  });
+});
+
+describe('playbook da semana', () => {
+  const PACC = 'acc-playbook'; // conta própria: o backoff de 1 h é por conta e vive no módulo
+  const refRow = (id: string, eixo: string): Row => ({
+    id, account_id: PACC, url: `https://x.com/${id}`, eixo, nicho: null, status: 'done',
+    finished_at: '2026-10-20T12:00:00Z',
+    analise: {
+      gancho: { tipo: 'dor', frase: 'f', primeiroQuadro: 'q' }, duracaoSeg: 10, cortesPorMinuto: 20,
+      formato: 'tela', tema: `Tema ${id}`, promessa: 'p', entrega: 'e', cta: 'c', porQueViralizou: ['x'], comoAdaptar: 'a',
+    },
+  });
+  const pbJson = JSON.stringify({ comoFalar: ['a'], sobreOQue: ['b'], evitar: ['c'] });
+
+  it('com 2 referências: playbook primeiro, pauta grava playbook', async () => {
+    const db = fakeDb({ marketing_references: [refRow('r1', 'como_falar'), refRow('r2', 'sobre_o_que')] });
+    const d = { now: () => QUA, generateText: vi.fn(async (system: string) => (system === PLAYBOOK_SYSTEM ? pbJson : pautaJson())) };
+    expect(await runPautaTick(db, [PACC], d)).toBe(true);
+    expect(d.generateText).toHaveBeenCalledTimes(2);
+    expect(d.generateText.mock.calls[0][0]).toBe(PLAYBOOK_SYSTEM);
+    expect(db.tables.marketing_pautas[0]).toMatchObject({ status: 'pending_approval', playbook: { comoFalar: ['a'], sobreOQue: ['b'], evitar: ['c'] } });
+  });
+
+  it('sem referências: uma chamada só e playbook null', async () => {
+    const db = fakeDb();
+    const d = deps(QUA, pautaJson());
+    expect(await runPautaTick(db, [PACC], d)).toBe(true);
+    expect(d.generateText).toHaveBeenCalledTimes(1);
+    expect(db.tables.marketing_pautas[0].playbook).toBeNull();
+  });
+
+  it('referência fora dos 30 dias é ignorada', async () => {
+    const velha = { ...refRow('r1', 'como_falar'), finished_at: '2026-08-01T00:00:00Z' };
+    const db = fakeDb({ marketing_references: [velha] });
+    const d = deps(QUA, pautaJson());
+    await runPautaTick(db, [PACC], d);
+    expect(d.generateText).toHaveBeenCalledTimes(1);
+  });
+
+  it('playbook com JSON quebrado: pauta sai mesmo assim, playbook null, sem espera de 1 h', async () => {
+    const db = fakeDb({ marketing_references: [refRow('r1', 'como_falar')] });
+    const d = { now: () => QUA, generateText: vi.fn(async (system: string) => (system === PLAYBOOK_SYSTEM ? '{quebrado' : pautaJson())) };
+    expect(await runPautaTick(db, [PACC], d)).toBe(true);
+    expect(db.tables.marketing_pautas[0]).toMatchObject({ status: 'pending_approval', playbook: null });
+    expect(db.tables.marketing_pauta_itens).toHaveLength(6);
+  });
+
+  it('IA do playbook lança erro: loga e segue com playbook null', async () => {
+    const db = fakeDb({ marketing_references: [refRow('r1', 'como_falar')] });
+    const d = { now: () => QUA, generateText: vi.fn(async (system: string) => { if (system === PLAYBOOK_SYSTEM) throw new Error('fora'); return pautaJson(); }) };
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await runPautaTick(db, [PACC], d)).toBe(true);
+    expect(err).toHaveBeenCalledWith('[pauta] playbook:', 'fora');
+    err.mockRestore();
+    expect(db.tables.marketing_pautas[0].playbook).toBeNull();
   });
 });
