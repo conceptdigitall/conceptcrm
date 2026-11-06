@@ -1,25 +1,18 @@
-// Referência por arquivo: o vídeo vai para o bucket privado `marketing` e o
-// worker analisa a partir de lá.
+// Passo 1 do upload de referência: valida e devolve uma URL assinada para o
+// navegador enviar o vídeo direto ao Storage. O arquivo nunca passa pela
+// função: na Vercel o corpo da requisição é limitado a ~4,5 MB e um reel pesa
+// 10-100 MB. A linha só nasce em /upload/complete, depois do envio.
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
-import type { MarketingReference } from '@/types';
-import { REFERENCE_UPLOAD_MAX_BYTES, validateReferenceMeta } from '@/lib/marketing/references';
-import { dbErrorResponse } from '@/lib/marketing/db-error';
-
-const BUCKET = 'marketing';
-
-function fileExtension(file: File): string {
-  const fromName = file.name.split('.').pop()?.toLowerCase() ?? '';
-  if (/^[a-z0-9]{2,5}$/.test(fromName)) return fromName;
-  const fromType = file.type.split('/')[1]?.replace(/[^a-z0-9]/gi, '').toLowerCase();
-  return fromType || 'mp4';
-}
-
-function field(form: FormData, name: string): string {
-  const v = form.get(name);
-  return typeof v === 'string' ? v.trim() : '';
-}
+import { REFERENCE_UPLOAD_MAX_BYTES } from '@/lib/marketing/references';
+import {
+  REFERENCE_BUCKET,
+  isPlatform,
+  referenceFolder,
+  safeExtension,
+  validateUploadMeta,
+} from '@/lib/marketing/reference-upload';
 
 export async function POST(request: Request) {
   let ctx;
@@ -29,65 +22,31 @@ export async function POST(request: Request) {
     return toErrorResponse(err);
   }
 
-  const form = await request.formData().catch(() => null);
-  if (!form) return NextResponse.json({ error: 'Envio inválido.' }, { status: 400 });
+  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Envio inválido.' }, { status: 400 });
 
-  const file = form.get('file');
-  if (!(file instanceof File)) return NextResponse.json({ error: 'Envie um arquivo de vídeo.' }, { status: 400 });
-  if (!file.type.startsWith('video/')) {
+  if (typeof body.fileType !== 'string' || !body.fileType.startsWith('video/')) {
     return NextResponse.json({ error: 'O arquivo precisa ser um vídeo.' }, { status: 400 });
   }
-  if (file.size > REFERENCE_UPLOAD_MAX_BYTES) {
+  if (typeof body.fileSize !== 'number' || !Number.isFinite(body.fileSize) || body.fileSize <= 0) {
+    return NextResponse.json({ error: 'Tamanho do arquivo inválido.' }, { status: 400 });
+  }
+  if (body.fileSize > REFERENCE_UPLOAD_MAX_BYTES) {
     return NextResponse.json({ error: 'O vídeo passa de 100 MB. Envie um menor.' }, { status: 400 });
   }
-
-  const plataforma = field(form, 'plataforma');
-  if (plataforma !== 'instagram' && plataforma !== 'tiktok') {
+  if (!isPlatform(body.plataforma)) {
     return NextResponse.json({ error: 'Escolha a plataforma do vídeo (Instagram ou TikTok).' }, { status: 400 });
   }
-
-  const viewsRaw = field(form, 'views');
-  const meta = validateReferenceMeta({
-    eixo: field(form, 'eixo'),
-    nicho: field(form, 'nicho') || null,
-    views: viewsRaw === '' ? null : /^\d+$/.test(viewsRaw) ? Number(viewsRaw) : viewsRaw,
-  });
+  const meta = validateUploadMeta(body);
   if (!meta.ok) return NextResponse.json({ error: meta.error }, { status: 400 });
 
   const id = crypto.randomUUID();
-  const path = `account-${ctx.accountId}/referencias/${id}.${fileExtension(file)}`;
-  const admin = supabaseAdmin();
+  const path = `${referenceFolder(ctx.accountId)}/${id}.${safeExtension(body.ext, body.fileType)}`;
 
-  const { error: upErr } = await admin.storage.from(BUCKET).upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-  });
-  if (upErr) {
-    console.error('[marketing/references] falha no upload:', upErr);
-    return NextResponse.json({ error: 'Não foi possível salvar o vídeo. Tente de novo.' }, { status: 500 });
+  const { data, error } = await supabaseAdmin().storage.from(REFERENCE_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) {
+    console.error('[marketing/references] falha ao assinar upload:', error);
+    return NextResponse.json({ error: 'Não foi possível preparar o envio. Tente de novo.' }, { status: 500 });
   }
-
-  const { data, error } = await ctx.supabase
-    .from('marketing_references')
-    .insert({
-      id,
-      account_id: ctx.accountId,
-      url: `upload:${id}`,
-      url_normalizada: `upload:${id}`,
-      plataforma,
-      eixo: meta.value.eixo,
-      nicho: meta.value.nicho,
-      views: meta.value.views,
-      arquivo_path: path,
-      status: 'pending',
-      criado_por: ctx.userId,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    await admin.storage.from(BUCKET).remove([path]);
-    return dbErrorResponse('references', error);
-  }
-  return NextResponse.json({ reference: data as MarketingReference }, { status: 201 });
+  return NextResponse.json({ id, path, token: data.token, signedUrl: data.signedUrl });
 }

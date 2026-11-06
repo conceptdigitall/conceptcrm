@@ -6,7 +6,8 @@ import { ForbiddenError } from '@/lib/auth/account';
 
 const mocks = vi.hoisted(() => ({
   requireRole: vi.fn(),
-  upload: vi.fn(),
+  signUpload: vi.fn(),
+  list: vi.fn(),
   remove: vi.fn(),
 }));
 vi.mock('@/lib/auth/account', async (orig) => ({
@@ -19,11 +20,12 @@ vi.mock('@/lib/marketing/references', async (orig) => ({
   REFERENCE_UPLOAD_MAX_BYTES: 10,
 }));
 vi.mock('@/lib/ai/admin-client', () => ({
-  supabaseAdmin: () => ({ storage: { from: () => ({ upload: mocks.upload, remove: mocks.remove }) } }),
+  supabaseAdmin: () => ({ storage: { from: () => ({ createSignedUploadUrl: mocks.signUpload, list: mocks.list, remove: mocks.remove }) } }),
 }));
 
 import * as list from './route';
 import * as upload from './upload/route';
+import * as complete from './upload/complete/route';
 import * as retry from './[id]/retry/route';
 
 const IG = 'https://www.instagram.com/reel/ABC123/';
@@ -42,23 +44,13 @@ const postLink = (body: unknown) =>
   new Request('http://localhost/api/marketing/references', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
   });
-const postUpload = (file: File, extra: Record<string, string> = {}) => {
-  const form = new FormData();
-  form.set('file', file);
-  form.set('plataforma', 'tiktok');
-  form.set('eixo', 'como_falar');
-  form.set('nicho', '');
-  form.set('views', '1200');
-  for (const [k, v] of Object.entries(extra)) form.set(k, v);
-  return new Request('http://localhost/api/marketing/references/upload', { method: 'POST', body: form });
-};
-const video = () => new File(['x'], 'v.mp4', { type: 'video/mp4' });
 const retryCtx = { params: Promise.resolve({ id: 'r-1' }) };
 const retryReq = () => new Request('http://localhost/api/marketing/references/r-1/retry', { method: 'POST' });
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.upload.mockResolvedValue({ error: null });
+  mocks.signUpload.mockResolvedValue({ data: { token: 'tok', signedUrl: 'https://signed.example/up' }, error: null });
+  mocks.list.mockResolvedValue({ data: [{ name: `${ID}.mp4` }], error: null });
   mocks.remove.mockResolvedValue({ error: null });
   useAccount();
 });
@@ -112,42 +104,99 @@ describe('POST /api/marketing/references', () => {
   });
 });
 
+const jsonReq = (url: string, body: unknown) =>
+  new Request(`http://localhost/api/marketing/references/${url}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+const prepBody = (extra: Record<string, unknown> = {}) => ({
+  plataforma: 'tiktok', eixo: 'como_falar', nicho: '', views: '1200', fileType: 'video/mp4', fileSize: 5, ext: 'mp4', ...extra,
+});
+const ID = '11111111-1111-4111-8111-111111111111';
+const PATH = `account-acc-1/referencias/${ID}.mp4`;
+const completeBody = (extra: Record<string, unknown> = {}) => ({
+  id: ID, path: PATH, plataforma: 'tiktok', eixo: 'como_falar', nicho: '', views: '1200', ...extra,
+});
+
 describe('POST /api/marketing/references/upload', () => {
-  it('rejects non-video files', async () => {
-    const res = await upload.POST(postUpload(new File(['x'], 'a.png', { type: 'image/png' })));
+  it('rejects non-video types without touching Storage', async () => {
+    const res = await upload.POST(jsonReq('upload', prepBody({ fileType: 'image/png' })));
     expect(res.status).toBe(400);
-    expect(mocks.upload).not.toHaveBeenCalled();
+    expect(mocks.signUpload).not.toHaveBeenCalled();
   });
 
-  it('rejects files above the size limit without touching Storage', async () => {
-    const res = await upload.POST(postUpload(new File(['x'.repeat(11)], 'v.mp4', { type: 'video/mp4' })));
-    expect(res.status).toBe(400);
-    expect(mocks.upload).not.toHaveBeenCalled();
+  it('rejects sizes above the limit without touching Storage', async () => {
+    expect((await upload.POST(jsonReq('upload', prepBody({ fileSize: 11 })))).status).toBe(400);
+    expect(mocks.signUpload).not.toHaveBeenCalled();
   });
 
   it('rejects an unknown platform', async () => {
-    expect((await upload.POST(postUpload(video(), { plataforma: 'youtube' }))).status).toBe(400);
-    expect(mocks.upload).not.toHaveBeenCalled();
+    expect((await upload.POST(jsonReq('upload', prepBody({ plataforma: 'youtube' })))).status).toBe(400);
+    expect(mocks.signUpload).not.toHaveBeenCalled();
   });
 
-  it('stores the file and inserts upload:<id> with the form platform', async () => {
+  it('returns a signed upload with a path built from account and generated id, without inserting', async () => {
+    const res = await upload.POST(jsonReq('upload', prepBody({ ext: '../x/mp4' })));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.path).toBe(`account-acc-1/referencias/${json.id}.mp4`);
+    expect(json).toMatchObject({ token: 'tok', signedUrl: 'https://signed.example/up' });
+    expect(mocks.signUpload).toHaveBeenCalledWith(json.path);
+    expect(ops).toHaveLength(0);
+  });
+
+  it('forbids viewers', async () => {
+    mocks.requireRole.mockRejectedValue(new ForbiddenError('no'));
+    expect((await upload.POST(jsonReq('upload', prepBody()))).status).toBe(403);
+  });
+});
+
+describe('POST /api/marketing/references/upload/complete', () => {
+  it('rejects a path from another account without inserting', async () => {
+    const res = await complete.POST(
+      jsonReq('upload/complete', completeBody({ path: `account-other/referencias/${ID}.mp4` })),
+    );
+    expect(res.status).toBe(400);
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(ops).toHaveLength(0);
+  });
+
+  it('rejects a path that does not match the id', async () => {
+    const res = await complete.POST(
+      jsonReq('upload/complete', completeBody({ path: 'account-acc-1/referencias/outro.mp4' })),
+    );
+    expect(res.status).toBe(400);
+    expect(ops).toHaveLength(0);
+  });
+
+  it('400s when the object is missing', async () => {
+    mocks.list.mockResolvedValue({ data: [], error: null });
+    const res = await complete.POST(jsonReq('upload/complete', completeBody()));
+    expect(res.status).toBe(400);
+    expect(ops).toHaveLength(0);
+  });
+
+  it('inserts upload:<id> with arquivo_path on the happy path', async () => {
     useAccount(() => ({ data: row() }));
-    const res = await upload.POST(postUpload(video()));
+    const res = await complete.POST(jsonReq('upload/complete', completeBody()));
     expect(res.status).toBe(201);
-    const path = mocks.upload.mock.calls[0][0] as string;
-    expect(path).toMatch(/^account-acc-1\/referencias\/[0-9a-f-]{36}\.mp4$/);
-    const payload = ops.find((o) => o.action === 'insert')!.payload as Record<string, unknown>;
-    expect(payload).toMatchObject({ plataforma: 'tiktok', arquivo_path: path, views: 1200, nicho: null });
-    expect(payload.url).toBe(`upload:${payload.id}`);
-    expect(payload.url_normalizada).toBe(`upload:${payload.id}`);
+    expect(mocks.list).toHaveBeenCalledWith('account-acc-1/referencias', expect.objectContaining({ search: `${ID}.mp4` }));
+    expect(ops.find((o) => o.action === 'insert')!.payload).toMatchObject({
+      id: ID, account_id: 'acc-1', url: `upload:${ID}`, url_normalizada: `upload:${ID}`,
+      plataforma: 'tiktok', arquivo_path: PATH, views: 1200, nicho: null, status: 'pending', criado_por: 'u-1',
+    });
   });
 
-  it('removes the file when the insert fails', async () => {
+  it('removes the object when the insert fails', async () => {
     useAccount(() => ({ error: { code: 'XX' } }));
     vi.spyOn(console, 'error').mockImplementation(() => {});
-    const res = await upload.POST(postUpload(video()));
+    const res = await complete.POST(jsonReq('upload/complete', completeBody()));
     expect(res.status).toBe(500);
-    expect(mocks.remove).toHaveBeenCalledWith([mocks.upload.mock.calls[0][0]]);
+    expect(mocks.remove).toHaveBeenCalledWith([PATH]);
+  });
+
+  it('forbids viewers', async () => {
+    mocks.requireRole.mockRejectedValue(new ForbiddenError('no'));
+    expect((await complete.POST(jsonReq('upload/complete', completeBody()))).status).toBe(403);
   });
 });
 
@@ -170,5 +219,10 @@ describe('POST /api/marketing/references/[id]/retry', () => {
   it('404s for another account row', async () => {
     useAccount(() => ({ data: null }));
     expect((await retry.POST(retryReq(), retryCtx)).status).toBe(404);
+  });
+
+  it('forbids viewers', async () => {
+    mocks.requireRole.mockRejectedValue(new ForbiddenError('no'));
+    expect((await retry.POST(retryReq(), retryCtx)).status).toBe(403);
   });
 });
