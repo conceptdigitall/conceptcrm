@@ -51,7 +51,7 @@ Card novo **Referências** na aba Marketing:
 Worker `worker/references.ts`, no mesmo laço do worker que já roda no Mac (`worker/index.ts`), com dependências injetadas como em `PautaDeps`:
 
 1. Pega **uma** referência `pending` por vez e marca `running`.
-2. Lê a duração com `yt-dlp --dump-json`. Acima de 180 s: `erro` ("vídeo longo demais").
+2. Lê a duração com `yt-dlp --dump-json`. Acima de 180 s: `failed` ("vídeo longo demais").
 3. Baixa com `yt-dlp` para uma pasta temporária (ou usa o arquivo enviado).
 4. Envia ao Gemini (Files API, modelo Flash do plano gratuito, mesma chave do `worker/narration-gemini.ts`) com saída JSON:
 
