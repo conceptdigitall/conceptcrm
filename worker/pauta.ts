@@ -8,12 +8,15 @@ import { weekStart } from '@/lib/marketing/autopilot';
 import { DEFAULT_SETTINGS } from '@/lib/marketing/content';
 import {
   PAUTA_SYSTEM,
+  CARROSSEL_MAX,
   ajustePrompt,
+  laminasDoRoteiro,
   parseItemAjustado,
   parsePautaItens,
   pautaPrompt,
   semanaInicioISO,
 } from '@/lib/marketing/pauta';
+import { textoDeDado } from '@/lib/marketing/json-text';
 import { parseReferenceAnalysis } from '@/lib/marketing/references';
 import { PLAYBOOK_SYSTEM, parsePlaybook, playbookPrompt, type PlaybookRef } from '@/lib/marketing/playbook';
 import type { VideoStyle } from '@/lib/marketing/video-options';
@@ -93,11 +96,13 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
   const item = (data as MarketingPautaItem[] | null)?.[0];
   if (!item) return false;
 
+  if (item.formato === 'carrossel') return produzirCarrossel(db, item, now);
+
   const { data: irmaos } = await db.from('marketing_pauta_itens').select('post_id').eq('pauta_id', item.pauta_id);
   const n = (irmaos ?? []).filter((r) => r.post_id).length;
   const { postId, videoId } = await enqueuePostWithVideo(db, accountId, slotDoFormato(item.formato, n), {
     title: item.tema,
-    brief: `${item.gancho}\n${item.roteiro}`.slice(0, 1000),
+    brief: await briefDoReel(db, item),
     caption: item.legenda_base,
   });
   // `.is('post_id', null)` + `.select()`: zero linhas conta como falha, e então
@@ -116,6 +121,55 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
     throw new Error(`Não consegui ligar o post ao item: ${uErr?.message ?? 'nenhuma linha atualizada'}`);
   }
   console.log(`[pauta] aprovado em produção: ${item.tema}`);
+  return true;
+}
+
+const BRIEF_MAX = 1000;
+
+/** Gancho + roteiro (+ gancho da referência, por último: é o que se corta primeiro). Teto de 1000 caracteres. */
+async function briefDoReel(db: SupabaseClient, item: MarketingPautaItem): Promise<string> {
+  const base = `${item.gancho}\n${item.roteiro}`.slice(0, BRIEF_MAX);
+  if (!item.referencia_id) return base;
+  const { data } = await db.from('marketing_references').select('analise').eq('id', item.referencia_id).maybeSingle();
+  // Referência apagada ou com análise quebrada: o reel sai sem a linha extra.
+  const analise = data ? parseReferenceAnalysis(JSON.stringify((data as { analise: unknown }).analise ?? null)) : null;
+  if (!analise) return base;
+  const linha = `Gancho de referência: ${textoDeDado(analise.gancho.tipo)} — ${textoDeDado(analise.gancho.primeiroQuadro)}`;
+  return `${base}\n${linha}`.slice(0, BRIEF_MAX);
+}
+
+/** Carrossel não tem vídeo: o post já nasce em aprovação e a arte de cada lâmina sai na publicação. */
+async function produzirCarrossel(db: SupabaseClient, item: MarketingPautaItem, now: Date): Promise<boolean> {
+  const laminas = laminasDoRoteiro(item.roteiro)?.slice(0, CARROSSEL_MAX);
+  if (!laminas) throw new Error(`Carrossel com menos de 3 lâminas: ${item.tema}`);
+  const { data: post, error: pErr } = await db.from('marketing_posts').insert({
+    account_id: item.account_id,
+    created_by: null,
+    kind: 'feed',
+    media_type: 'carrossel',
+    title: item.tema,
+    idea: item.gancho,
+    caption: item.legenda_base,
+    media_urls: [],
+    video_id: null,
+    frames: laminas.map((text) => ({ text, interaction: 'nenhuma' })),
+    status: 'pending_approval',
+  }).select('id').single();
+  if (pErr || !post) throw new Error(`Não consegui criar o post do carrossel: ${pErr?.message}`);
+  const postId = post.id as string;
+  const { data: ligado, error: uErr } = await db
+    .from('marketing_pauta_itens')
+    .update({ post_id: postId, produzido_em: now.toISOString(), updated_at: now.toISOString() })
+    .eq('id', item.id)
+    .is('post_id', null)
+    .is('produzido_em', null)
+    .select('id');
+  if (uErr || !ligado || ligado.length === 0) {
+    const { error: dErr } = await db.from('marketing_posts').delete().eq('id', postId);
+    if (dErr) console.error('[pauta] rollback: não apaguei o post do carrossel:', dErr.message);
+    throw new Error(`Não consegui ligar o post ao item: ${uErr?.message ?? 'nenhuma linha atualizada'}`);
+  }
+  console.log(`[pauta] carrossel em aprovação: ${item.tema}`);
   return true;
 }
 
@@ -151,6 +205,11 @@ async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: Pau
   const raw = await deps.generateText(PAUTA_SYSTEM, ajustePrompt(item, item.comentario ?? ''));
   const novo = parseItemAjustado(raw);
   if (!novo) throw new Error('A IA não devolveu o item reescrito');
+  if (item.formato === 'carrossel') {
+    const laminas = laminasDoRoteiro(novo.roteiro);
+    if (!laminas) throw new Error('A IA reescreveu o carrossel com menos de 3 lâminas');
+    novo.roteiro = laminas.slice(0, CARROSSEL_MAX).join('\n');
+  }
   const { error: uErr } = await db
     .from('marketing_pauta_itens')
     .update({ ...novo, versao: item.versao + 1, status: 'pending_approval', comentario: null, updated_at: now.toISOString() })

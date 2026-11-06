@@ -213,6 +213,105 @@ function novoOk() {
   return JSON.stringify({ tema: 'N', gancho: 'G', roteiro: 'R', legenda_base: 'L' });
 }
 
+describe('carrossel e gancho da referência', () => {
+  const CACC = 'acc-carrossel';
+  const analise = {
+    gancho: { tipo: 'dor', frase: 'f', primeiroQuadro: 'Mão cortando <b>cabelo</b>\nem close' }, duracaoSeg: 10, cortesPorMinuto: 20,
+    formato: 'tela', tema: 'T', promessa: 'p', entrega: 'e', cta: 'c', porQueViralizou: ['x', 'y', 'z'], comoAdaptar: 'a',
+  };
+  const pautaSeed = [{ id: 'p-1', account_id: CACC, semana_inicio: '2026-10-26', status: 'pending_approval' }];
+
+  it('item carrossel vira post com lâminas, sem vídeo', async () => {
+    const db = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'carrossel', tema: 'Tema C', gancho: 'Gancho C', roteiro: 'Um\nDois\n\nTrês', legenda_base: 'Leg C' })],
+    });
+    expect(await runPautaTick(db, [CACC], deps(QUA, ''))).toBe(true);
+    expect(db.tables.marketing_videos).toHaveLength(0);
+    const post = db.tables.marketing_posts[0];
+    expect(post).toMatchObject({
+      kind: 'feed', media_type: 'carrossel', status: 'pending_approval', video_id: null,
+      title: 'Tema C', caption: 'Leg C', idea: 'Gancho C',
+      frames: [{ text: 'Um', interaction: 'nenhuma' }, { text: 'Dois', interaction: 'nenhuma' }, { text: 'Três', interaction: 'nenhuma' }],
+    });
+    expect(db.tables.marketing_pauta_itens[0].post_id).toBe(post.id);
+    expect(typeof db.tables.marketing_pauta_itens[0].produzido_em).toBe('string');
+  });
+
+  it('carrossel com mais de 7 lâminas guarda só 7; com menos de 3 não produz', async () => {
+    const db = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'carrossel', roteiro: Array.from({ length: 9 }, (_, i) => `L${i}`).join('\n') })],
+    });
+    await runPautaTick(db, [CACC], deps(QUA, ''));
+    expect((db.tables.marketing_posts[0].frames as Row[])).toHaveLength(7);
+
+    const db2 = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'carrossel', roteiro: 'só\ndois' })],
+    });
+    await runPautaTick(db2, [CACC], deps(QUA, ''));
+    expect(db2.tables.marketing_posts).toHaveLength(0);
+    expect(db2.tables.marketing_pauta_itens[0].produzido_em).toBeNull();
+  });
+
+  it('carrossel: se ligar o item falha (zero linhas), apaga o post', async () => {
+    const db = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'carrossel', roteiro: 'a\nb\nc', post_id: 'outro' })],
+    });
+    await runPautaTick(db, [CACC], deps(QUA, ''));
+    expect(db.tables.marketing_posts).toHaveLength(0);
+  });
+
+  it('reel com referência: prompt ganha o gancho no fim; sem referência fica igual', async () => {
+    const db = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_references: [{ id: 'r1', account_id: CACC, analise }],
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'reel', gancho: 'G', roteiro: 'R', referencia_id: 'r1' })],
+    });
+    await runPautaTick(db, [CACC], deps(QUA, ''));
+    expect(db.tables.marketing_videos[0].prompt).toBe('G\nR\nGancho de referência: dor — Mão cortando ‹b›cabelo‹/b› em close');
+
+    const sem = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'reel', gancho: 'G', roteiro: 'R', referencia_id: 'sumiu' })],
+    });
+    await runPautaTick(sem, [CACC], deps(QUA, ''));
+    expect(sem.tables.marketing_videos[0].prompt).toBe('G\nR');
+  });
+
+  it('gancho da referência é cortado antes do gancho/roteiro (teto de 1000)', async () => {
+    const db = fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_references: [{ id: 'r1', account_id: CACC, analise }],
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'aprovado', formato: 'reel', gancho: 'G', roteiro: 'R'.repeat(990), referencia_id: 'r1' })],
+    });
+    await runPautaTick(db, [CACC], deps(QUA, ''));
+    const prompt = db.tables.marketing_videos[0].prompt as string;
+    expect(prompt.length).toBeLessThanOrEqual(1000);
+    expect(prompt.startsWith(`G\n${'R'.repeat(990)}`)).toBe(true);
+  });
+
+  it('ajuste de carrossel: < 3 lâminas falha; > 7 corta para 7', async () => {
+    const mk = () => fakeDb({
+      marketing_pautas: pautaSeed,
+      marketing_pauta_itens: [item({ account_id: CACC, status: 'ajuste', formato: 'carrossel', comentario: 'x' })],
+    });
+    const curto = mk();
+    const bad = deps(new Date('2026-11-04T12:00:00Z'), JSON.stringify({ tema: 'N', gancho: 'g', roteiro: 'a\nb', legenda_base: 'l' }));
+    await runPautaTick(curto, [CACC], bad);
+    expect(curto.tables.marketing_pauta_itens[0]).toMatchObject({ status: 'ajuste', versao: 1 });
+
+    const longo = mk();
+    const roteiro = Array.from({ length: 9 }, (_, i) => `L${i}`).join('\n');
+    const ok = deps(new Date('2026-11-05T12:00:00Z'), JSON.stringify({ tema: 'N', gancho: 'g', roteiro, legenda_base: 'l' }));
+    await runPautaTick(longo, [CACC], ok);
+    expect(longo.tables.marketing_pauta_itens[0].roteiro).toBe(roteiro.split('\n').slice(0, 7).join('\n'));
+    expect(longo.tables.marketing_pauta_itens[0]).toMatchObject({ versao: 2, status: 'pending_approval' });
+  });
+});
+
 describe('slotDoFormato', () => {
   it('mapeia formato para mídia, com options.pauta e sem autopilot', () => {
     const feed = slotDoFormato('feed', 0);
