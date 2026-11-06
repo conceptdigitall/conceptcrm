@@ -45,7 +45,10 @@
     "menuSettings": "Configurações",
     "menuSignOut": "Sair",
     "groupGrow": "Crescer",
-    "groupAutomate": "Automatizar"
+    "groupAutomate": "Automatizar",
+    "groupStore": "Loja",
+    "orders": "Pedidos",
+    "store": "Loja"
   },
   "Header": {
     "dashboard": "Painel",
