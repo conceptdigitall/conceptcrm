@@ -30,7 +30,7 @@ Card novo **Referências** na aba Marketing:
 - Campo para colar o link e seletor de eixo (`como_falar` | `sobre_o_que`) e, no eixo `sobre_o_que`, o nicho (lista de `BUSINESS_NICHES`). Para conta de cliente, o eixo é sempre `sobre_o_que` com o nicho da conta e o seletor não aparece.
 - Campo opcional de views (número que o João vê no app).
 - Botão **Enviar arquivo** para quando o link não baixar (upload para o bucket privado `marketing`, pasta `account-<id>/referencias/`, que as policies já isolam por conta; apagado depois da análise).
-- Lista das referências com status e, quando pronta, a análise resumida. Botão **Analisar de novo** nas que deram erro.
+- Lista das referências com status (Na fila, Analisando, Pronto, Erro) e, quando pronta, a análise resumida. Botão **Analisar de novo** nas que deram erro.
 
 ### Pelo Telegram (Hermes)
 
@@ -50,7 +50,7 @@ Card novo **Referências** na aba Marketing:
 
 Worker `worker/references.ts`, no mesmo laço do worker que já roda no Mac (`worker/index.ts`), com dependências injetadas como em `PautaDeps`:
 
-1. Pega **uma** referência `pendente` por vez e marca `analisando`.
+1. Pega **uma** referência `pending` por vez e marca `running`.
 2. Lê a duração com `yt-dlp --dump-json`. Acima de 180 s: `erro` ("vídeo longo demais").
 3. Baixa com `yt-dlp` para uma pasta temporária (ou usa o arquivo enviado).
 4. Envia ao Gemini (Files API, modelo Flash do plano gratuito, mesma chave do `worker/narration-gemini.ts`) com saída JSON:
@@ -73,12 +73,12 @@ interface ReferenceAnalysis {
 ```
 
 5. Valida o JSON com um parser puro (`parseReferenceAnalysis`): campos obrigatórios, limites de tamanho, tipos fechados. Corta o que passar do limite.
-6. Grava a análise, marca `pronto` e **apaga o arquivo** (em `finally`, inclusive no erro; o arquivo enviado também sai do Storage).
+6. Grava a análise, marca `done` e **apaga o arquivo** (em `finally`, inclusive no erro; o arquivo enviado também sai do Storage).
 
 ## 3. Playbook da semana
 
 `src/lib/marketing/playbook.ts` (puro) + chamada no `worker/pauta.ts`:
-- Toda segunda, antes de gerar a pauta, junta as referências `pronto` dos últimos 30 dias (no máximo 20, as mais recentes).
+- Toda segunda, antes de gerar a pauta, junta as referências `done` dos últimos 30 dias (no máximo 20, as mais recentes).
 - O Haiku (`HAIKU_MODEL`, mesmo da pauta) resume em um playbook JSON:
 
 ```ts
@@ -89,7 +89,7 @@ interface Playbook {
 }
 ```
 
-- Grava em `marketing_pautas.playbook` (coluna nova, `jsonb`, nula quando não houver referência). Na aba Marketing, a pauta da semana mostra o playbook como **Tendências da semana**, só leitura.
+- Grava em `marketing_pautas.playbook` (coluna nova, `jsonb`, nula quando não houver referência). A aba **Referências** mostra o playbook como **Tendências da semana**, só leitura (o CRM web não tem tela de pauta; a pauta é aprovada no app do Léo, que recebe `playbook` pela API v1).
 - Sem referências no período, ou se o resumo falhar: a pauta sai como hoje e fica um aviso no log.
 
 ## 4. Pauta inspirada
@@ -123,10 +123,14 @@ CREATE TABLE marketing_references (
   nicho TEXT,
   views BIGINT,
   arquivo_path TEXT,            -- só quando o vídeo foi enviado; zerado após a análise
-  status TEXT NOT NULL DEFAULT 'pendente'
-    CHECK (status IN ('pendente','analisando','pronto','erro')),
-  erro TEXT,
-  tentar_depois TIMESTAMPTZ,    -- 429 do Gemini
+  -- Mesmos nomes da fila do worker (worker/queue.ts) para reaproveitar
+  -- claimNext/failJob/requeueOrphaned. Na tela: Na fila, Analisando, Pronto, Erro.
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','running','done','failed')),
+  error TEXT,
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ,
+  retry_after TIMESTAMPTZ,      -- 429 do Gemini
   analise JSONB,
   criado_por UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -148,10 +152,10 @@ RLS igual à da 057 (`is_account_member(account_id, 'agent')` para ler e escreve
 |---|---|
 | Link de site não aceito | Recusado na entrada (400) |
 | Link repetido | Devolve a referência existente, sem nova análise |
-| Vídeo acima de 180 s | `erro`: "vídeo longo demais" |
-| Download bloqueado (comum no Instagram sem login) | `erro`: "envie o arquivo do vídeo" |
-| Gemini 429 | `tentar_depois = now() + 1 h`, volta para `pendente` |
-| JSON inválido do Gemini | Uma nova tentativa; se falhar, `erro` com botão **Analisar de novo** |
+| Vídeo acima de 180 s | `failed`: "vídeo longo demais" |
+| Download bloqueado (comum no Instagram sem login) | `failed`: "envie o arquivo do vídeo" |
+| Gemini 429 | `retry_after = now() + 1 h`, volta para `pending` |
+| JSON inválido do Gemini | Uma nova tentativa; se falhar, `failed` com botão **Analisar de novo** |
 | Falha no playbook | Pauta sai como hoje; aviso no log |
 
 ## Segurança
