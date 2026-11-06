@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PLAYBOOK_SYSTEM } from '@/lib/marketing/playbook';
-import { runPautaTick, slotDoFormato } from './pauta';
+import { carregarReferencias, runPautaTick, slotDoFormato } from './pauta';
 
 type Row = Record<string, unknown>;
 
@@ -298,7 +298,7 @@ describe('playbook da semana', () => {
     finished_at: '2026-10-20T12:00:00Z',
     analise: {
       gancho: { tipo: 'dor', frase: 'f', primeiroQuadro: 'q' }, duracaoSeg: 10, cortesPorMinuto: 20,
-      formato: 'tela', tema: `Tema ${id}`, promessa: 'p', entrega: 'e', cta: 'c', porQueViralizou: ['x'], comoAdaptar: 'a',
+      formato: 'tela', tema: `Tema ${id}`, promessa: 'p', entrega: 'e', cta: 'c', porQueViralizou: ['x', 'y', 'z'], comoAdaptar: 'a',
     },
   });
   const pbJson = JSON.stringify({ comoFalar: ['a'], sobreOQue: ['b'], evitar: ['c'] });
@@ -344,5 +344,32 @@ describe('playbook da semana', () => {
     expect(err).toHaveBeenCalledWith('[pauta] playbook:', 'fora');
     err.mockRestore();
     expect(db.tables.marketing_pautas[0].playbook).toBeNull();
+  });
+
+  it('análise parcial é ignorada (com log) e as outras ainda geram playbook', async () => {
+    const quebrada = { ...refRow('r0', 'como_falar'), analise: { tema: 'só isso' } };
+    const db = fakeDb({ marketing_references: [quebrada, refRow('r1', 'sobre_o_que')] });
+    const d = { now: () => QUA, generateText: vi.fn(async (system: string) => (system === PLAYBOOK_SYSTEM ? pbJson : pautaJson())) };
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await runPautaTick(db, [PACC], d)).toBe(true);
+    expect(err).toHaveBeenCalledWith(expect.stringContaining('r0'));
+    err.mockRestore();
+    const prompt = (d.generateText.mock.calls[0] as unknown as string[])[1];
+    expect(prompt).toContain('Tema r1');
+    expect(prompt).not.toContain('só isso');
+    expect(db.tables.marketing_pautas[0].playbook).toMatchObject({ comoFalar: ['a'] });
+  });
+
+  it('carregarReferencias pede finished_at decrescente, limite 20 e janela de 30 dias', async () => {
+    const calls: unknown[][] = [];
+    const q: Record<string, unknown> = {};
+    for (const m of ['select', 'eq', 'gte', 'order', 'limit']) q[m] = (...a: unknown[]) => { calls.push([m, ...a]); return q; };
+    q.then = (res: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(res);
+    const db = { from: () => q } as unknown as Parameters<typeof carregarReferencias>[0];
+    await carregarReferencias(db, PACC, QUA);
+    expect(calls).toContainEqual(['order', 'finished_at', { ascending: false }]);
+    expect(calls).toContainEqual(['limit', 20]);
+    expect(calls).toContainEqual(['gte', 'finished_at', '2026-09-28T15:00:00.000Z']);
+    expect(calls).toContainEqual(['eq', 'status', 'done']);
   });
 });

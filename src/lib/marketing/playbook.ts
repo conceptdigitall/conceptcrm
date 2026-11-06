@@ -1,7 +1,7 @@
 // Playbook da semana: resume as referências virais analisadas dos últimos 30
 // dias em três listas curtas que alimentam a pauta. Funções puras; o worker
 // carrega as referências e chama a IA.
-import { parseObject, txt } from '@/lib/marketing/json-text';
+import { parseObject, textoDeDado, txt } from '@/lib/marketing/json-text';
 import type { BusinessNiche, Playbook, ReferenceAnalysis, ReferenceEixo } from '@/types';
 
 export type { Playbook };
@@ -27,14 +27,15 @@ const ITEM_MAX = 200;
 
 function linha(r: PlaybookRef): string {
   const a = r.analise;
+  const d = (v: string, max: number) => textoDeDado(txt(v, max));
   const campos = [
-    `tema: ${txt(a.tema, 80)}`,
-    `gancho (${a.gancho.tipo}): ${txt(a.gancho.frase, 140)}`,
+    `tema: ${d(a.tema, 80)}`,
+    `gancho (${a.gancho.tipo}): ${d(a.gancho.frase, 140)}`,
     `formato: ${a.formato}`,
-    `promessa: ${txt(a.promessa, 140)}`,
-    `entrega: ${txt(a.entrega, 140)}`,
-    `por que viralizou: ${a.porQueViralizou.map((m) => txt(m, 140)).join('; ')}`,
-    `como adaptar: ${txt(a.comoAdaptar, 280)}`,
+    `promessa: ${d(a.promessa, 140)}`,
+    `entrega: ${d(a.entrega, 140)}`,
+    `por que viralizou: ${a.porQueViralizou.map((m) => d(m, 140)).join('; ')}`,
+    `como adaptar: ${d(a.comoAdaptar, 280)}`,
   ];
   return `- ${campos.join(' | ')}`;
 }

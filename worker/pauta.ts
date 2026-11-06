@@ -14,6 +14,7 @@ import {
   pautaPrompt,
   semanaInicioISO,
 } from '@/lib/marketing/pauta';
+import { parseReferenceAnalysis } from '@/lib/marketing/references';
 import { PLAYBOOK_SYSTEM, parsePlaybook, playbookPrompt, type PlaybookRef } from '@/lib/marketing/playbook';
 import type { VideoStyle } from '@/lib/marketing/video-options';
 import type { MarketingPautaItem, MarketingSettings, PautaFormato, Playbook, VideoTone } from '@/types';
@@ -174,8 +175,17 @@ export async function carregarReferencias(db: SupabaseClient, accountId: string,
     .order('finished_at', { ascending: false })
     .limit(REFERENCIAS_MAX);
   if (error) throw new Error(`Não consegui ler as referências: ${error.message}`);
-  return ((data as (Omit<PlaybookRef, 'analise'> & { analise: PlaybookRef['analise'] | null })[] | null) ?? [])
-    .filter((r): r is PlaybookRef => !!r.analise);
+  const refs: PlaybookRef[] = [];
+  for (const row of (data as (Omit<PlaybookRef, 'analise'> & { analise: unknown })[] | null) ?? []) {
+    // Reaproveita a checagem canônica (forma e limites): análise quebrada fica de fora.
+    const analise = parseReferenceAnalysis(JSON.stringify(row.analise ?? null));
+    if (!analise) {
+      console.error(`[pauta] playbook: referência ${row.id} com análise inválida, ignorada`);
+      continue;
+    }
+    refs.push({ ...row, analise });
+  }
+  return refs;
 }
 
 /** Resume as referências em playbook. Qualquer falha só loga: a pauta sai sem playbook. */
@@ -226,7 +236,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   ]);
   const settings = (settingsRow as MarketingSettings | null) ?? { ...DEFAULT_SETTINGS, account_id: accountId };
 
-  // `refs` fica à mão para a pauta usar as referências no prompt.
+  // `refs` ainda não é usado aqui; a Task 9 passa as referências ao prompt da pauta.
   const { playbook } = await gerarPlaybook(db, accountId, deps, now);
 
   const raw = await deps.generateText(PAUTA_SYSTEM, pautaPrompt({

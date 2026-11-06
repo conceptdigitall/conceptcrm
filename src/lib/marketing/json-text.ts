@@ -14,3 +14,6 @@ export function parseObject(raw: string): Record<string, unknown> | null {
 
 /** Texto aparado e cortado em `max`; string vazia se não for texto. */
 export const txt = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+
+/** Texto de terceiros para dentro de um prompt: sem `<`/`>` (não fecha o bloco de dados) e sem quebras de linha. */
+export const textoDeDado = (v: string) => v.replace(/</g, '‹').replace(/>/g, '›').replace(/\s*[\r\n]+\s*/g, ' ');
