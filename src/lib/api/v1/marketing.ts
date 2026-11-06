@@ -10,7 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { forbidden } from '@/lib/api/v1/respond';
 import { isInternalAccount } from '@/lib/internal-accounts';
 import { videoFileName } from '@/lib/marketing/download';
-import type { MarketingPauta, MarketingPautaItem, MarketingPost, PostStatus } from '@/types';
+import type { MarketingPauta, MarketingPautaItem, MarketingPost, PostStatus, Playbook } from '@/types';
 
 const BUCKET = 'marketing';
 /** Long enough to forward the file (e.g. to Telegram), short enough to not linger. */
@@ -127,10 +127,10 @@ export function decisionPatch(decision: PostDecision, reason?: unknown): Record<
 // item a item pelo celular (aprovar, pedir ajuste ou recusar).
 // ------------------------------------------------------------
 
-export const PAUTA_SELECT = 'id, semana_inicio, status, created_at';
+export const PAUTA_SELECT = 'id, semana_inicio, status, playbook, created_at';
 
 export const PAUTA_ITEM_SELECT =
-  'id, pauta_id, dia, formato, tema, gancho, roteiro, legenda_base, status, comentario, versao, post_id, updated_at';
+  'id, pauta_id, dia, formato, tema, gancho, roteiro, legenda_base, status, comentario, versao, post_id, referencia_id, inspiracao, updated_at';
 
 export interface ApiPautaItem {
   id: string;
@@ -144,12 +144,15 @@ export interface ApiPautaItem {
   comentario: string | null;
   versao: number;
   post_id: string | null;
+  referencia_id: string | null;
+  inspiracao: string | null;
 }
 
 export interface ApiPauta {
   id: string;
   semana_inicio: string;
   status: string;
+  playbook: Playbook | null;
   itens: ApiPautaItem[];
 }
 
@@ -166,6 +169,8 @@ export function serializePautaItem(i: MarketingPautaItem): ApiPautaItem {
     comentario: i.comentario ?? null,
     versao: i.versao,
     post_id: i.post_id ?? null,
+    referencia_id: i.referencia_id ?? null,
+    inspiracao: i.inspiracao ?? null,
   };
 }
 
@@ -174,6 +179,7 @@ export function serializePauta(p: MarketingPauta, itens: MarketingPautaItem[]): 
     id: p.id,
     semana_inicio: p.semana_inicio,
     status: p.status,
+    playbook: p.playbook ?? null,
     itens: itens.map(serializePautaItem),
   };
 }

@@ -57,6 +57,8 @@ const itemRow = (status: string, extra: Record<string, unknown> = {}) => ({
   comentario: null,
   versao: 1,
   post_id: null,
+  referencia_id: null,
+  inspiracao: null,
   updated_at: '2026-10-26T10:00:00Z',
   ...extra,
 });
@@ -101,8 +103,22 @@ describe('GET /api/v1/marketing/pautas', () => {
       expect.objectContaining({ id: 'i-1', dia: '2026-10-27', formato: 'reel', status: 'pending_approval', versao: 1, post_id: null }),
     ]);
     expect(body.data.itens[0]).not.toHaveProperty('account_id');
+    expect(body.data.itens[0]).toMatchObject({ referencia_id: null, inspiracao: null });
+    expect(body.data.playbook).toBeNull();
     expect(ops[1].table).toBe('marketing_pauta_itens');
     expect(ops[1].filters).toEqual({ pauta_id: 'pa-1', account_id: 'acc-1' });
+  });
+
+  it('exposes playbook and item inspiration', async () => {
+    const pb = { comoFalar: ['a'], sobreOQue: ['b'], evitar: ['c'] };
+    useAccount('acc-1', (op) =>
+      op.table === 'marketing_pautas'
+        ? { data: pauta({ playbook: pb }) }
+        : { data: [itemRow('pending_approval', { formato: 'carrossel', referencia_id: 'r-1', inspiracao: 'gancho em pergunta' })] }
+    );
+    const body = await (await pautas.GET(get('?semana=2026-10-26'))).json();
+    expect(body.data.playbook).toEqual(pb);
+    expect(body.data.itens[0]).toMatchObject({ formato: 'carrossel', referencia_id: 'r-1', inspiracao: 'gancho em pergunta' });
   });
 
   it('400s on a malformed semana', async () => {

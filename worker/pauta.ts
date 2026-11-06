@@ -236,16 +236,17 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   ]);
   const settings = (settingsRow as MarketingSettings | null) ?? { ...DEFAULT_SETTINGS, account_id: accountId };
 
-  // `refs` ainda não é usado aqui; a Task 9 passa as referências ao prompt da pauta.
-  const { playbook } = await gerarPlaybook(db, accountId, deps, now);
+  const { refs, playbook } = await gerarPlaybook(db, accountId, deps, now);
 
   const raw = await deps.generateText(PAUTA_SYSTEM, pautaPrompt({
     semanaInicio: pauta.semana_inicio,
     settings,
     projects: (projects ?? []).map((p) => `${p.name} (${p.category})`),
     recentTitles: (recent ?? []).map((p) => p.title).filter(Boolean),
+    playbook,
+    referencias: refs,
   }));
-  const itens = parsePautaItens(raw, pauta.semana_inicio);
+  const itens = parsePautaItens(raw, pauta.semana_inicio, new Set(refs.map((r) => r.id)));
   if (!itens) throw new Error('A IA não devolveu uma pauta válida');
 
   const stamp = now.toISOString();

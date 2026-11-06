@@ -359,6 +359,19 @@ stays in the dashboard), `reject` → `archived` with the reason. A post
 that is no longer pending gets `409`. Used by the Hermes bot to approve
 from Telegram.
 
+### `GET` / `POST /api/v1/marketing/pautas`
+
+`GET ?semana=YYYY-MM-DD` returns the week's content plan (default: current
+Brasília week) or `data: null`; `POST` opens a plan for the week. Scope:
+`marketing:generate`, internal accounts only. The plan carries `playbook`
+(`{ comoFalar, sobreOQue, evitar }` string lists summarising the viral
+references of the last 30 days, or `null`). Each item in `itens` has `dia`,
+`formato` (`feed` | `story` | `reel` | `carrossel`; a carrossel `roteiro` has
+3 to 7 slides, one per line), `tema`, `gancho`, `roteiro`, `legenda_base`,
+`status`, `comentario`, `versao`, `post_id`, and the new `referencia_id`
+(id of the viral reference that inspired the item, or `null`) and
+`inspiracao` (up to 140 characters on what was borrowed, or `null`).
+
 ## Pagination
 
 Every list endpoint pages the same way. Request a page size with
