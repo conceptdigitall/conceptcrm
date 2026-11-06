@@ -21,7 +21,7 @@
 - Upload manual: só `video/*`, até **100 MB**, no bucket `marketing`, caminho `account-<id>/referencias/<referenceId>.<ext>`; apagado depois da análise.
 - Vídeo de terceiro nunca fica guardado. Pasta temporária apagada em `finally`.
 - Nada é publicado sem aprovação (a pauta continua passando pelo João/Léo).
-- Modelo de texto do playbook: `HAIKU_MODEL` (`worker/video-models.ts`). Modelo de vídeo: env `GEMINI_VIDEO_MODEL`, padrão definido na Task 1.
+- Modelo de texto do playbook: `HAIKU_MODEL` (`worker/video-models.ts`). Modelo de vídeo: env `GEMINI_VIDEO_MODEL`, padrão **`gemini-3.5-flash`** (Task 1, 2026-11-06: vídeo + áudio aceitos; `files.upload` → `files.get` até `ACTIVE` (~6 s) → `models.generateContent` com `responseMimeType: 'application/json'` → `files.delete`). Usar `responseSchema` (o flash-lite devolveu o JSON dentro de um array) e **timeout de 120 s** por chamada (o 3.8-flash travou >180 s). Cota gratuita não confirmada pela API: o João confere no AI Studio.
 - Status da fila seguem `worker/queue.ts`: `pending | running | done | failed` (na tela: Na fila, Analisando, Pronto, Erro).
 - Migração `060_marketing_references.sql` (a 059 é da Loja); conferir o próximo número livre no merge.
 
