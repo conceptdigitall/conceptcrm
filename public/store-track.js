@@ -19,7 +19,7 @@
         localStorage.setItem(key, v);
       }
       return v;
-    } catch (e) {
+    } catch {
       return fallback();
     }
   }
@@ -33,12 +33,12 @@
         localStorage.setItem('st_sid', sid);
       }
       return sid;
-    } catch (e) {
+    } catch {
       return rid();
     }
   })();
   function touch() {
-    try { localStorage.setItem('st_last', String(Date.now())); } catch (e) { /* sem storage */ }
+    try { localStorage.setItem('st_last', String(Date.now())); } catch { /* sem storage */ }
   }
 
   function flush(useBeacon) {
