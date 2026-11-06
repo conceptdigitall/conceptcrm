@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Upload, RefreshCw, TrendingUp } from 'lucide-react';
 import type {
@@ -13,6 +13,7 @@ import type {
 import { BUSINESS_NICHES } from '@/lib/marketing/niche-autopilot';
 import {
   EIXO_LABEL,
+  createCoalescedLoader,
   fileExtension,
   parseViewsInput,
   referenceStatusLabel,
@@ -51,28 +52,24 @@ export function ReferencesTab() {
   const [busy, setBusy] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const loadingRef = useRef(false);
-  const loadSeq = useRef(0);
 
-  const load = useCallback(async () => {
-    // Uma busca por vez; só a mais recente pode atualizar a tela.
-    if (loadingRef.current) return;
-    loadingRef.current = true;
-    const seq = ++loadSeq.current;
-    try {
-      const res = await fetch('/api/marketing/references');
-      if (!res.ok) return;
-      const data = await res.json();
-      if (seq !== loadSeq.current) return;
-      setReferences(data.references || []);
-      setPlaybook(data.playbook ?? null);
-    } catch {
-      // Falha de rede: mantém o que já está na tela.
-    } finally {
-      loadingRef.current = false;
-      setLoading(false);
-    }
-  }, []);
+  // Uma busca por vez; pedidos feitos durante uma busca viram uma busca nova logo depois,
+  // então uma resposta antiga nunca fica por cima do estado mais recente.
+  const [load] = useState(() =>
+    createCoalescedLoader(async () => {
+      try {
+        const res = await fetch('/api/marketing/references');
+        if (!res.ok) return;
+        const data = await res.json();
+        setReferences(data.references || []);
+        setPlaybook(data.playbook ?? null);
+      } catch {
+        // Falha de rede: mantém o que já está na tela.
+      } finally {
+        setLoading(false);
+      }
+    }),
+  );
 
   useEffect(() => {
     load();
@@ -106,6 +103,8 @@ export function ReferencesTab() {
       toast.success('Referência enviada. A análise começa em instantes.');
     }
     setReferences((prev) => [reference, ...prev.filter((r) => r.id !== reference.id)]);
+    // Uma busca em andamento pode ter saído antes deste envio: pede outra para não perder o item.
+    void load();
   }
 
   async function handleSendLink(e: React.FormEvent) {

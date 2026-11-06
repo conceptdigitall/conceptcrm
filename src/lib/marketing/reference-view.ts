@@ -44,3 +44,38 @@ export function parseViewsInput(text: string): number | null | 'invalid' {
   const n = Number(t);
   return Number.isSafeInteger(n) ? n : 'invalid';
 }
+
+/**
+ * Roda `fn` uma vez por vez. Chamadas feitas durante uma execução viram UMA
+ * execução seguinte (nunca são descartadas), e a promessa devolvida só resolve
+ * depois da execução que reflete aquele pedido.
+ */
+export function createCoalescedLoader(fn: () => Promise<void>): () => Promise<void> {
+  let current: Promise<void> | null = null;
+  let queued: Promise<void> | null = null;
+
+  function trigger(): Promise<void> {
+    if (!current) {
+      const run = (async () => {
+        try {
+          await fn();
+        } finally {
+          current = null;
+        }
+      })();
+      current = run;
+      return run;
+    }
+    if (!queued) {
+      queued = current
+        .catch(() => undefined)
+        .then(() => {
+          queued = null;
+          return trigger();
+        });
+    }
+    return queued;
+  }
+
+  return trigger;
+}

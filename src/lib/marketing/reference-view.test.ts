@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseViewsInput, validateReferenceFile, fileExtension, referenceStatusLabel, shouldPoll } from './reference-view';
+import { createCoalescedLoader, parseViewsInput, validateReferenceFile, fileExtension, referenceStatusLabel, shouldPoll } from './reference-view';
 
 describe('reference-view', () => {
   it('traduz o status', () => {
@@ -35,5 +35,47 @@ describe('reference-view', () => {
     expect(parseViewsInput('1,5')).toBe('invalid');
     expect(parseViewsInput('abc')).toBe('invalid');
     expect(parseViewsInput('99999999999999999999')).toBe('invalid');
+  });
+  it('coalesce chamadas feitas durante uma execução em uma só execução seguinte', async () => {
+    let calls = 0;
+    const gates: Array<() => void> = [];
+    const loader = createCoalescedLoader(
+      () =>
+        new Promise<void>((resolve) => {
+          calls++;
+          gates.push(resolve);
+        }),
+    );
+    const first = loader();
+    expect(calls).toBe(1);
+    const a = loader();
+    const b = loader();
+    const c = loader();
+    expect(calls).toBe(1);
+    gates[0]();
+    await first;
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(calls).toBe(2);
+    gates[1]();
+    await Promise.all([a, b, c]);
+    expect(calls).toBe(2);
+    // sem nada em andamento, uma nova chamada roda direto
+    const d = loader();
+    expect(calls).toBe(3);
+    gates[2]();
+    await d;
+  });
+  it('a execução seguinte ainda roda se a anterior falhar', async () => {
+    let calls = 0;
+    const loader = createCoalescedLoader(async () => {
+      calls++;
+      if (calls === 1) throw new Error('x');
+    });
+    const first = loader();
+    const second = loader();
+    await expect(first).rejects.toThrow();
+    await second;
+    expect(calls).toBe(2);
   });
 });
