@@ -45,7 +45,10 @@
     "menuSettings": "Configuración",
     "menuSignOut": "Cerrar sesión",
     "groupGrow": "Crecer",
-    "groupAutomate": "Automatizar"
+    "groupAutomate": "Automatizar",
+    "groupStore": "Tienda",
+    "orders": "Pedidos",
+    "store": "Tienda"
   },
   "Header": {
     "dashboard": "Panel",
@@ -1676,7 +1679,8 @@
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",
-      "api": "Claves de API"
+      "api": "Claves de API",
+      "store": "Tienda"
     },
     "groups": {
       "account": "Cuenta",

@@ -3,6 +3,7 @@ import {
   FileText,
   KeyRound,
   LayoutGrid,
+  Package,
   Palette,
   PlugZap,
   Shield,
@@ -33,6 +34,7 @@ export const SETTINGS_SECTIONS = [
   'deals',
   'members',
   'api',
+  'store',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -45,6 +47,8 @@ export interface SectionMeta {
   label: string;
   icon: LucideIcon;
   group: 'top' | 'account' | 'workspace';
+  /** Módulo Loja: só aparece para contas em NEXT_PUBLIC_STORE_ACCOUNT_IDS. */
+  storeOnly?: boolean;
 }
 
 export const SECTION_META: Record<SettingsSection, SectionMeta> = {
@@ -59,6 +63,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },
   members: { id: 'members', label: 'Team members', icon: UsersRound, group: 'workspace' },
   api: { id: 'api', label: 'API keys', icon: KeyRound, group: 'workspace' },
+  store: { id: 'store', label: 'Store', icon: Package, group: 'workspace', storeOnly: true },
 };
 
 export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[] = [

@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
 import { useAuth } from '@/hooks/use-auth';
+import { isStoreAccount } from '@/lib/store-accounts';
+import { ContactPurchases } from '@/components/store/contact-purchases';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
@@ -483,6 +485,14 @@ export function ContactDetailView({
                 >
                   {t('tabs.deals')}
                 </TabsTrigger>
+                {isStoreAccount(accountId) && (
+                  <TabsTrigger
+                    value="purchases"
+                    className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                  >
+                    Compras
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               {/* Details Tab */}
@@ -745,6 +755,12 @@ export function ContactDetailView({
                   </div>
                 )}
               </TabsContent>
+
+              {isStoreAccount(accountId) && contactId && (
+                <TabsContent value="purchases" className="flex-1 overflow-y-auto px-4 py-3">
+                  <ContactPurchases contactId={contactId} />
+                </TabsContent>
+              )}
             </Tabs>
           </div>
         )}

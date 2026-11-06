@@ -26,10 +26,13 @@ import {
   Workflow,
   X,
   Zap,
+  Package,
+  Store,
 } from "lucide-react";
 import { ConceptLogo } from "@/components/brand/concept-logo";
 import type { AccountRole } from "@/lib/auth/roles";
 import { isInternalAccount } from "@/lib/internal-accounts";
+import { isStoreAccount } from "@/lib/store-accounts";
 import { ModeToggle } from "@/components/layout/mode-toggle";
 import { MOBILE_PRIMARY_HREFS } from "@/components/layout/mobile-bottom-nav";
 
@@ -94,6 +97,8 @@ interface NavItem {
   beta?: boolean;
   /** Concept Digital's own tools; hidden unless the account is internal. */
   internalOnly?: boolean;
+  /** Módulo Loja; hidden unless the account is in NEXT_PUBLIC_STORE_ACCOUNT_IDS. */
+  storeOnly?: boolean;
 }
 
 interface NavGroup {
@@ -113,6 +118,14 @@ const primaryItems: NavItem[] = [
 ];
 
 const navGroups: NavGroup[] = [
+  {
+    id: "store",
+    labelKey: "groupStore",
+    items: [
+      { href: "/pedidos", labelKey: "orders", icon: Package, storeOnly: true },
+      { href: "/loja", labelKey: "store", icon: Store, storeOnly: true },
+    ],
+  },
   {
     id: "grow",
     labelKey: "groupGrow",
@@ -159,7 +172,9 @@ export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
-  const visible = (item: NavItem) => !item.internalOnly || isInternalAccount(account?.id);
+  const visible = (item: NavItem) =>
+    (!item.internalOnly || isInternalAccount(account?.id)) &&
+    (!item.storeOnly || isStoreAccount(account?.id));
   const groups = navGroups
     .map((g) => ({ ...g, items: g.items.filter(visible) }))
     .filter((g) => g.items.length > 0);

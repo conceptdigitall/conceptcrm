@@ -178,6 +178,9 @@ export const RATE_LIMITS = {
    *  for 5 min, so 120/min covers scrolling while bounding CPU spent on
    *  a script hammering the render. */
   marketingArt: { limit: 120, windowMs: 60_000 },
+  /** Analytics do site da loja (POST /api/loja/track), por IP. O script
+   *  manda lotes a cada 5 s + heartbeats, bem abaixo disso. */
+  storeTrack: { limit: 120, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't
