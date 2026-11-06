@@ -57,9 +57,13 @@ export async function POST(request: Request) {
       const { data: order } = await db.from('orders').select('id, status').eq('id', shipment.order_id).maybeSingle()
       const next = order ? nextStatus(order.status as OrderStatus, 'mark_delivered') : null
       if (order && next) {
-        await setOrderStatus(db, order.id, next, { delivered_at: data.tracking_status.status_date ?? new Date().toISOString() })
-        await addOrderEvent(db, accountId, order.id, 'delivered', {})
-        await sendOrderEmail(db, accountId, order.id, 'delivered')
+        const moved = await setOrderStatus(db, order.id, next, order.status as OrderStatus, {
+          delivered_at: data.tracking_status.status_date ?? new Date().toISOString(),
+        })
+        if (moved) {
+          await addOrderEvent(db, accountId, order.id, 'delivered', {})
+          await sendOrderEmail(db, accountId, order.id, 'delivered')
+        }
       }
     } else if (status === 'RETURNED' || status === 'FAILURE') {
       await addOrderEvent(db, accountId, shipment.order_id, 'tracking_problem', { status, details: data.tracking_status.status_details })

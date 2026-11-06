@@ -11,6 +11,7 @@ import {
   type PaidLineItem,
   type PaidSession,
 } from '@/lib/store/orders'
+import { setOrderStatus } from '@/lib/store/order-query'
 import { publicStoreAccount } from '@/lib/store/public-route'
 import { loadStoreSettings } from '@/lib/store/settings'
 import { getStripe } from '@/lib/store/stripe'
@@ -42,7 +43,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'invalid_signature' }, { status: 400 })
   }
 
-  if (event.type !== 'checkout.session.completed' && event.type !== 'charge.refunded') {
+  const HANDLED = ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'charge.refunded']
+  if (!HANDLED.includes(event.type)) {
     return NextResponse.json({ received: true })
   }
   if (!(await claimWebhook(db, 'stripe', event.id, accountId))) {
@@ -50,22 +52,22 @@ export async function POST(request: Request) {
   }
 
   try {
-    if (event.type === 'checkout.session.completed') {
+    if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
       const session = event.data.object as Stripe.Checkout.Session
       if (session.payment_status === 'paid' && session.metadata?.account_id === accountId) {
         const items = await stripe.checkout.sessions.listLineItems(session.id, {
           limit: 100,
           expand: ['data.price.product'],
         })
-        const { orderId, created } = await createPaidOrder(
+        const { orderId, needsConfirmation } = await createPaidOrder(
           db, accountId, session as unknown as PaidSession, items.data as unknown as PaidLineItem[],
         )
-        if (created) await sendOrderEmail(db, accountId, orderId, 'confirmed')
+        if (needsConfirmation) await sendOrderEmail(db, accountId, orderId, 'confirmed')
       }
     } else {
       const charge = event.data.object as Stripe.Charge
       const pi = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id
-      if (pi) await markRefunded(db, accountId, pi)
+      if (pi) await markRefunded(db, accountId, pi, charge.refunded === true, charge.amount_refunded ?? 0)
     }
     return NextResponse.json({ received: true })
   } catch (err) {
@@ -75,7 +77,13 @@ export async function POST(request: Request) {
   }
 }
 
-async function markRefunded(db: ReturnType<typeof supabaseAdmin>, accountId: string, paymentIntent: string) {
+async function markRefunded(
+  db: ReturnType<typeof supabaseAdmin>,
+  accountId: string,
+  paymentIntent: string,
+  fullyRefunded: boolean,
+  amountRefunded: number,
+) {
   const { data: order } = await db
     .from('orders')
     .select('id, status')
@@ -84,13 +92,18 @@ async function markRefunded(db: ReturnType<typeof supabaseAdmin>, accountId: str
     .maybeSingle()
   if (!order) return
   if (order.status === 'refunded') return
+  if (!fullyRefunded) {
+    // Reembolso parcial (ex.: desconto de boa vontade): o pedido segue o fluxo.
+    await addOrderEvent(db, accountId, order.id, 'partial_refund', { amount_refunded_cents: amountRefunded })
+    return
+  }
 
   if (!nextStatus(order.status as OrderStatus, 'refund')) {
     await addOrderEvent(db, accountId, order.id, 'refund_after_ship', { status: order.status })
     return
   }
-  const now = new Date().toISOString()
-  await db.from('orders').update({ status: 'refunded', status_changed_at: now, updated_at: now }).eq('id', order.id)
+  // Se o botão do CRM reembolsou ao mesmo tempo, só um dos dois faz a transição e manda o e-mail.
+  if (!(await setOrderStatus(db, order.id, 'refunded', order.status as OrderStatus))) return
   await addOrderEvent(db, accountId, order.id, 'refunded', {})
   await sendOrderEmail(db, accountId, order.id, 'refunded')
 }

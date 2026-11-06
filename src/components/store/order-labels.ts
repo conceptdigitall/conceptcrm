@@ -29,6 +29,7 @@ export const EVENT_LABEL: Record<string, string> = {
   label_refunded: 'Etiqueta anulada no Shippo',
   label_refund_failed: 'Não foi possível anular a etiqueta',
   amount_mismatch: 'Valor cobrado diferente do catálogo',
+  partial_refund: 'Reembolso parcial no Stripe',
   tracking_problem: 'Problema no rastreio',
   email_sent: 'E-mail enviado',
   email_skipped: 'E-mail não enviado (desligado)',

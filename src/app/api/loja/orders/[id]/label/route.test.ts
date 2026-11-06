@@ -90,6 +90,28 @@ describe('label + rates routes', () => {
     expect(mocks.buyLabel).toHaveBeenCalledTimes(1)
   })
 
+  it('buys only one label when two requests race', async () => {
+    let release: () => void = () => {}
+    mocks.buyLabel.mockImplementation(() => new Promise((r) => {
+      release = () => r({ transactionId: 'tx_1', trackingNumber: '9400', trackingUrl: null, labelUrl: 'https://l.test/1.pdf', eta: null })
+    }))
+    const a = POST(post(), ctx)
+    const b = POST(post(), ctx)
+    await new Promise((r) => setTimeout(r, 20))
+    release()
+    const statuses = (await Promise.all([a, b])).map((r) => r.status).sort()
+    expect(statuses).toEqual([200, 409])
+    expect(mocks.buyLabel).toHaveBeenCalledTimes(1)
+    expect(tables().shipments).toHaveLength(1)
+  })
+
+  it('frees the order for a new try when Shippo fails', async () => {
+    mocks.buyLabel.mockRejectedValueOnce(new ShippoError('label failed', ['x']))
+    expect((await POST(post(), ctx)).status).toBe(502)
+    expect(tables().shipments).toHaveLength(0)
+    expect((await POST(post(), ctx)).status).toBe(200)
+  })
+
   it('keeps the status and logs when Shippo fails', async () => {
     mocks.buyLabel.mockRejectedValue(new ShippoError('label failed', ['Address not found']))
     const res = await POST(post(), ctx)

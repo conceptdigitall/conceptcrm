@@ -71,7 +71,7 @@ const lineItems = {
   }],
 }
 
-function db(extra: Record<string, Record<string, unknown>[]> = {}) {
+function db(extra: Record<string, Record<string, unknown>[]> = {}, opts: { failInsert?: (t: string) => boolean } = {}) {
   let next = 1001
   return fakeDb(
     {
@@ -81,6 +81,7 @@ function db(extra: Record<string, Record<string, unknown>[]> = {}) {
       ...extra,
     },
     { store_next_order_number: () => next++ },
+    opts,
   )
 }
 
@@ -159,6 +160,54 @@ describe('POST /api/loja/webhooks/stripe', () => {
     expect(tables().order_events.map((e) => e.type)).toContain('amount_mismatch')
   })
 
+  const refundEvt = (refunded: boolean, id = 'evt_r') => ({
+    id, object: 'event', type: 'charge.refunded',
+    data: { object: { id: 'ch_1', payment_intent: 'pi_1', refunded, amount_refunded: refunded ? 7000 : 1500 } },
+  })
+
+  it('only logs a partial refund', async () => {
+    await POST(signed(completed()))
+    await POST(signed(refundEvt(false)))
+    expect(tables().orders[0].status).toBe('paid')
+    expect(tables().order_events.map((e) => e.type)).toContain('partial_refund')
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalledWith(expect.anything(), ACC, expect.anything(), 'refunded')
+  })
+
+  it('does not email the refund twice when the order is already refunded', async () => {
+    await POST(signed(completed()))
+    tables().orders[0].status = 'refunded'
+    await POST(signed(refundEvt(true)))
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalledWith(expect.anything(), ACC, expect.anything(), 'refunded')
+  })
+
+  it('creates the order from a delayed payment that succeeds later', async () => {
+    await POST(signed(completed(session({ payment_status: 'unpaid' }))))
+    expect(tables().orders ?? []).toHaveLength(0)
+    await POST(signed({ id: 'evt_async', object: 'event', type: 'checkout.session.async_payment_succeeded', data: { object: session() } }))
+    expect(tables().orders).toHaveLength(1)
+    expect(tables().orders[0].status).toBe('paid')
+  })
+
+  it('lets Stripe retry when the items fail to save, then repairs items and email', async () => {
+    let fail = true
+    mocks.db = db({}, { failInsert: (t) => t === 'order_items' && fail })
+    const first = await POST(signed(completed()))
+    expect(first.status).toBe(500)
+    fail = false
+    const retry = await POST(signed(completed()))
+    expect(retry.status).toBe(200)
+    expect(tables().orders).toHaveLength(1)
+    expect(tables().order_items).toHaveLength(1)
+    expect(mocks.sendOrderEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not attach the order to a contact whose email only matches a wildcard', async () => {
+    mocks.db = db({ contacts: [{ id: 'c-other', account_id: ACC, email: 'johnxdoe@test.com', phone: '' }] })
+    const s = session({ customer_details: { ...session().customer_details, email: 'john_doe@test.com' } })
+    await POST(signed(completed(s)))
+    expect(tables().orders[0].contact_id).not.toBe('c-other')
+  })
+
   it('ignores a refund for an unknown order', async () => {
     const res = await POST(signed({ id: 'evt_r', object: 'event', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_nope' } } }))
     expect(res.status).toBe(200)
@@ -166,7 +215,7 @@ describe('POST /api/loja/webhooks/stripe', () => {
 
   it('marks a refunded order and emails the buyer', async () => {
     await POST(signed(completed()))
-    await POST(signed({ id: 'evt_r', object: 'event', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1' } } }))
+    await POST(signed({ id: 'evt_r', object: 'event', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1', refunded: true } } }))
     expect(tables().orders[0].status).toBe('refunded')
     expect(mocks.sendOrderEmail).toHaveBeenLastCalledWith(expect.anything(), ACC, tables().orders[0].id, 'refunded')
   })
@@ -174,7 +223,7 @@ describe('POST /api/loja/webhooks/stripe', () => {
   it('does not refund-flip a shipped order, only logs it', async () => {
     await POST(signed(completed()))
     tables().orders[0].status = 'shipped'
-    await POST(signed({ id: 'evt_r', object: 'event', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1' } } }))
+    await POST(signed({ id: 'evt_r', object: 'event', type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1', refunded: true } } }))
     expect(tables().orders[0].status).toBe('shipped')
     expect(tables().order_events.map((e) => e.type)).toContain('refund_after_ship')
   })

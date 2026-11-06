@@ -10,7 +10,11 @@ type Rpc = (args: Record<string, unknown>) => unknown
 let seq = 0
 const newId = () => `id-${++seq}`
 
-export function fakeDb(initial: Tables, rpcs: Record<string, Rpc> = {}) {
+export function fakeDb(
+  initial: Tables,
+  rpcs: Record<string, Rpc> = {},
+  opts: { failInsert?: (table: string) => boolean } = {},
+) {
   const tables: Tables = {}
   for (const [k, v] of Object.entries(initial)) tables[k] = v.map((r) => ({ ...r }))
   const table = (name: string) => (tables[name] ??= [])
@@ -30,6 +34,9 @@ export function fakeDb(initial: Tables, rpcs: Record<string, Rpc> = {}) {
       let result: Row[] = []
       let error: { message: string; code?: string } | null = null
 
+      if (op === 'insert' && opts.failInsert?.(name)) {
+        return { data: null, error: { message: 'simulated insert failure' }, count: null }
+      }
       if (op === 'insert' || op === 'upsert') {
         const list = Array.isArray(payload) ? payload : [payload as Row]
         for (const raw of list) {
@@ -63,6 +70,8 @@ export function fakeDb(initial: Tables, rpcs: Record<string, Rpc> = {}) {
           (a[col] as string) > (b[col] as string) ? (asc ? 1 : -1) : (asc ? -1 : 1))
       }
       if (limit != null) result = result.slice(0, limit)
+      // Como o PostgREST: quem lê recebe cópias, não as linhas da tabela.
+      result = result.map((r) => ({ ...r }))
 
       if (error) return { data: null, error, count: null }
       if (wantSingle === 'single') {
@@ -92,7 +101,9 @@ export function fakeDb(initial: Tables, rpcs: Record<string, Rpc> = {}) {
       gte: (c: string, v: string) => { filters.push((r) => String(r[c]) >= v); return b },
       lt: (c: string, v: string) => { filters.push((r) => String(r[c]) < v); return b },
       ilike: (c: string, v: string) => {
-        filters.push((r) => String(r[c] ?? '').toLowerCase() === v.toLowerCase()); return b
+        const re = new RegExp('^' + v.replace(/\\([\\%_])|([%_])|([.*+?^${}()|[\]])/g,
+          (_m, esc, wild, meta) => esc ? esc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : wild === '%' ? '.*' : wild === '_' ? '.' : '\\' + meta) + '$', 'i')
+        filters.push((r) => re.test(String(r[c] ?? ''))); return b
       },
       order: (col: string, o?: { ascending?: boolean }) => {
         order = { col, asc: o?.ascending !== false }; return b

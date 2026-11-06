@@ -59,9 +59,23 @@ describe('POST /api/loja/orders/[id]/actions', () => {
   it('refunds through Stripe with the order payment intent and voids the label', async () => {
     mocks.db = fakeDb({ orders: [order('label_ready')], shipments: [{ order_id: 'o1', shippo_transaction_id: 'tx_1' }] })
     expect((await POST(act({ action: 'refund' }), ctx)).status).toBe(200)
-    expect(mocks.refundsCreate).toHaveBeenCalledWith({ payment_intent: 'pi_1' })
+    expect(mocks.refundsCreate).toHaveBeenCalledWith({ payment_intent: 'pi_1' }, expect.anything())
     expect(mocks.refundLabel).toHaveBeenCalledWith('shippo_1', 'tx_1')
     expect(tables().orders[0].status).toBe('refunded')
+  })
+
+  it('does not email the refund again when the Stripe webhook already did', async () => {
+    mocks.refundsCreate.mockImplementation(async () => {
+      tables().orders[0].status = 'refunded' // webhook charge.refunded chegou durante a chamada
+      return { id: 're_1' }
+    })
+    expect((await POST(act({ action: 'refund' }), ctx)).status).toBe(200)
+    expect(mocks.sendOrderEmail).not.toHaveBeenCalled()
+  })
+
+  it('uses an idempotency key so a double click never refunds twice', async () => {
+    await POST(act({ action: 'refund' }), ctx)
+    expect(mocks.refundsCreate).toHaveBeenCalledWith({ payment_intent: 'pi_1' }, { idempotencyKey: 'refund-o1' })
   })
 
   it('still refunds when voiding the label fails', async () => {

@@ -42,7 +42,7 @@ export async function POST(request: Request, { params }: Params) {
     if (action === 'start_preparing') {
       const next = nextStatus(order.status, 'start_preparing')
       if (!next) return conflict()
-      await setOrderStatus(db, id, next)
+      if (!(await setOrderStatus(db, id, next, order.status))) return conflict()
       await addOrderEvent(db, accountId, id, 'preparing')
       return NextResponse.json({ status: next })
     }
@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: Params) {
     if (action === 'mark_shipped') {
       const next = nextStatus(order.status, 'mark_shipped')
       if (!next) return conflict()
-      await setOrderStatus(db, id, next, { shipped_at: new Date().toISOString() })
+      if (!(await setOrderStatus(db, id, next, order.status, { shipped_at: new Date().toISOString() }))) return conflict()
       await addOrderEvent(db, accountId, id, 'shipped')
       const email = await sendOrderEmail(db, accountId, id, 'shipped')
       return NextResponse.json({ status: next, email })
@@ -65,7 +65,10 @@ export async function POST(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'Stripe não configurado ou pedido sem pagamento' }, { status: 412 })
     }
     try {
-      await getStripe(stripeKey).refunds.create({ payment_intent: order.payment_intent })
+      await getStripe(stripeKey).refunds.create(
+        { payment_intent: order.payment_intent },
+        { idempotencyKey: `refund-${order.id}` },
+      )
     } catch (err) {
       await addOrderEvent(db, accountId, id, 'refund_failed', { message: String(err) })
       return NextResponse.json({ error: 'refund_failed' }, { status: 502 })
@@ -81,8 +84,10 @@ export async function POST(request: Request, { params }: Params) {
       }
     }
 
-    // O webhook charge.refunded vai chegar depois e não fará nada (já refunded).
-    await setOrderStatus(db, id, next)
+    // O webhook charge.refunded pode chegar antes ou depois: só quem fizer a
+    // transição registra o evento e manda o e-mail.
+    const moved = await setOrderStatus(db, id, next, order.status)
+    if (!moved) return NextResponse.json({ status: next, email: 'already_sent' })
     await addOrderEvent(db, accountId, id, 'refunded')
     const email = await sendOrderEmail(db, accountId, id, 'refunded')
     return NextResponse.json({ status: next, email })

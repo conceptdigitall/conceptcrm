@@ -17,19 +17,28 @@ export async function loadOrder(db: SupabaseClient, accountId: string, orderId: 
   return (data as OrderRow | null) ?? null
 }
 
-/** Muda o status gravando a hora da mudança (o kanban mostra "há N dias"). */
+/**
+ * Muda o status gravando a hora da mudança (o kanban mostra "há N dias").
+ * Só grava se o pedido ainda estiver em `expected` (compare-and-set): duas
+ * abas, ou uma ação e um webhook, nunca fazem a mesma transição duas vezes.
+ * Devolve false quando outro pedido/aviso chegou antes.
+ */
 export async function setOrderStatus(
   db: SupabaseClient,
   orderId: string,
   status: OrderStatus,
+  expected: OrderStatus,
   extra: Record<string, unknown> = {},
-): Promise<void> {
+): Promise<boolean> {
   const now = new Date().toISOString()
-  const { error } = await db
+  const { data, error } = await db
     .from('orders')
     .update({ status, status_changed_at: now, updated_at: now, ...extra })
     .eq('id', orderId)
+    .eq('status', expected)
+    .select('id')
   if (error) throw new Error(`orders update: ${error.message}`)
+  return (data ?? []).length > 0
 }
 
 /** Peso total dos itens (oz), lido do catálogo atual. */

@@ -38,8 +38,10 @@ export async function upsertCustomerContact(
   const phone = customer.phone?.trim() || ''
 
   if (email) {
+    // ilike sem curingas: "_" e "%" do e-mail viram literais.
+    const literal = email.replace(/[\\%_]/g, (c) => `\\${c}`)
     const { data } = await db
-      .from('contacts').select('id').eq('account_id', accountId).ilike('email', email).limit(1)
+      .from('contacts').select('id').eq('account_id', accountId).ilike('email', literal).limit(1)
     if (data?.[0]) return data[0].id as string
   }
   const normalized = phone ? normalizePhone(phone) : ''
@@ -112,10 +114,16 @@ export async function createPaidOrder(
   accountId: string,
   session: PaidSession,
   lineItems: PaidLineItem[],
-): Promise<{ orderId: string; created: boolean }> {
+): Promise<{ orderId: string; created: boolean; needsConfirmation: boolean }> {
   const { data: existing } = await db
     .from('orders').select('id').eq('payment_provider', 'stripe').eq('payment_ref', session.id).maybeSingle()
-  if (existing) return { orderId: existing.id as string, created: false }
+  if (existing) {
+    // Reenvio do Stripe depois de uma falha: completa o que faltou.
+    const orderId = existing.id as string
+    const { data: items } = await db.from('order_items').select('id').eq('order_id', orderId).limit(1)
+    if (!items?.length) await insertItems(db, accountId, orderId, session, lineItems)
+    return { orderId, created: false, needsConfirmation: !(await confirmationLogged(db, orderId)) }
+  }
 
   const customer = session.customer_details ?? {}
   const shipping = session.collected_information?.shipping_details ?? session.shipping_details ?? null
@@ -158,13 +166,23 @@ export async function createPaidOrder(
     if (error?.code === '23505') {
       const { data: again } = await db
         .from('orders').select('id').eq('payment_provider', 'stripe').eq('payment_ref', session.id).maybeSingle()
-      if (again) return { orderId: again.id as string, created: false }
+      if (again) return { orderId: again.id as string, created: false, needsConfirmation: false }
     }
     throw new Error(`orders insert: ${error?.message}`)
   }
   const orderId = order.id as string
+  await insertItems(db, accountId, orderId, session, lineItems)
+  return { orderId, created: true, needsConfirmation: true }
+}
 
-  // Itens congelados: nome, cor, tamanho e preço do momento da compra.
+/** Itens congelados (nome, cor, tamanho e preço do momento) + evento "paid". */
+async function insertItems(
+  db: SupabaseClient,
+  accountId: string,
+  orderId: string,
+  session: PaidSession,
+  lineItems: PaidLineItem[],
+): Promise<void> {
   const slugs = lineItems.map((li) => lineMeta(li).slug).filter(Boolean)
   const { data: products } = await db
     .from('store_products').select('id, slug, name, price_cents').eq('account_id', accountId).in('slug', slugs)
@@ -190,8 +208,9 @@ export async function createPaidOrder(
     }
   })
   if (rows.length) {
+    // Erro aqui derruba o webhook (500): o Stripe reenvia e a próxima tentativa completa o pedido.
     const { error: itemsErr } = await db.from('order_items').insert(rows)
-    if (itemsErr) console.error('[loja] order_items insert failed:', itemsErr.message)
+    if (itemsErr) throw new Error(`order_items insert: ${itemsErr.message}`)
   }
 
   await addOrderEvent(db, accountId, orderId, 'paid', { total_cents: session.amount_total ?? 0 })
@@ -201,5 +220,9 @@ export async function createPaidOrder(
       charged_cents: session.amount_subtotal ?? 0,
     })
   }
-  return { orderId, created: true }
+}
+
+async function confirmationLogged(db: SupabaseClient, orderId: string): Promise<boolean> {
+  const { data } = await db.from('order_events').select('detail').eq('order_id', orderId).in('type', ['email_sent', 'email_skipped'])
+  return (data ?? []).some((e) => (e.detail as { kind?: string } | null)?.kind === 'confirmed')
 }
