@@ -11,7 +11,14 @@ import type {
   BusinessNiche,
 } from '@/types';
 import { BUSINESS_NICHES } from '@/lib/marketing/niche-autopilot';
-import { EIXO_LABEL, fileExtension, referenceStatusLabel, shouldPoll } from '@/lib/marketing/reference-view';
+import {
+  EIXO_LABEL,
+  fileExtension,
+  parseViewsInput,
+  referenceStatusLabel,
+  shouldPoll,
+  validateReferenceFile,
+} from '@/lib/marketing/reference-view';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,17 +51,25 @@ export function ReferencesTab() {
   const [busy, setBusy] = useState(false);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const loadingRef = useRef(false);
+  const loadSeq = useRef(0);
 
   const load = useCallback(async () => {
+    // Uma busca por vez; só a mais recente pode atualizar a tela.
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    const seq = ++loadSeq.current;
     try {
       const res = await fetch('/api/marketing/references');
       if (!res.ok) return;
       const data = await res.json();
+      if (seq !== loadSeq.current) return;
       setReferences(data.references || []);
       setPlaybook(data.playbook ?? null);
     } catch {
       // Falha de rede: mantém o que já está na tela.
     } finally {
+      loadingRef.current = false;
       setLoading(false);
     }
   }, []);
@@ -70,11 +85,17 @@ export function ReferencesTab() {
     return () => clearInterval(timer);
   }, [polling, load]);
 
+  /** Eixo, nicho e views prontos para enviar; null (com aviso) se as views forem inválidas. */
   function meta() {
+    const parsed = parseViewsInput(views);
+    if (parsed === 'invalid') {
+      toast.error('Visualizações: use só números, sem pontos ou vírgulas.');
+      return null;
+    }
     return {
       eixo,
       nicho: eixo === 'sobre_o_que' ? nicho : undefined,
-      views: views.trim() || undefined,
+      views: parsed ?? undefined,
     };
   }
 
@@ -93,12 +114,14 @@ export function ReferencesTab() {
       toast.error('Cole o link do vídeo.');
       return;
     }
+    const m = meta();
+    if (!m) return;
     setBusy(true);
     try {
       const res = await fetch('/api/marketing/references', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), ...meta() }),
+        body: JSON.stringify({ url: url.trim(), ...m }),
       });
       if (!res.ok) throw new Error(await readError(res, 'Não foi possível enviar o link.'));
       const data = await res.json();
@@ -113,13 +136,21 @@ export function ReferencesTab() {
   }
 
   async function handleFile(file: File) {
+    const fileError = validateReferenceFile(file);
+    if (fileError) {
+      toast.error(fileError);
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
     if (!plataforma) {
       toast.error('Escolha a plataforma do vídeo (Instagram ou TikTok) antes de enviar o arquivo.');
       return;
     }
+    const m = meta();
+    if (!m) return;
     setBusy(true);
     try {
-      const common = { plataforma, ...meta() };
+      const common = { plataforma, ...m };
       const prep = await fetch('/api/marketing/references/upload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -337,14 +368,18 @@ function ReferenceCard({
     <li className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 md:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <a
-            href={r.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block truncate text-sm font-semibold text-primary hover:underline"
-          >
-            {r.url}
-          </a>
+          {r.url.startsWith('upload:') ? (
+            <span className="block truncate text-sm font-semibold text-foreground">Arquivo enviado</span>
+          ) : (
+            <a
+              href={r.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block truncate text-sm font-semibold text-primary hover:underline"
+            >
+              {r.url}
+            </a>
+          )}
           <p className="mt-0.5 text-xs text-muted-foreground">
             {r.plataforma === 'instagram' ? 'Instagram' : 'TikTok'} · {EIXO_LABEL[r.eixo]}
             {nichoLabel ? ` · ${nichoLabel}` : ''}

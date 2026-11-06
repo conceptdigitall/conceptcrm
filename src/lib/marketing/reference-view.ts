@@ -1,3 +1,4 @@
+import { REFERENCE_UPLOAD_MAX_BYTES } from '@/lib/marketing/references';
 import type { MarketingReference, ReferenceEixo, ReferenceStatus } from '@/types';
 
 const STATUS_LABEL: Record<ReferenceStatus, string> = {
@@ -25,4 +26,21 @@ export function shouldPoll(refs: Pick<MarketingReference, 'status'>[]): boolean 
 export function fileExtension(name: string): string {
   const i = name.lastIndexOf('.');
   return i >= 0 && i < name.length - 1 ? name.slice(i + 1).toLowerCase() : '';
+}
+
+/** Confere tipo e tamanho do arquivo antes de pedir o envio; devolve a mensagem de erro ou null. */
+export function validateReferenceFile(file: { type: string; size: number }): string | null {
+  if (!file.type.startsWith('video/')) return 'O arquivo precisa ser um vídeo.';
+  if (file.size <= 0) return 'O arquivo está vazio.';
+  if (file.size > REFERENCE_UPLOAD_MAX_BYTES) return 'O vídeo passa de 100 MB. Envie um menor.';
+  return null;
+}
+
+/** Texto das views -> número inteiro; vazio -> null; qualquer outra coisa -> 'invalid'. */
+export function parseViewsInput(text: string): number | null | 'invalid' {
+  const t = text.trim();
+  if (t === '') return null;
+  if (!/^\d+$/.test(t)) return 'invalid';
+  const n = Number(t);
+  return Number.isSafeInteger(n) ? n : 'invalid';
 }
