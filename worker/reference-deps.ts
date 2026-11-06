@@ -3,8 +3,9 @@
 import { GoogleGenAI, Type, createPartFromUri, createUserContent } from '@google/genai';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { readdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 import { runCommand } from './exec';
+import { REFERENCE_UPLOAD_MAX_BYTES } from '@/lib/marketing/references';
 import { GeminiQuotaError, type ReferenceDeps } from './references';
 
 const BUCKET = 'marketing';
@@ -61,7 +62,7 @@ const ANALYSIS_SCHEMA = {
     promessa: STR,
     entrega: STR,
     cta: STR,
-    porQueViralizou: { type: Type.ARRAY, items: STR },
+    porQueViralizou: { type: Type.ARRAY, items: STR, minItems: '3', maxItems: '3' },
     comoAdaptar: STR,
   },
   required: [
@@ -80,6 +81,24 @@ export function ytDlpArgs(extra: string[], url: string): string[] {
   return ['--ignore-config', '--no-playlist', '--use-extractors', YT_DLP_EXTRACTORS, ...extra, '--', url];
 }
 
+/** Opções extras só do download (não do probe): formato, saída e teto de tamanho. */
+export function ytDlpDownloadArgs(dir: string): string[] {
+  return ['-f', 'mp4/best[height<=720]', '--max-filesize', '200M', '-o', join(dir, 'video.%(ext)s')];
+}
+
+const VIDEO_MIME: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska',
+};
+
+/** Tipo MIME que o Gemini recebe, pela extensão do arquivo (padrão video/mp4). */
+export function mimeTypeForVideo(path: string): string {
+  return VIDEO_MIME[extname(path).toLowerCase()] ?? 'video/mp4';
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function probeFile(path: string): Promise<number> {
@@ -96,7 +115,7 @@ async function analyzeWithGemini(videoPath: string, prompt: string): Promise<str
   const ai = new GoogleGenAI({ apiKey });
   let remote: string | undefined;
   try {
-    let file = await ai.files.upload({ file: videoPath, config: { mimeType: 'video/mp4' } });
+    let file = await ai.files.upload({ file: videoPath, config: { mimeType: mimeTypeForVideo(videoPath) } });
     remote = file.name;
     const deadline = Date.now() + ACTIVE_MAX_WAIT_MS;
     while (file.state !== 'ACTIVE') {
@@ -137,9 +156,7 @@ export function makeReferenceDeps(db: SupabaseClient): ReferenceDeps {
     },
     probeFileDuration: probeFile,
     async download(url, dir) {
-      const r = await runCommand('yt-dlp', ytDlpArgs([
-        '-f', 'mp4/best[height<=720]', '-o', join(dir, 'video.%(ext)s'),
-      ], url), { timeoutMs: DOWNLOAD_TIMEOUT_MS });
+      const r = await runCommand('yt-dlp', ytDlpArgs(ytDlpDownloadArgs(dir), url), { timeoutMs: DOWNLOAD_TIMEOUT_MS });
       if (r.code !== 0) throw new Error(`yt-dlp falhou: ${r.stderr.slice(-200)}`);
       const file = (await readdir(dir)).find((f) => f.startsWith('video.') && VIDEO_EXTENSIONS.some((e) => f.endsWith(e)));
       if (!file) throw new Error('yt-dlp não gerou arquivo');
@@ -148,7 +165,9 @@ export function makeReferenceDeps(db: SupabaseClient): ReferenceDeps {
     async downloadUpload(path, dir) {
       const { data, error } = await db.storage.from(BUCKET).download(path);
       if (error || !data) throw new Error(`Storage: ${error?.message ?? 'arquivo ausente'}`);
-      const local = join(dir, 'upload.mp4');
+      if (data.size > REFERENCE_UPLOAD_MAX_BYTES) throw new Error('arquivo grande demais');
+      const ext = extname(path).toLowerCase();
+      const local = join(dir, `upload${VIDEO_EXTENSIONS.includes(ext) ? ext : '.mp4'}`);
       await writeFile(local, Buffer.from(await data.arrayBuffer()));
       return local;
     },

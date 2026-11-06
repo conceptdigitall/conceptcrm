@@ -253,6 +253,24 @@ describe('carrossel e gancho da referência', () => {
     await runPautaTick(db2, [CACC], deps(QUA, ''));
     expect(db2.tables.marketing_posts).toHaveLength(0);
     expect(db2.tables.marketing_pauta_itens[0].produzido_em).toBeNull();
+    // Vai para o caminho de reescrita em vez de travar a fila de aprovados.
+    expect(db2.tables.marketing_pauta_itens[0]).toMatchObject({
+      status: 'ajuste', comentario: 'Carrossel precisa de 3 a 7 lâminas',
+    });
+  });
+
+  it('aprovados são lidos do mais antigo para o mais novo (um item ruim não trava os outros)', async () => {
+    const db = fakeDb({ marketing_pautas: pautaSeed, marketing_pauta_itens: [] });
+    const orders: unknown[][] = [];
+    const realFrom = db.from.bind(db);
+    (db as unknown as { from: unknown }).from = (name: string) => {
+      const q = realFrom(name) as unknown as Record<string, (...a: unknown[]) => unknown>;
+      const order = q.order;
+      q.order = (...a: unknown[]) => { orders.push([name, ...a]); return order(...a); };
+      return q;
+    };
+    await runPautaTick(db, [CACC], deps(QUA, ''));
+    expect(orders).toContainEqual(['marketing_pauta_itens', 'updated_at', { ascending: true }]);
   });
 
   it('carrossel: se ligar o item falha (zero linhas), apaga o post', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isQuotaError, parseDuration, parseYtDlpDuration, ytDlpArgs } from './reference-deps';
+import { isQuotaError, mimeTypeForVideo, parseDuration, parseYtDlpDuration, ytDlpArgs, ytDlpDownloadArgs } from './reference-deps';
 
 describe('parseYtDlpDuration', () => {
   it('lê a duração em segundos', () => {
@@ -45,5 +45,25 @@ describe('ytDlpArgs', () => {
     expect(args).toContain('--use-extractors');
     expect(args.slice(-2)).toEqual(['--', '--exec=rm']);
     expect(args.indexOf('--dump-json')).toBeLessThan(args.indexOf('--'));
+  });
+});
+
+describe('mimeTypeForVideo', () => {
+  it('mapeia pela extensão', () => {
+    expect(mimeTypeForVideo('/t/video.mp4')).toBe('video/mp4');
+    expect(mimeTypeForVideo('x.MOV')).toBe('video/quicktime');
+    expect(mimeTypeForVideo('x.webm')).toBe('video/webm');
+    expect(mimeTypeForVideo('x.mkv')).toBe('video/x-matroska');
+    expect(mimeTypeForVideo('x.m4v')).toBe('video/mp4');
+  });
+  it('desconhecida cai em video/mp4', () => {
+    expect(mimeTypeForVideo('x.avi')).toBe('video/mp4');
+    expect(mimeTypeForVideo('semextensao')).toBe('video/mp4');
+  });
+});
+
+describe('limites do download', () => {
+  it('download do yt-dlp limita o tamanho', () => {
+    expect(ytDlpDownloadArgs('/d')).toEqual(expect.arrayContaining(['--max-filesize', '200M']));
   });
 });

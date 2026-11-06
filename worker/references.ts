@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  REFERENCE_ERROR_TOO_LONG,
   REFERENCE_MAX_SECONDS,
   parseReferenceAnalysis,
   referenceAnalysisPrompt,
@@ -28,7 +29,7 @@ export class GeminiQuotaError extends Error {}
 const RETRY_AFTER_MS = 60 * 60_000;
 const DEFAULT_BUSINESS_NAME = 'Concept Digital';
 
-const MSG_TOO_LONG = 'vídeo longo demais';
+const MSG_TOO_LONG = REFERENCE_ERROR_TOO_LONG;
 const MSG_NEED_FILE = 'envie o arquivo do vídeo';
 const MSG_ANALYSIS = 'análise falhou';
 const MSG_GENERIC = 'erro inesperado ao analisar';
@@ -69,9 +70,9 @@ async function prepareVideo(ref: MarketingReference, dir: string, deps: Referenc
   }
   // Se o probe falhar (link privado, plataforma bloqueada), o João precisa enviar o arquivo.
   let seconds: number;
-  try { seconds = await deps.probeDuration(ref.url); } catch { throw new JobFailure(MSG_NEED_FILE); }
+  try { seconds = await deps.probeDuration(ref.url_normalizada); } catch { throw new JobFailure(MSG_NEED_FILE); }
   if (seconds > REFERENCE_MAX_SECONDS) throw new JobFailure(MSG_TOO_LONG);
-  try { return await deps.download(ref.url, dir); } catch { throw new JobFailure(MSG_NEED_FILE); }
+  try { return await deps.download(ref.url_normalizada, dir); } catch { throw new JobFailure(MSG_NEED_FILE); }
 }
 
 export async function runReferenceTick(

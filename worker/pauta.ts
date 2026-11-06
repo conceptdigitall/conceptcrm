@@ -91,6 +91,8 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
     // produzido_em (e não post_id): apagar o post zera post_id, e sem esta marca
     // o worker compraria um vídeo novo a cada passe.
     .is('produzido_em', null)
+    // Mais antigo primeiro: um item que falha sempre não pode esconder os demais.
+    .order('updated_at', { ascending: true })
     .limit(1);
   if (error) throw new Error(`Não consegui ler os aprovados: ${error.message}`);
   const item = (data as MarketingPautaItem[] | null)?.[0];
@@ -141,7 +143,15 @@ async function briefDoReel(db: SupabaseClient, item: MarketingPautaItem): Promis
 /** Carrossel não tem vídeo: o post já nasce em aprovação e a arte de cada lâmina sai na publicação. */
 async function produzirCarrossel(db: SupabaseClient, item: MarketingPautaItem, now: Date): Promise<boolean> {
   const laminas = laminasDoRoteiro(item.roteiro)?.slice(0, CARROSSEL_MAX);
-  if (!laminas) throw new Error(`Carrossel com menos de 3 lâminas: ${item.tema}`);
+  if (!laminas) {
+    // Sem lâminas suficientes não adianta tentar de novo: vai para a reescrita.
+    const { error: aErr } = await db
+      .from('marketing_pauta_itens')
+      .update({ status: 'ajuste', comentario: 'Carrossel precisa de 3 a 7 lâminas', updated_at: now.toISOString() })
+      .eq('id', item.id);
+    if (aErr) throw new Error(`Não consegui mandar o carrossel para ajuste: ${aErr.message}`);
+    return true;
+  }
   const { data: post, error: pErr } = await db.from('marketing_posts').insert({
     account_id: item.account_id,
     created_by: null,

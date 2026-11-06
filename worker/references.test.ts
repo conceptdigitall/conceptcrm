@@ -92,6 +92,15 @@ describe('runReferenceTick', () => {
     expect(analyze.mock.calls[0][1]).toContain('Padaria Sol');
   });
 
+  it('link usa a URL normalizada (yt-dlp só entende www.tiktok.com)', async () => {
+    const db = fakeDb({ marketing_references: [ref({
+      url: 'https://tiktok.com/@u/video/1', url_normalizada: 'https://www.tiktok.com/@u/video/1',
+    })] });
+    const { deps } = makeDeps();
+    await runReferenceTick(db, [ACC], deps);
+    expect(deps.probeDuration).toHaveBeenCalledWith('https://www.tiktok.com/@u/video/1');
+    expect(deps.download).toHaveBeenCalledWith('https://www.tiktok.com/@u/video/1', expect.any(String));
+  });
   it('link com 200 s: failed "vídeo longo demais" e nunca baixa', async () => {
     const db = fakeDb({ marketing_references: [ref()] });
     const { deps } = makeDeps({ probeDuration: vi.fn(async () => 200) });
