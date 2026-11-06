@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import type { MarketingReference } from '@/types';
+import { REFERENCE_ERROR_TOO_LONG } from '@/lib/marketing/references';
 import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -21,8 +22,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     .maybeSingle();
   if (findErr) return dbErrorResponse('references', findErr);
   if (!current) return NextResponse.json({ error: 'Referência não encontrada.' }, { status: 404 });
-  if ((current as MarketingReference).status !== 'failed') {
+  const cur = current as MarketingReference;
+  if (cur.status !== 'failed') {
     return NextResponse.json({ error: 'Só dá para analisar de novo uma referência que falhou.' }, { status: 409 });
+  }
+  // O arquivo do upload some após a falha e vídeo longo demais falha igual: repetir só gasta fila.
+  if ((cur.url.startsWith('upload:') && !cur.arquivo_path) || cur.error === REFERENCE_ERROR_TOO_LONG) {
+    return NextResponse.json(
+      { error: 'Não dá para analisar de novo este vídeo: envie o arquivo de novo (até 3 minutos).' },
+      { status: 409 },
+    );
   }
 
   const { data, error } = await ctx.supabase

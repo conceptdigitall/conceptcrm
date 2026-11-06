@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCoalescedLoader, parseViewsInput, validateReferenceFile, fileExtension, referenceStatusLabel, shouldPoll } from './reference-view';
+import { canRetry, createCoalescedLoader, parseViewsInput, validateReferenceFile, fileExtension, referenceStatusLabel, shouldPoll } from './reference-view';
 
 describe('reference-view', () => {
   it('traduz o status', () => {
@@ -77,5 +77,23 @@ describe('reference-view', () => {
     await expect(first).rejects.toThrow();
     await second;
     expect(calls).toBe(2);
+  });
+});
+
+describe('canRetry', () => {
+  const failed = { status: 'failed' as const, url: 'https://www.tiktok.com/@u/video/1', arquivo_path: null, error: 'análise falhou' };
+  it('link que falhou pode tentar de novo', () => {
+    expect(canRetry(failed)).toBe(true);
+    expect(canRetry({ ...failed, error: 'envie o arquivo do vídeo' })).toBe(true);
+  });
+  it('upload sem arquivo não pode', () => {
+    expect(canRetry({ ...failed, url: 'upload:r-1' })).toBe(false);
+    expect(canRetry({ ...failed, url: 'upload:r-1', arquivo_path: 'a/r-1.mp4' })).toBe(true);
+  });
+  it('vídeo longo demais não pode', () => {
+    expect(canRetry({ ...failed, error: 'vídeo longo demais' })).toBe(false);
+  });
+  it('só quando falhou', () => {
+    expect(canRetry({ ...failed, status: 'done' })).toBe(false);
   });
 });

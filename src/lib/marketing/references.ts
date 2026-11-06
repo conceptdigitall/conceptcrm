@@ -14,6 +14,8 @@ import { parseObject, txt } from './json-text';
 export type { ReferenceAnalysis } from '@/types';
 
 export const REFERENCE_MAX_SECONDS = 180;
+/** Erro gravado quando o vídeo passa do limite; repetir a análise não adianta. */
+export const REFERENCE_ERROR_TOO_LONG = 'vídeo longo demais';
 export const REFERENCE_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 
 const INSTAGRAM_HOSTS = ['instagram.com', 'www.instagram.com'];
@@ -118,7 +120,7 @@ export function referenceAnalysisPrompt(input: { eixo: ReferenceEixo; nicho: Bus
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
 
-/** Lê a análise do Gemini; null se faltar campo, tipo fechado inválido ou não vier 3 motivos. */
+/** Lê a análise do Gemini; null se faltar campo, tipo fechado inválido ou vierem menos de 3 motivos. */
 export function parseReferenceAnalysis(raw: string): ReferenceAnalysis | null {
   const o = parseObject(raw);
   if (!o) return null;
@@ -128,8 +130,8 @@ export function parseReferenceAnalysis(raw: string): ReferenceAnalysis | null {
   const duracaoSeg = num(o.duracaoSeg);
   const cortesPorMinuto = num(o.cortesPorMinuto);
   if (duracaoSeg === null || cortesPorMinuto === null) return null;
-  if (!Array.isArray(o.porQueViralizou) || o.porQueViralizou.length !== 3) return null;
-  const porQueViralizou = o.porQueViralizou.map((m) => txt(m, 140));
+  if (!Array.isArray(o.porQueViralizou) || o.porQueViralizou.length < 3) return null;
+  const porQueViralizou = o.porQueViralizou.slice(0, 3).map((m) => txt(m, 140));
   if (porQueViralizou.some((m) => !m)) return null;
 
   const frase = txt(g.frase, 200);

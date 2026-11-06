@@ -96,9 +96,13 @@ describe('parseReferenceAnalysis', () => {
     expect(parseReferenceAnalysis(JSON.stringify(valid))).toEqual(valid);
     expect(parseReferenceAnalysis(`Aqui:\n${JSON.stringify(valid)}\nfim`)).toEqual(valid);
   });
-  it('exige exatamente 3 motivos', () => {
+  it('exige ao menos 3 motivos e guarda os 3 primeiros', () => {
     expect(parseReferenceAnalysis(JSON.stringify({ ...valid, porQueViralizou: ['a', 'b'] }))).toBeNull();
-    expect(parseReferenceAnalysis(JSON.stringify({ ...valid, porQueViralizou: ['a', 'b', 'c', 'd'] }))).toBeNull();
+    expect(parseReferenceAnalysis(JSON.stringify({ ...valid, porQueViralizou: ['a', 'b', 'c', 'd'] }))?.porQueViralizou)
+      .toEqual(['a', 'b', 'c']);
+    expect(parseReferenceAnalysis(JSON.stringify({ ...valid, porQueViralizou: ['a', 'b', 'c', ''] }))?.porQueViralizou)
+      .toEqual(['a', 'b', 'c']);
+    expect(parseReferenceAnalysis(JSON.stringify({ ...valid, porQueViralizou: ['a', '', 'c', 'd'] }))).toBeNull();
   });
   it('tipos fechados', () => {
     expect(parseReferenceAnalysis(JSON.stringify({ ...valid, gancho: { ...valid.gancho, tipo: 'humor' } }))).toBeNull();

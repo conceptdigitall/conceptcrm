@@ -38,7 +38,7 @@ function useAccount(reply: Parameters<typeof recordingDb>[0] = () => ({ data: []
 }
 
 const row = (extra: Record<string, unknown> = {}) => ({
-  id: 'r-1', account_id: 'acc-1', status: 'pending', url_normalizada: 'https://www.instagram.com/reel/ABC123', ...extra,
+  id: 'r-1', account_id: 'acc-1', status: 'pending', url: IG, url_normalizada: 'https://www.instagram.com/reel/ABC123', ...extra,
 });
 const postLink = (body: unknown) =>
   new Request('http://localhost/api/marketing/references', {
@@ -50,7 +50,7 @@ const retryReq = () => new Request('http://localhost/api/marketing/references/r-
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.signUpload.mockResolvedValue({ data: { token: 'tok', signedUrl: 'https://signed.example/up' }, error: null });
-  mocks.list.mockResolvedValue({ data: [{ name: `${ID}.mp4` }], error: null });
+  mocks.list.mockResolvedValue({ data: [fileEntry()], error: null });
   mocks.remove.mockResolvedValue({ error: null });
   useAccount();
 });
@@ -113,6 +113,9 @@ const prepBody = (extra: Record<string, unknown> = {}) => ({
 });
 const ID = '11111111-1111-4111-8111-111111111111';
 const PATH = `account-acc-1/referencias/${ID}.mp4`;
+const fileEntry = (meta: Record<string, unknown> = {}) => ({
+  name: `${ID}.mp4`, metadata: { size: 5, mimetype: 'video/mp4', ...meta },
+});
 const completeBody = (extra: Record<string, unknown> = {}) => ({
   id: ID, path: PATH, plataforma: 'tiktok', eixo: 'como_falar', nicho: '', views: '1200', ...extra,
 });
@@ -175,6 +178,24 @@ describe('POST /api/marketing/references/upload/complete', () => {
     expect(ops).toHaveLength(0);
   });
 
+  it.each([
+    ['oversize', { size: 11 }],
+    ['non-video mime', { mimetype: 'image/png' }],
+    ['missing mime', { mimetype: undefined }],
+  ])('rejects %s: 400, removes the object, no insert', async (_n, meta) => {
+    mocks.list.mockResolvedValue({ data: [fileEntry(meta)], error: null });
+    const res = await complete.POST(jsonReq('upload/complete', completeBody()));
+    expect(res.status).toBe(400);
+    expect(mocks.remove).toHaveBeenCalledWith([PATH]);
+    expect(ops.some((o) => o.action === 'insert')).toBe(false);
+  });
+
+  it('rejects an entry without metadata', async () => {
+    mocks.list.mockResolvedValue({ data: [{ name: `${ID}.mp4`, metadata: null }], error: null });
+    expect((await complete.POST(jsonReq('upload/complete', completeBody()))).status).toBe(400);
+    expect(mocks.remove).toHaveBeenCalledWith([PATH]);
+  });
+
   it('inserts upload:<id> with arquivo_path on the happy path', async () => {
     useAccount(() => ({ data: row() }));
     const res = await complete.POST(jsonReq('upload/complete', completeBody()));
@@ -231,6 +252,17 @@ describe('POST /api/marketing/references/[id]/retry', () => {
     const update = ops.find((o) => o.action === 'update')!;
     expect(update.payload).toEqual({ status: 'pending', error: null, retry_after: null, started_at: null, finished_at: null });
     expect(update.filters.account_id).toBe('acc-1');
+  });
+
+  it.each([
+    ['upload whose file is gone', { url: 'upload:r-1', arquivo_path: null, error: 'análise falhou' }],
+    ['video too long', { url: 'https://www.instagram.com/reel/A', arquivo_path: null, error: 'vídeo longo demais' }],
+  ])('409s with a message for %s', async (_n, extra) => {
+    useAccount(() => ({ data: row({ status: 'failed', ...extra }) }));
+    const res = await retry.POST(retryReq(), retryCtx);
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toContain('envie');
+    expect(ops.some((o) => o.action === 'update')).toBe(false);
   });
 
   it('404s for another account row', async () => {

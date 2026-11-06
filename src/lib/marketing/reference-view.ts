@@ -1,4 +1,4 @@
-import { REFERENCE_UPLOAD_MAX_BYTES } from '@/lib/marketing/references';
+import { REFERENCE_ERROR_TOO_LONG, REFERENCE_UPLOAD_MAX_BYTES } from '@/lib/marketing/references';
 import type { MarketingReference, ReferenceEixo, ReferenceStatus } from '@/types';
 
 const STATUS_LABEL: Record<ReferenceStatus, string> = {
@@ -20,6 +20,18 @@ export const EIXO_LABEL: Record<ReferenceEixo, string> = {
 /** Só vale atualizar a lista sozinho enquanto alguma análise ainda não terminou. */
 export function shouldPoll(refs: Pick<MarketingReference, 'status'>[]): boolean {
   return refs.some((r) => r.status === 'pending' || r.status === 'running');
+}
+
+/**
+ * "Analisar de novo" só serve quando há o que reanalisar: upload sem arquivo
+ * (apagado após a falha) e vídeo longo demais falhariam outra vez.
+ */
+export function canRetry(
+  ref: Pick<MarketingReference, 'status' | 'url' | 'arquivo_path' | 'error'>,
+): boolean {
+  if (ref.status !== 'failed') return false;
+  if (ref.url.startsWith('upload:') && !ref.arquivo_path) return false;
+  return ref.error !== REFERENCE_ERROR_TOO_LONG;
 }
 
 /** Extensão do nome do arquivo, sem ponto; '' se não houver. */

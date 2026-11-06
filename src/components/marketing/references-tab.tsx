@@ -13,6 +13,7 @@ import type {
 import { BUSINESS_NICHES } from '@/lib/marketing/niche-autopilot';
 import {
   EIXO_LABEL,
+  canRetry,
   createCoalescedLoader,
   fileExtension,
   parseViewsInput,
@@ -393,10 +394,14 @@ function ReferenceCard({
       {r.status === 'failed' && (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           {r.error && <p className="text-sm text-destructive">{r.error}</p>}
-          <Button type="button" variant="outline" disabled={retrying} onClick={onRetry} className="h-10 gap-2 rounded-xl">
-            <RefreshCw className={`h-4 w-4 ${retrying ? 'animate-spin' : ''}`} />
-            Analisar de novo
-          </Button>
+          {canRetry(r) ? (
+            <Button type="button" variant="outline" disabled={retrying} onClick={onRetry} className="h-10 gap-2 rounded-xl">
+              <RefreshCw className={`h-4 w-4 ${retrying ? 'animate-spin' : ''}`} />
+              Analisar de novo
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Envie o vídeo de novo para analisar.</p>
+          )}
         </div>
       )}
 

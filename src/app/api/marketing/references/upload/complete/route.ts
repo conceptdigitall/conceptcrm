@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import type { MarketingReference } from '@/types';
+import { REFERENCE_UPLOAD_MAX_BYTES } from '@/lib/marketing/references';
 import { dbErrorResponse } from '@/lib/marketing/db-error';
 import {
   REFERENCE_BUCKET,
@@ -50,8 +51,21 @@ export async function POST(request: Request) {
     console.error('[marketing/references] falha ao conferir o arquivo:', listErr);
     return NextResponse.json({ error: 'Não foi possível conferir o arquivo. Tente de novo.' }, { status: 500 });
   }
-  if (!found?.some((f) => f.name === fileName)) {
+  const entry = found?.find((f) => f.name === fileName);
+  if (!entry) {
     return NextResponse.json({ error: 'Arquivo não encontrado. Envie o vídeo de novo.' }, { status: 400 });
+  }
+  // A URL assinada aceita qualquer tamanho/tipo: quem confere é este passo.
+  const size = entry.metadata?.size;
+  const mime = entry.metadata?.mimetype;
+  const tooBig = typeof size !== 'number' || size <= 0 || size > REFERENCE_UPLOAD_MAX_BYTES;
+  if (tooBig || typeof mime !== 'string' || !mime.startsWith('video/')) {
+    const { error: rmErr } = await admin.storage.from(REFERENCE_BUCKET).remove([path]);
+    if (rmErr) console.error('[marketing/references] falha ao apagar o arquivo rejeitado:', path, rmErr);
+    return NextResponse.json(
+      { error: 'O arquivo enviado não é um vídeo válido ou passa de 100 MB. Envie outro.' },
+      { status: 400 },
+    );
   }
 
   const { data, error } = await ctx.supabase
