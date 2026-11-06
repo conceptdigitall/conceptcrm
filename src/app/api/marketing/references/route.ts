@@ -4,6 +4,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import type { MarketingReference, Playbook } from '@/types';
 import { validateReferenceInput } from '@/lib/marketing/references';
 import { semanaInicioISO } from '@/lib/marketing/pauta';
+import { createReference } from '@/lib/marketing/reference-store';
 import { dbErrorResponse } from '@/lib/marketing/db-error';
 
 export async function GET() {
@@ -47,36 +48,8 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = validateReferenceInput(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-  const { url, normalized, platform, eixo, nicho, views } = parsed.value;
-
-  const { data, error } = await ctx.supabase
-    .from('marketing_references')
-    .insert({
-      account_id: ctx.accountId,
-      url,
-      url_normalizada: normalized,
-      plataforma: platform,
-      eixo,
-      nicho,
-      views,
-      status: 'pending',
-      criado_por: ctx.userId,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    if ((error as { code?: string }).code === '23505') {
-      const { data: existing, error: findErr } = await ctx.supabase
-        .from('marketing_references')
-        .select('*')
-        .eq('account_id', ctx.accountId)
-        .eq('url_normalizada', normalized)
-        .maybeSingle();
-      if (findErr || !existing) return dbErrorResponse('references', findErr ?? error);
-      return NextResponse.json({ reference: existing as MarketingReference, duplicate: true });
-    }
-    return dbErrorResponse('references', error);
-  }
-  return NextResponse.json({ reference: data as MarketingReference }, { status: 201 });
+  const result = await createReference(ctx.supabase, ctx.accountId, ctx.userId, parsed.value);
+  if (!result.ok) return dbErrorResponse('references', result.error);
+  if (result.duplicate) return NextResponse.json({ reference: result.reference, duplicate: true });
+  return NextResponse.json({ reference: result.reference }, { status: 201 });
 }

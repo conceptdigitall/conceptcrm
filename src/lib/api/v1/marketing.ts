@@ -10,7 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { forbidden } from '@/lib/api/v1/respond';
 import { isInternalAccount } from '@/lib/internal-accounts';
 import { videoFileName } from '@/lib/marketing/download';
-import type { MarketingPauta, MarketingPautaItem, MarketingPost, PostStatus, Playbook } from '@/types';
+import type { MarketingReference, ReferenceAnalysis, MarketingPauta, MarketingPautaItem, MarketingPost, PostStatus, Playbook } from '@/types';
 
 const BUCKET = 'marketing';
 /** Long enough to forward the file (e.g. to Telegram), short enough to not linger. */
@@ -181,5 +181,42 @@ export function serializePauta(p: MarketingPauta, itens: MarketingPautaItem[]): 
     status: p.status,
     playbook: p.playbook ?? null,
     itens: itens.map(serializePautaItem),
+  };
+}
+
+// ------------------------------------------------------------
+// Referências virais — o Hermes manda o link e lê a análise do worker.
+// ------------------------------------------------------------
+
+export const REFERENCE_STATUSES = ['pending', 'running', 'done', 'failed'] as const;
+
+export interface ApiReference {
+  id: string;
+  url: string;
+  plataforma: string;
+  eixo: string;
+  nicho: string | null;
+  views: number | null;
+  status: string;
+  error: string | null;
+  /** Só quando a análise terminou (`done`). */
+  analise: ReferenceAnalysis | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export function serializeReference(r: MarketingReference): ApiReference {
+  return {
+    id: r.id,
+    url: r.url,
+    plataforma: r.plataforma,
+    eixo: r.eixo,
+    nicho: r.nicho ?? null,
+    views: r.views ?? null,
+    status: r.status,
+    error: r.error ?? null,
+    analise: r.status === 'done' ? (r.analise ?? null) : null,
+    created_at: r.created_at,
+    finished_at: r.finished_at ?? null,
   };
 }
