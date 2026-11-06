@@ -33,6 +33,15 @@ describe('normalizeReferenceUrl', () => {
     expect(t).toMatchObject({ normalized: 'https://www.tiktok.com/@user/video/123', platform: 'tiktok' });
     expect(normalizeReferenceUrl('https://vm.tiktok.com/ZM123/')?.platform).toBe('tiktok');
   });
+  it('TikTok m.tiktok.com normaliza como www; vt.tiktok.com aceito', () => {
+    expect(normalizeReferenceUrl('https://m.tiktok.com/@user/video/123?x=1')?.normalized).toBe('https://www.tiktok.com/@user/video/123');
+    expect(normalizeReferenceUrl('https://vt.tiktok.com/ZS123/')).toMatchObject({ normalized: 'https://vt.tiktok.com/ZS123', platform: 'tiktok' });
+  });
+  it('rejeita credenciais, porta e host parecido', () => {
+    expect(normalizeReferenceUrl('https://instagram.com@evil.com/reel/x')).toBeNull();
+    expect(normalizeReferenceUrl('https://instagram.com:8443/reel/x')).toBeNull();
+    expect(normalizeReferenceUrl('https://evil-instagram.com/reel/x')).toBeNull();
+  });
 });
 
 describe('validateReferenceMeta / validateReferenceInput', () => {

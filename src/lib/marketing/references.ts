@@ -17,7 +17,7 @@ export const REFERENCE_MAX_SECONDS = 180;
 export const REFERENCE_UPLOAD_MAX_BYTES = 100 * 1024 * 1024;
 
 const INSTAGRAM_HOSTS = ['instagram.com', 'www.instagram.com'];
-const TIKTOK_HOSTS = ['tiktok.com', 'www.tiktok.com'];
+const TIKTOK_HOSTS = ['tiktok.com', 'www.tiktok.com', 'm.tiktok.com'];
 const TIKTOK_SHORT_HOSTS = ['vm.tiktok.com', 'vt.tiktok.com'];
 
 const EIXOS: ReferenceEixo[] = ['como_falar', 'sobre_o_que'];
