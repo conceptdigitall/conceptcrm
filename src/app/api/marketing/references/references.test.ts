@@ -186,6 +186,23 @@ describe('POST /api/marketing/references/upload/complete', () => {
     });
   });
 
+  it('is idempotent on 23505: keeps the object and returns the existing row', async () => {
+    useAccount((op) => (op.action === 'insert' ? { error: { code: '23505' } } : { data: row({ id: ID }) }));
+    const res = await complete.POST(jsonReq('upload/complete', completeBody()));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ duplicate: true, reference: { id: ID } });
+    expect(mocks.remove).not.toHaveBeenCalled();
+    const find = ops.find((o) => o.action === 'select')!;
+    expect(find.filters).toMatchObject({ id: ID, account_id: 'acc-1' });
+  });
+
+  it('409s without removing when a 23505 row is not visible to the account', async () => {
+    useAccount((op) => (op.action === 'insert' ? { error: { code: '23505' } } : { data: null }));
+    const res = await complete.POST(jsonReq('upload/complete', completeBody()));
+    expect(res.status).toBe(409);
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
   it('removes the object when the insert fails', async () => {
     useAccount(() => ({ error: { code: 'XX' } }));
     vi.spyOn(console, 'error').mockImplementation(() => {});

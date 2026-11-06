@@ -73,6 +73,21 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
+    // Repetir o "concluir" (duplo clique, retry) colide com a linha já criada:
+    // o arquivo é dessa linha, então nunca pode ser apagado aqui.
+    if ((error as { code?: string }).code === '23505') {
+      const { data: existing, error: findErr } = await ctx.supabase
+        .from('marketing_references')
+        .select('*')
+        .eq('id', id)
+        .eq('account_id', ctx.accountId)
+        .maybeSingle();
+      if (findErr) return dbErrorResponse('references', findErr);
+      if (!existing) {
+        return NextResponse.json({ error: 'Esta referência já existe. Atualize a lista.' }, { status: 409 });
+      }
+      return NextResponse.json({ reference: existing as MarketingReference, duplicate: true });
+    }
     const { error: rmErr } = await admin.storage.from(REFERENCE_BUCKET).remove([path]);
     if (rmErr) console.error('[marketing/references] falha ao apagar o arquivo órfão:', path, rmErr);
     return dbErrorResponse('references', error);
