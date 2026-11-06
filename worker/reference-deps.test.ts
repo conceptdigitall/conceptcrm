@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isQuotaError, parseDuration, parseYtDlpDuration } from './reference-deps';
+import { isQuotaError, parseDuration, parseYtDlpDuration, ytDlpArgs } from './reference-deps';
 
 describe('parseYtDlpDuration', () => {
   it('lê a duração em segundos', () => {
@@ -35,5 +35,15 @@ describe('isQuotaError', () => {
     expect(isQuotaError(Object.assign(new Error('boom'), { status: 500 }))).toBe(false);
     expect(isQuotaError('x')).toBe(false);
     expect(isQuotaError(null)).toBe(false);
+  });
+});
+
+describe('ytDlpArgs', () => {
+  it('ignora config local, limita extratores e termina com -- url', () => {
+    const args = ytDlpArgs(['--dump-json'], '--exec=rm');
+    expect(args).toContain('--ignore-config');
+    expect(args).toContain('--use-extractors');
+    expect(args.slice(-2)).toEqual(['--', '--exec=rm']);
+    expect(args.indexOf('--dump-json')).toBeLessThan(args.indexOf('--'));
   });
 });

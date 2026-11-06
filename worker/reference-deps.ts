@@ -70,6 +70,16 @@ const ANALYSIS_SCHEMA = {
   ],
 };
 
+// Só os extratores do Instagram e do TikTok (vm.tiktok cobre vm./vt.tiktok.com);
+// sem isso o extrator genérico seguiria redirecionamentos para qualquer host.
+const YT_DLP_EXTRACTORS = 'Instagram,TikTok,vm.tiktok';
+const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.webm', '.mov', '.m4v'];
+
+/** Argumentos do yt-dlp: sem config local, só extratores permitidos e URL após `--`. */
+export function ytDlpArgs(extra: string[], url: string): string[] {
+  return ['--ignore-config', '--no-playlist', '--use-extractors', YT_DLP_EXTRACTORS, ...extra, '--', url];
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function probeFile(path: string): Promise<number> {
@@ -121,17 +131,17 @@ export function makeReferenceDeps(db: SupabaseClient): ReferenceDeps {
   return {
     now: () => new Date(),
     async probeDuration(url) {
-      const r = await runCommand('yt-dlp', ['--dump-json', '--no-playlist', url], { timeoutMs: PROBE_TIMEOUT_MS });
+      const r = await runCommand('yt-dlp', ytDlpArgs(['--dump-json'], url), { timeoutMs: PROBE_TIMEOUT_MS });
       if (r.code !== 0) throw new Error(`yt-dlp falhou: ${r.stderr.slice(-200)}`);
       return parseYtDlpDuration(r.stdout);
     },
     probeFileDuration: probeFile,
     async download(url, dir) {
-      const r = await runCommand('yt-dlp', [
-        '-f', 'mp4/best[height<=720]', '--no-playlist', '-o', join(dir, 'video.%(ext)s'), url,
-      ], { timeoutMs: DOWNLOAD_TIMEOUT_MS });
+      const r = await runCommand('yt-dlp', ytDlpArgs([
+        '-f', 'mp4/best[height<=720]', '-o', join(dir, 'video.%(ext)s'),
+      ], url), { timeoutMs: DOWNLOAD_TIMEOUT_MS });
       if (r.code !== 0) throw new Error(`yt-dlp falhou: ${r.stderr.slice(-200)}`);
-      const file = (await readdir(dir)).find((f) => f.startsWith('video.'));
+      const file = (await readdir(dir)).find((f) => f.startsWith('video.') && VIDEO_EXTENSIONS.some((e) => f.endsWith(e)));
       if (!file) throw new Error('yt-dlp não gerou arquivo');
       return join(dir, file);
     },
