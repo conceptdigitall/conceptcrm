@@ -4,6 +4,7 @@
 import type { MarketingPautaItem, MarketingSettings, PautaFormato } from '@/types';
 import { activeHashtags } from './content';
 import { weekStart } from './autopilot';
+import { parseObject, txt } from './json-text';
 
 export const PAUTA_MIN_ITENS = 5;
 export const PAUTA_MAX_ITENS = 7;
@@ -78,19 +79,6 @@ export function ajustePrompt(item: MarketingPautaItem, comentario: string): stri
 }
 
 export type PautaItemNovo = Pick<MarketingPautaItem, 'dia' | 'formato' | 'tema' | 'gancho' | 'roteiro' | 'legenda_base'>;
-
-function parseObject(raw: string): Record<string, unknown> | null {
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  try {
-    const o = JSON.parse(match[0]);
-    return o && typeof o === 'object' ? (o as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
-
-const txt = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /** Lê o JSON da IA; null se vier quebrado ou com menos de 5 itens válidos. */
 export function parsePautaItens(raw: string, semanaInicio: string): PautaItemNovo[] | null {
