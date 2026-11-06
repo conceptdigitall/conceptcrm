@@ -42,7 +42,7 @@ Card novo **Referências** na aba Marketing:
 ### Validação do link (função pura)
 
 `src/lib/marketing/references.ts`:
-- Aceita só `https://(www.)instagram.com/reel/…`, `https://(www.)instagram.com/p/…`, `https://(www.|vm.|m.)tiktok.com/…`. Qualquer outro host é recusado na entrada (impede o servidor de ser usado para acessar endereço interno).
+- Aceita só `https://(www.)instagram.com/reel/…`, `https://(www.)instagram.com/p/…`, `https://(www.|vm.|vt.|m.)tiktok.com/…`. Qualquer outro host é recusado na entrada (impede o servidor de ser usado para acessar endereço interno).
 - Normaliza o link (sem parâmetros de rastreio) e detecta a plataforma.
 - Índice único `(account_id, url_normalizada)`: link repetido devolve a referência que já existe.
 

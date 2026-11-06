@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Hosts aceitos: `instagram.com/reel/`, `instagram.com/reels/`, `instagram.com/p/` (com ou sem `www.`), `tiktok.com`, `www.tiktok.com`, `vm.tiktok.com`, `m.tiktok.com`. Só `https`.
+- Hosts aceitos: `instagram.com/reel/`, `instagram.com/reels/`, `instagram.com/p/` (com ou sem `www.`), `tiktok.com`, `www.tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`, `m.tiktok.com`. Só `https`.
 - Vídeo acima de **180 s** é recusado antes da análise.
 - Análise: `porQueViralizou` com **exatamente 3** itens de até 140 caracteres; `tema` até 80; `promessa` e `entrega` até 140; `cta` até 100; `comoAdaptar` até 280; `inspiracao` do item da pauta até 140.
 - Playbook: no máximo **20** referências dos últimos **30 dias**; `comoFalar` e `sobreOQue` até 5 itens cada; `evitar` até 3.
