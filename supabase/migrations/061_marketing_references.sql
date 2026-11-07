@@ -1,4 +1,4 @@
--- Migration 060: Radar de virais (referências analisadas pelo worker) + playbook e inspiração na pauta
+-- Migration 061: Radar de virais (referências analisadas pelo worker) + playbook e inspiração na pauta
 CREATE TABLE IF NOT EXISTS marketing_references (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,

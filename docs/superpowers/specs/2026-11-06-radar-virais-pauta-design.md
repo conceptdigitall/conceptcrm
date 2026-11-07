@@ -108,9 +108,9 @@ interface Playbook {
 - Roteiro do carrossel: de 3 a 7 lâminas, uma por linha. O parser corta acima de 7 e recusa abaixo de 3.
 - Produção: cada lâmina é desenhada pelo gerador de arte existente (`post-art.tsx`, `post-art-content.ts`) com um layout novo de lâmina numerada (n/total). As imagens viram um post `media_type = 'carrossel'`, que `src/lib/marketing/instagram.ts` já publica (2 a 10 mídias).
 
-## Dados (migração `060_marketing_references.sql`)
+## Dados (migração `061_marketing_references.sql`)
 
-Número 060 porque a 059 é do módulo Loja (`feat/modulo-loja`). Conferir o próximo número livre no merge.
+Número 061 porque a 059 e a 060 são do módulo Loja. Conferir o próximo número livre no merge.
 
 ```sql
 CREATE TABLE marketing_references (
@@ -184,7 +184,7 @@ No padrão do repositório (`*.test.ts` ao lado do arquivo, dependências injeta
 ## Ordem de entrega
 
 1. Conferir a cota do Gemini (passo bloqueante, sem código).
-2. Migração 060 + validação de link + tabela na aba Marketing (entrada).
+2. Migração 061 + validação de link + tabela na aba Marketing (entrada).
 3. Worker de análise.
 4. Playbook + pauta inspirada.
 5. Carrossel.

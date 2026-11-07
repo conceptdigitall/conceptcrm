@@ -23,7 +23,7 @@
 - Nada é publicado sem aprovação (a pauta continua passando pelo João/Léo).
 - Modelo de texto do playbook: `HAIKU_MODEL` (`worker/video-models.ts`). Modelo de vídeo: env `GEMINI_VIDEO_MODEL`, padrão **`gemini-3.5-flash`** (Task 1, 2026-11-06: vídeo + áudio aceitos; `files.upload` → `files.get` até `ACTIVE` (~6 s) → `models.generateContent` com `responseMimeType: 'application/json'` → `files.delete`). Usar `responseSchema` (o flash-lite devolveu o JSON dentro de um array) e **timeout de 120 s** por chamada (o 3.8-flash travou >180 s). Cota gratuita não confirmada pela API: o João confere no AI Studio.
 - Status da fila seguem `worker/queue.ts`: `pending | running | done | failed` (na tela: Na fila, Analisando, Pronto, Erro).
-- Migração `060_marketing_references.sql` (a 059 é da Loja); conferir o próximo número livre no merge.
+- Migração `061_marketing_references.sql` (a 059 e a 060 são da Loja); conferir o próximo número livre no merge.
 
 ## Review Focus
 
@@ -44,10 +44,10 @@
 - [ ] **Step 3:** Script descartável: `files.upload` de um MP4 público curto + `models.generateContent` com `responseMimeType: 'application/json'`, conferindo nos tipos de `node_modules/@google/genai` os nomes exatos dessas chamadas e como esperar o arquivo ficar `ACTIVE`.
 - [ ] **Step 4:** Registrar no topo deste plano (seção Global Constraints) o modelo escolhido como padrão de `GEMINI_VIDEO_MODEL` e a cota diária. **Se o plano gratuito não aceitar vídeo, parar e avisar o João** (a decisão de custo zero muda).
 
-### Task 2: Migração 060 e tipos
+### Task 2: Migração 061 e tipos
 
 **Files:**
-- Create: `supabase/migrations/060_marketing_references.sql`
+- Create: `supabase/migrations/061_marketing_references.sql`
 - Modify: `src/types/index.ts` (perto de `MarketingPautaItem`, linha ~886)
 - Modify: `worker/queue.ts` (`JobTable`)
 
@@ -59,7 +59,7 @@
 - [ ] **Step 3:** `JobTable` ganha `'marketing_references'`.
 - [ ] **Step 4:** `npm run typecheck` → sem erros.
 - [ ] **Step 5:** Aplicar a migração num banco **não produção** (branch do Supabase ou local) e conferir `\d marketing_references`. Produção só com OK do João.
-- [ ] **Step 6: Commit** `feat(marketing): tabela de referências virais (migration 060)`.
+- [ ] **Step 6: Commit** `feat(marketing): tabela de referências virais (migration 061)`.
 
 ### Task 3: Regras puras das referências
 
