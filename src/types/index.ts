@@ -883,13 +883,14 @@ export interface MarketingPost {
 
 export type PautaStatus = 'gerando' | 'pending_approval' | 'fechada';
 export type PautaItemStatus = 'pending_approval' | 'aprovado' | 'ajuste' | 'recusado';
-export type PautaFormato = 'feed' | 'story' | 'reel';
+export type PautaFormato = 'feed' | 'story' | 'reel' | 'carrossel';
 
 export interface MarketingPauta {
   id: string;
   account_id: string;
   semana_inicio: string;
   status: PautaStatus;
+  playbook: Playbook | null;
   created_at: string;
 }
 
@@ -908,6 +909,54 @@ export interface MarketingPautaItem {
   versao: number;
   post_id: string | null;
   produzido_em: string | null;
+  referencia_id: string | null;
+  inspiracao: string | null;
+  updated_at: string;
+}
+
+export type ReferencePlatform = 'instagram' | 'tiktok';
+export type ReferenceEixo = 'como_falar' | 'sobre_o_que';
+export type ReferenceStatus = 'pending' | 'running' | 'done' | 'failed';
+export type ReferenceHookKind = 'curiosidade' | 'dor' | 'prova' | 'conflito';
+export type ReferenceFormato = 'pessoa_falando' | 'tela' | 'texto_animado' | 'bastidor' | 'misto';
+
+export interface ReferenceAnalysis {
+  gancho: { tipo: ReferenceHookKind; frase: string; primeiroQuadro: string };
+  duracaoSeg: number;
+  cortesPorMinuto: number;
+  formato: ReferenceFormato;
+  tema: string;
+  promessa: string;
+  entrega: string;
+  cta: string;
+  porQueViralizou: string[];
+  comoAdaptar: string;
+}
+
+export interface Playbook {
+  comoFalar: string[];
+  sobreOQue: string[];
+  evitar: string[];
+}
+
+export interface MarketingReference {
+  id: string;
+  account_id: string;
+  url: string;
+  url_normalizada: string;
+  plataforma: ReferencePlatform;
+  eixo: ReferenceEixo;
+  nicho: BusinessNiche | null;
+  views: number | null;
+  arquivo_path: string | null;
+  status: ReferenceStatus;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  retry_after: string | null;
+  analise: ReferenceAnalysis | null;
+  criado_por: string | null;
+  created_at: string;
   updated_at: string;
 }
 

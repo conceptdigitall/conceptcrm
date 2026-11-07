@@ -10,6 +10,8 @@ import { autopilotConfigFromEnv } from '@/lib/marketing/autopilot';
 import { requeueColumnsForAccount, runColumnJob } from './columns';
 import { layaBatch, layaEmbed } from './laya-client';
 import { headPredictor, learnAfterRun } from './learning';
+import { runReferenceTick } from './references';
+import { makeReferenceDeps } from './reference-deps';
 import { arbitrateWithClaude } from '@/lib/laya/claude-arbitrator';
 
 const POLL_MS = 5000;
@@ -34,6 +36,11 @@ if (!layaUrl) {
   console.warn('LAYA_URL não definida: colunas da Planilha Preditiva ficam na fila (veja docs/worker.md)');
 }
 
+const referencesEnabled = Boolean(process.env.GEMINI_API_KEY);
+if (!referencesEnabled) {
+  console.warn('GEMINI_API_KEY não definida: referências virais ficam na fila (veja docs/worker.md)');
+}
+
 const autopilot = autopilotConfigFromEnv(process.env);
 if (autopilot) {
   console.log(`Piloto automático ligado: ${autopilot.feedPerWeek} posts e ${autopilot.storiesPerWeek} stories por semana (sempre com aprovação).`);
@@ -44,6 +51,8 @@ let lastPautaAt = 0;
 const db = createClient(requireEnv('NEXT_PUBLIC_SUPABASE_URL'), requireEnv('SUPABASE_SERVICE_ROLE_KEY'), {
   auth: { persistSession: false },
 });
+
+const referenceDeps = makeReferenceDeps(db);
 
 let stopping = false;
 process.on('SIGINT', () => { stopping = true; console.log('\nParando depois do job atual…'); });
@@ -78,6 +87,10 @@ async function tick(): Promise<boolean> {
     await syncPostsForVideo(db, video.id);
     return true;
   }
+  if (referencesEnabled && await runReferenceTick(db, accountIds, referenceDeps)) {
+    console.log('[referências] análise processada');
+    return true;
+  }
   if (Date.now() - lastPautaAt > PAUTA_EVERY_MS) {
     const worked = await runPautaTick(db, accountIds, {
       now: () => new Date(),
@@ -103,7 +116,8 @@ async function main() {
   const a = await requeueOrphaned(db, 'lead_searches');
   const b = await requeueOrphaned(db, 'marketing_videos');
   const c = await requeueOrphaned(db, 'lead_columns');
-  if (a + b + c > 0) console.log(`Devolvidos à fila: ${a + b + c} job(s) travados`);
+  const d = await requeueOrphaned(db, 'marketing_references');
+  if (a + b + c + d > 0) console.log(`Devolvidos à fila: ${a + b + c + d} job(s) travados`);
   console.log(`Vídeo: motor ${ENGINE}, modelo ${MODEL}`);
   console.log('Worker rodando. Ctrl+C para parar.');
   while (!stopping) {

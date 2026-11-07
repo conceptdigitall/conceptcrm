@@ -15,6 +15,8 @@ export interface ArtContent {
   handle: string;
   brand: string;
   layout: ArtLayout;
+  /** Lâmina de carrossel: posição (1 a total) para o indicador "n/total". */
+  slide?: { n: number; total: number };
 }
 
 export const ART_SIZE: Record<ArtFormat, { width: number; height: number }> = {
@@ -82,6 +84,28 @@ export function buildArtContent(
     handle: `@${(settings.instagram_username || 'conceptdigita.l').replace(/^@/, '')}`,
     brand: settings.business_name?.trim() || 'Concept Digital',
     layout: (hash(post.id) % 3) as ArtLayout,
+  };
+}
+
+/**
+ * Arte de uma lâmina do carrossel: o texto da lâmina vira a chamada, sem apoio;
+ * só a última leva o CTA. O layout vem do post, então todas as lâminas combinam.
+ */
+export function buildSlideContent(
+  post: Pick<MarketingPost, 'id' | 'kind' | 'title' | 'idea' | 'frames'>,
+  settings: Pick<MarketingSettings, 'business_name' | 'business_niche' | 'instagram_username'>,
+  index: number,
+): ArtContent {
+  const frames = post.frames ?? [];
+  const base = buildArtContent(post, settings);
+  const text = frames[index]?.text?.trim() ?? '';
+  const last = index >= frames.length - 1;
+  return {
+    ...base,
+    headline: clip(text || post.title || 'Novidade do dia', 140),
+    support: '',
+    cta: last ? base.cta : '',
+    slide: { n: index + 1, total: frames.length },
   };
 }
 

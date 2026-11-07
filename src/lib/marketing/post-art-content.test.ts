@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtContent, headlineSize } from './post-art-content';
+import { buildArtContent, buildSlideContent, headlineSize } from './post-art-content';
 
 const settings = { business_name: 'Barbearia do Alemão', business_niche: 'barbearia' as const, instagram_username: 'alemao.barber' };
 
@@ -59,5 +59,28 @@ describe('headlineSize', () => {
     expect(headlineSize('curta', 'feed')).toBeGreaterThan(headlineSize('x'.repeat(50), 'feed'));
     expect(headlineSize('x'.repeat(50), 'feed')).toBeGreaterThan(headlineSize('x'.repeat(80), 'feed'));
     expect(headlineSize('curta', 'story')).toBeGreaterThan(headlineSize('curta', 'feed'));
+  });
+});
+
+describe('buildSlideContent', () => {
+  const frames = ['Um erro comum', 'Segundo ponto', 'Terceiro ponto', 'Fale com a gente'].map((text) => ({ text, interaction: 'nenhuma' as const }));
+  const p = post({ id: 'car', title: 'Carrossel', frames });
+
+  it('usa o texto da lâmina e marca n/total', () => {
+    const c = buildSlideContent(p, settings, 0);
+    expect(c.headline).toBe('Um erro comum');
+    expect(c.slide).toEqual({ n: 1, total: 4 });
+    expect(c.support).toBe('');
+  });
+
+  it('só a última lâmina leva o CTA; o layout é o mesmo em todas', () => {
+    const all = frames.map((_, i) => buildSlideContent(p, settings, i));
+    expect(all.slice(0, 3).every((c) => c.cta === '')).toBe(true);
+    expect(all[3].cta).toBe('Agende pelo WhatsApp');
+    expect(new Set(all.map((c) => c.layout)).size).toBe(1);
+  });
+
+  it('buildArtContent segue sem slide', () => {
+    expect(buildArtContent(p, settings).slide).toBeUndefined();
   });
 });

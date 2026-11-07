@@ -24,6 +24,7 @@ import * as deals from './deals/route';
 import * as deal from './deals/[id]/route';
 import * as videos from './marketing/videos/route';
 import * as video from './marketing/videos/[id]/route';
+import * as references from './marketing/references/route';
 
 const params = { params: Promise.resolve({ id: 'x-1' }) };
 const get = (path: string) => new Request(`http://localhost/api/v1/${path}`);
@@ -69,6 +70,8 @@ describe('scope required by each endpoint', () => {
     ['GET videos', () => videos.GET(get('marketing/videos')), 'marketing:generate'],
     ['POST videos', () => videos.POST(send('marketing/videos', 'POST', {})), 'marketing:generate'],
     ['GET video', () => video.GET(get('marketing/videos/x-1'), params), 'marketing:generate'],
+    ['GET references', () => references.GET(get('marketing/references')), 'marketing:references'],
+    ['POST references', () => references.POST(send('marketing/references', 'POST', {})), 'marketing:references'],
   ];
 
   it.each(cases)('%s', async (_name, call, scope) => {

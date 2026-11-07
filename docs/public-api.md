@@ -56,6 +56,7 @@ it. Grant the minimum.
 | `deals:read`         | List pipelines, stages and deals         |
 | `deals:write`        | Create deals, move stages, mark won/lost |
 | `marketing:generate` | Queue marketing videos, approve posts (internal only) |
+| `marketing:references` | Send viral references for analysis, read results (internal only) |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -358,6 +359,31 @@ Body `{ "decision": "approve" | "reject", "reason"?: string }`. Only a
 stays in the dashboard), `reject` → `archived` with the reason. A post
 that is no longer pending gets `409`. Used by the Hermes bot to approve
 from Telegram.
+
+### `GET` / `POST /api/v1/marketing/pautas`
+
+`GET ?semana=YYYY-MM-DD` returns the week's content plan (default: current
+Brasília week) or `data: null`; `POST` opens a plan for the week. Scope:
+`marketing:generate`, internal accounts only. The plan carries `playbook`
+(`{ comoFalar, sobreOQue, evitar }` string lists summarising the viral
+references of the last 30 days, or `null`). Each item in `itens` has `dia`,
+`formato` (`feed` | `story` | `reel` | `carrossel`; a carrossel `roteiro` has
+3 to 7 slides, one per line), `tema`, `gancho`, `roteiro`, `legenda_base`,
+`status`, `comentario`, `versao`, `post_id`, and the new `referencia_id`
+(id of the viral reference that inspired the item, or `null`) and
+`inspiracao` (up to 140 characters on what was borrowed, or `null`).
+
+### `GET` / `POST /api/v1/marketing/references`
+
+Viral video references analysed by the worker. Scope: `marketing:references`,
+internal accounts only. `POST` body `{ "url": "https://…", "eixo": "como_falar" | "sobre_o_que", "nicho"?: …, "views"?: number }`
+(`nicho` is required when `eixo` is `sobre_o_que`)
+(`views` must be a number or `null`); it returns `201` with the new reference
+(`status: "pending"`), or `200` with `duplicate: true` next to the existing one when the
+link was already sent. `GET ?status=pending|running|done|failed` lists the 50 most
+recent (any other `status` is `400`). Each reference has `id`, `url`, `plataforma`,
+`eixo`, `nicho`, `views`, `status`, `error`, `analise` (only when `status` is
+`done`, else `null`), `created_at` and `finished_at`.
 
 ## Pagination
 

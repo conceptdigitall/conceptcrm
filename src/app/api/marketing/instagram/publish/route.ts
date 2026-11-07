@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { publishToInstagram, InstagramApiError } from '@/lib/marketing/instagram';
 import { attachPostMedia } from '@/lib/marketing/post-media';
-import { loadArtSettings, storePostArt } from '@/lib/marketing/post-art-store';
+import { loadArtSettings, storeCarouselArt, storePostArt } from '@/lib/marketing/post-art-store';
 import { supabaseAdmin } from '@/lib/ai/admin-client';
 import { isInternalAccount } from '@/lib/internal-accounts';
 import { loadInstagramCredentials, recordInstagramError } from '@/lib/marketing/instagram-connection';
@@ -70,11 +70,13 @@ async function runPublish({ admin, accountId, post, credentials, restoreStatus }
 
   const scoped = () => admin.from('marketing_posts');
   try {
-    // Post só de texto: gera a arte da marca e publica ela.
+    // Post só de texto: gera a arte da marca e publica ela (carrossel: uma por lâmina).
     if (mediaUrls.length === 0 && mediaType !== 'video') {
       try {
         const settings = await loadArtSettings(admin, accountId);
-        mediaUrls = [await storePostArt(admin, post, settings)];
+        mediaUrls = mediaType === 'carrossel' && (post.frames?.length ?? 0) >= 2
+          ? await storeCarouselArt(admin, post, settings)
+          : [await storePostArt(admin, post, settings)];
       } catch (err) {
         console.error('[instagram/publish] falha ao gerar arte:', err);
       }

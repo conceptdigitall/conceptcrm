@@ -39,19 +39,23 @@ function loadFonts(): Promise<FontSpec[]> {
 function Footer({ c, dark }: { c: ArtContent; dark: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-      <div
-        style={{
-          display: 'flex',
-          padding: '22px 40px',
-          borderRadius: 999,
-          background: dark ? YELLOW : NAVY,
-          color: dark ? NIGHT : WHITE,
-          fontSize: 34,
-          fontWeight: 800,
-        }}
-      >
-        {c.cta}
-      </div>
+      {c.cta ? (
+        <div
+          style={{
+            display: 'flex',
+            padding: '22px 40px',
+            borderRadius: 999,
+            background: dark ? YELLOW : NAVY,
+            color: dark ? NIGHT : WHITE,
+            fontSize: 34,
+            fontWeight: 800,
+          }}
+        >
+          {c.cta}
+        </div>
+      ) : (
+        <div style={{ display: 'flex' }} />
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', color: dark ? WHITE : NIGHT }}>
         <div style={{ display: 'flex', fontSize: 30, fontWeight: 800 }}>{c.brand}</div>
         <div style={{ display: 'flex', fontSize: 26, opacity: 0.7 }}>{c.handle}</div>
@@ -130,6 +134,28 @@ function Editorial({ c, format }: { c: ArtContent; format: ArtFormat }) {
   );
 }
 
+/** Indicador "n/total" no canto superior direito (o card amarelo é o único layout claro). */
+function SlideCounter({ slide, dark }: { slide: { n: number; total: number }; dark: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        position: 'absolute',
+        top: 72,
+        right: 72,
+        padding: '12px 26px',
+        borderRadius: 999,
+        background: dark ? YELLOW : NAVY,
+        color: dark ? NIGHT : WHITE,
+        fontSize: 30,
+        fontWeight: 800,
+      }}
+    >
+      {`${slide.n}/${slide.total}`}
+    </div>
+  );
+}
+
 const LAYOUTS = [Impact, Card, Editorial] as const;
 
 export async function renderPostArt(c: ArtContent, format: ArtFormat, headers?: Record<string, string>): Promise<ImageResponse> {
@@ -137,8 +163,9 @@ export async function renderPostArt(c: ArtContent, format: ArtFormat, headers?: 
   const fonts = await loadFonts();
   return new ImageResponse(
     (
-      <div style={{ display: 'flex', width: '100%', height: '100%', fontFamily: fonts.length ? 'Montserrat' : undefined }}>
+      <div style={{ display: 'flex', position: 'relative', width: '100%', height: '100%', fontFamily: fonts.length ? 'Montserrat' : undefined }}>
         <Layout c={c} format={format} />
+        {c.slide && <SlideCounter slide={c.slide} dark={c.layout !== 1} />}
       </div>
     ),
     { ...ART_SIZE[format], fonts, headers },
