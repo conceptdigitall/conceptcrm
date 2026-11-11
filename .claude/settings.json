@@ -1,0 +1,35 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/joaovitormartinspetraglia/Downloads/Concept Digital/Segundo cérebro/SimpleBrain/harness/guard.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/joaovitormartinspetraglia/Downloads/Concept Digital/Segundo cérebro/SimpleBrain/harness/stop_verify.py\""
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"/Users/joaovitormartinspetraglia/Downloads/Concept Digital/Segundo cérebro/SimpleBrain/harness/stop_verify.py\" --inicio"
+          }
+        ]
+      }
+    ]
+  }
+}

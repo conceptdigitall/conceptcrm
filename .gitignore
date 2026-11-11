@@ -67,3 +67,4 @@ worker/laya/laya_finetune_*.py
 
 # codegraph
 .codegraph/
+.harness/
