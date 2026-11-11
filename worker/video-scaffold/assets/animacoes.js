@@ -159,6 +159,45 @@
         at
       );
     },
+
+    /**
+     * Mão que entra, toca um botão/link e sai (assets/icons/mao-toque.svg).
+     * A ponta do dedo cai no centro do alvo: nada de calcular coordenada no vídeo.
+     * @param {gsap.core.Timeline} tl
+     * @param {Object} opts
+     * @param {string|Element} opts.hand - <img> da mão, com position:absolute; left:0; top:0
+     * @param {string|Element} opts.target - Elemento que recebe o toque
+     * @param {number} [opts.at=0]
+     * @param {number} [opts.hold=0.6] - Quanto tempo a mão fica parada depois do toque
+     */
+    toque(tl, opts) {
+      const hand = typeof opts.hand === 'string' ? document.querySelector(opts.hand) : opts.hand;
+      const el = typeof opts.target === 'string' ? document.querySelector(opts.target) : opts.target;
+      if (!hand || !el) return;
+
+      const at = opts.at !== undefined ? opts.at : 0;
+      const hold = opts.hold !== undefined ? opts.hold : 0.6;
+      // Ponta do indicador no desenho: 43% da largura, 9% da altura.
+      const TIP_X = 0.43;
+      const TIP_Y = 0.09;
+      const r = el.getBoundingClientRect();
+      const w = hand.offsetWidth || 150;
+      const h = hand.offsetHeight || w;
+      const x = r.left + r.width / 2 - w * TIP_X;
+      // Toca na parte de baixo do alvo para o texto dele continuar legível.
+      const y = r.top + r.height * 0.8 - h * TIP_Y;
+
+      gsap.set(hand, { transformOrigin: `${TIP_X * 100}% ${TIP_Y * 100}%` });
+      tl.fromTo(
+        hand,
+        { opacity: 0, x: x + 90, y: y + 160, rotation: -8 },
+        { opacity: 1, x, y, rotation: 0, duration: 0.45, ease: 'power3.out' },
+        at
+      );
+      tl.to(hand, { scale: 0.9, duration: 0.1, yoyo: true, repeat: 1, ease: 'power1.inOut' }, at + 0.5);
+      tl.to(el, { scale: 0.95, duration: 0.1, yoyo: true, repeat: 1, ease: 'power1.inOut' }, at + 0.5);
+      tl.to(hand, { opacity: 0, y: y + 60, duration: 0.3, ease: 'power2.in' }, at + 0.7 + hold);
+    },
   };
 
   global.ConceptAnim = Animacoes;
