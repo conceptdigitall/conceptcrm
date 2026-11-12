@@ -43,6 +43,23 @@ ConceptAnim.whiteboard(tl, {
 
 ---
 
+## Toque / clique em botão ou link (mão)
+
+**Proibido desenhar mão, dedo ou cursor de mão com CSS, `<div>` ou SVG próprio.** Desenho improvisado de dedo vira forma estranha e o vídeo não pode ir ao ar. Use sempre a mão pronta e o helper, que coloca a ponta do dedo no centro do alvo:
+
+```html
+<img id="toque" src="assets/icons/mao-toque.svg" style="position: absolute; left: 0; top: 0; width: 150px; opacity: 0; pointer-events: none; z-index: 999;" />
+```
+```javascript
+ConceptAnim.toque(tl, { hand: "#toque", target: "#link-agendar", at: 1.2 });
+```
+
+- O alvo precisa ter pelo menos 60px de altura na tela para o toque ser visível.
+- Uma mão por cena; não gire nem estique a imagem.
+- Se não houver botão para tocar, não use mão: use destaque (sublinhado, brilho, seta).
+
+---
+
 ## 2. Contadores Numéricos Dinâmicos
 
 Ideal para: provas de faturamento, tempo de resposta ("10 segundos"), horas salvas.

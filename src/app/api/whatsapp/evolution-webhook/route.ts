@@ -6,6 +6,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import { cleanReplyFormatting } from '@/lib/whatsapp/clean-formatting';
 import { buildDateContext } from '@/lib/ai/defaults';
 import {
+  syncLeadDeal,
+  advanceDealOnScheduled,
+  recordDealPayment,
+} from '@/lib/ai/pipeline-orchestrator';
+import {
   buildEvolutionHistory,
   EVOLUTION_HISTORY_LIMIT,
   type HistoryRow,
@@ -273,6 +278,13 @@ export async function POST(req: Request) {
       } else {
         contact = createdContact;
       }
+    }
+
+    // 2.1 Garantir que o lead possua um Deal aberto no Pipeline de Vendas do CRM
+    if (contact?.id && accountId) {
+      syncLeadDeal(supabaseAdmin(), accountId, userId, contact.id, senderName, messageText).catch((err) =>
+        console.error('[Evolution Webhook] Erro ao sincronizar deal do lead:', err)
+      );
     }
 
     // 3. Localizar ou criar a conversa (conversation) para aparecer na Inbox
@@ -623,6 +635,23 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
         required: ['datetime_iso'],
       },
     },
+    {
+      name: 'confirm_deal_payment',
+      description: 'Acione esta ferramenta quando o cliente informar que realizou o pagamento, contratou a solução ou enviou comprovante. Ela atualiza o status do negócio no CRM para Ganho (Won) e notifica a diretoria.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          amount: {
+            type: 'number',
+            description: 'Valor acordado ou pago em reais (ex: 1200, 1500)',
+          },
+          notes: {
+            type: 'string',
+            description: 'Detalhes sobre o pacote escolhido ou informações sobre o pagamento informado pelo cliente',
+          },
+        },
+      },
+    },
   ];
 
   // Recupera histórico recente da conversa para manter contexto fluido
@@ -729,6 +758,14 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
         } else {
           console.info(`[Evolution Webhook] Agendamento salvo com sucesso para contato ${contactId}!`);
         }
+
+        // 3.1 Avançar Deal no Pipeline Kanban para "Reunião Agendada"
+        if (accountId && contactId) {
+          advanceDealOnScheduled(supabaseAdmin(), accountId, contactId, {
+            scheduledDateFormatted: formattedDate,
+            notes: input.notes,
+          }).catch((err) => console.error('[Evolution Webhook] Erro ao avançar deal no agendamento:', err));
+        }
       } catch (dbErr) {
         console.error('[Evolution Webhook] Falha ao sincronizar dados com banco:', dbErr);
       }
@@ -779,6 +816,34 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     );
   };
 
+  // Helper para processar confirmação de pagamento e fechamento de negócios
+  const processPaymentToolCall = async (toolUse: Anthropic.ToolUseBlock): Promise<string> => {
+    const input = toolUse.input as { amount?: number; notes?: string };
+    const firstName = userName.split(' ')[0] || 'Cliente';
+
+    if (accountId && contactId) {
+      const paymentRes = await recordDealPayment(supabaseAdmin(), accountId, contactId, {
+        amount: input.amount,
+        notes: input.notes,
+      });
+
+      const partnerNumbers = getAdminNotificationNumbers();
+      const notificationText =
+        `💰 *NOVO CLIENTE FECHADO / PAGAMENTO CONFIRMADO!* 🎉\n\n` +
+        `👤 *Cliente:* ${userName}\n` +
+        `📱 *WhatsApp:* +${senderPhone || ''}\n` +
+        `💵 *Valor do Negócio:* R$ ${paymentRes.value || input.amount || 1200}\n` +
+        (input.notes ? `📝 *Observações:* ${input.notes}\n` : '') +
+        `\n_Status do Deal atualizado para WON no CRM Concept Digital_`;
+
+      Promise.allSettled(
+        partnerNumbers.map((num) => sendEvolutionMessage(num, notificationText))
+      ).catch((err) => console.error('[Evolution Webhook] Erro ao notificar sócios de pagamento:', err));
+    }
+
+    return `Muito obrigado pela confiança, ${firstName}! Pagamento confirmado e registrado no nosso sistema. Já estamos alinhando a equipe para darmos início!`;
+  };
+
   const primaryModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
 
   try {
@@ -794,6 +859,9 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     const toolUse = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
     if (toolUse && toolUse.name === 'schedule_appointment') {
       return await processToolCall(toolUse);
+    }
+    if (toolUse && toolUse.name === 'confirm_deal_payment') {
+      return await processPaymentToolCall(toolUse);
     }
 
     const textBlock = response.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
@@ -814,6 +882,9 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
       const fallbackToolUse = fallbackResponse.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
       if (fallbackToolUse && fallbackToolUse.name === 'schedule_appointment') {
         return await processToolCall(fallbackToolUse);
+      }
+      if (fallbackToolUse && fallbackToolUse.name === 'confirm_deal_payment') {
+        return await processPaymentToolCall(fallbackToolUse);
       }
 
       const textBlock = fallbackResponse.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
