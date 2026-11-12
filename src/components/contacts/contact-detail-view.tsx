@@ -6,6 +6,7 @@ import { addContactTag, deleteContactTag } from '@/lib/contacts/tag-api';
 import { useAuth } from '@/hooks/use-auth';
 import { isStoreAccount } from '@/lib/store-accounts';
 import { ContactPurchases } from '@/components/store/contact-purchases';
+import { ContactDocumentsTab } from '@/components/contacts/contact-documents-tab';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
@@ -485,6 +486,12 @@ export function ContactDetailView({
                 >
                   {t('tabs.deals')}
                 </TabsTrigger>
+                <TabsTrigger
+                  value="documents"
+                  className="data-active:bg-muted data-active:text-primary text-muted-foreground"
+                >
+                  Contratos
+                </TabsTrigger>
                 {isStoreAccount(accountId) && (
                   <TabsTrigger
                     value="purchases"
@@ -753,6 +760,12 @@ export function ContactDetailView({
                       </div>
                     ))}
                   </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="documents" className="flex-1 overflow-y-auto">
+                {accountId && (
+                  <ContactDocumentsTab contact={contact} accountId={accountId} />
                 )}
               </TabsContent>
 
