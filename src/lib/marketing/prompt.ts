@@ -8,8 +8,10 @@ export const FORMAT_SIZE: Record<VideoFormat, { width: number; height: number }>
 };
 
 export function buildUserPrompt(input: {
-  prompt: string; format: VideoFormat; tone: VideoTone; imageFiles: string[]; audio?: string[];
+  prompt: string; format: VideoFormat; tone: VideoTone; imageFiles: string[]; audio?: string[]; hook?: string[];
   style?: VideoStyle; duration?: VideoDuration; target?: VideoTarget; still?: boolean;
+  /** 'files': o agente escreve index.html + compositions/ no projeto em vez de responder com um bloco HTML. */
+  output?: 'html' | 'files';
 }): string {
   const { width, height } = FORMAT_SIZE[input.format];
   const images = input.imageFiles.length
@@ -85,6 +87,16 @@ export function buildUserPrompt(input: {
     );
   }
 
+  if (style === 'cinematico') {
+    styleDirectives.push(
+      '',
+      'ESTILO ESCOLHIDO: CINEMÁTICO 3D (siga a seção "5. Cinemático 3D" dos estilos de animação):',
+      '- Mundo 3D contínuo numa sub-composição `world` montada com `assets/cena3d.js` (ConceptCena), com personagem do nicho do briefing.',
+      '- Arco: personagem triste em luz fria → virada no tempo da frase "imagina/agora" (luzes acendem, cor quente) → personagem feliz com clientes sorrindo.',
+      '- Uma sub-composição de interface por frase falada, câmera mudando a cada cena (zoom, travelling, corte seco) e whoosh lateral com `assets/sfx/` entre as cenas.',
+    );
+  }
+
   if (input.still) {
     return [
       'Crie a ARTE ESTÁTICA de um post de foto do Instagram, em português do Brasil, para o negócio do briefing. Siga o Playbook da Concept Digital.',
@@ -124,9 +136,12 @@ export function buildUserPrompt(input: {
     ...styleDirectives,
     '',
     'Todo texto na tela em português do Brasil. Preços, endereços e nomes exatamente como no briefing.',
+    ...(input.hook ? ['', ...input.hook, ''] : []),
     ...(input.audio ?? ['Sem áudio.']),
     'Sem fontes ou imagens externas além das fotos e assets locais listados.',
-    'Responda com UM bloco ```html contendo o index.html completo da composição HyperFrames, e nada mais.',
+    input.output === 'files'
+      ? 'Escreva a composição como arquivos no projeto: `index.html` na raiz e uma sub-composição por cena em `compositions/`.'
+      : 'Responda com UM bloco ```html contendo o index.html completo da composição HyperFrames, e nada mais.',
   ].join('\n');
 }
 

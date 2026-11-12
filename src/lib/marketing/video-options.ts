@@ -4,7 +4,7 @@
 // Vídeos de pacote de nicho usam o mesmo campo com `buttonId` e seguem outro
 // caminho no worker (`template_id`), sem conflito.
 
-export type VideoStyle = 'auto' | 'kinetic' | 'whiteboard' | 'cutout' | 'contador' | 'fotos';
+export type VideoStyle = 'auto' | 'kinetic' | 'whiteboard' | 'cutout' | 'contador' | 'fotos' | 'cinematico';
 export type VideoDuration = 15 | 30 | 45 | 60;
 export type VideoTarget = 'reels' | 'story';
 
@@ -23,6 +23,7 @@ export const VIDEO_STYLES: { value: VideoStyle; label: string; hint: string }[] 
   { value: 'cutout', label: 'Colagem de prints', hint: 'Prints recortados, estilo roast' },
   { value: 'contador', label: 'Números e dados', hint: 'Contadores e resultados subindo' },
   { value: 'fotos', label: 'Fotos em destaque', hint: 'Suas fotos com zoom e cortes' },
+  { value: 'cinematico', label: 'Cinemático 3D', hint: 'Cenário 3D com personagem, antes e depois' },
 ];
 
 export const VIDEO_DURATIONS: VideoDuration[] = [15, 30, 45, 60];

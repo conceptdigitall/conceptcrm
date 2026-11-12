@@ -12,9 +12,12 @@ import { parseVideoOptions, narrationWordLimit } from '@/lib/marketing/video-opt
 import { audioPromptLines, buildScriptPrompt, cleanScript, synthesize, type Narration } from './narration';
 import { narrationProvider, synthesizeGemini } from './narration-gemini';
 import { failJob, finishJob } from './queue';
-import { defaultRenderDeps } from './hf-render';
+import { HYPERFRAMES_BIN, defaultRenderDeps } from './hf-render';
+import { HF_WRAPPER, agentMode, buildAgentPrompt, composeWithAgent, prepareAgentProject, shouldUseAgent } from './video-agent';
 import { runTemplatedJob } from './video-template';
 import { MUSIC_DIR, loadTracks, pickTrack } from './music';
+import { hookPromptLines, runHookBank, type HookBank } from './hooks';
+import { judgeModel } from './video-models';
 
 const BUCKET = 'marketing';
 const MAX_FIX_ROUNDS = 2;
@@ -38,8 +41,12 @@ export interface ChatMessage { role: 'user' | 'assistant'; content: string }
 
 export interface VideoDeps {
   compose(messages: ChatMessage[]): Promise<string>;
+  /** Modo agente: escreve os arquivos na pasta do projeto, revisa por quadros e devolve o relatório. */
+  agent(dir: string, prompt: string): Promise<string>;
   script(brief: string, duration?: number): Promise<string>;
   narrate(text: string): Promise<Narration | null>;
+  /** Banco de ganchos; null/erro = o vídeo segue sem ele. */
+  hooks(brief: string): Promise<HookBank | null>;
   check(dir: string): Promise<{ ok: boolean; output: string }>;
   render(dir: string, out: string): Promise<void>;
   poster(video: string, out: string): Promise<void>;
@@ -68,7 +75,7 @@ async function systemPrompt(): Promise<string> {
   return systemPromptCache;
 }
 
-async function composeViaCli(messages: ChatMessage[], system?: Promise<string> | string): Promise<string> {
+async function composeViaCli(messages: ChatMessage[], system?: Promise<string> | string, model: string = MODEL): Promise<string> {
   const prompt = messages
     .map((m) => (m.role === 'user' ? m.content : `<sua_resposta_anterior>\n${m.content}\n</sua_resposta_anterior>`))
     .join('\n\n');
@@ -77,7 +84,7 @@ async function composeViaCli(messages: ChatMessage[], system?: Promise<string> |
   const cwd = await mkdtemp(join(tmpdir(), 'hf-llm-'));
   try {
     const r = await runCommand(CLAUDE_BIN, [
-      '-p', '--model', MODEL, ...(MODEL.includes('haiku') ? [] : ['--effort', 'high']),
+      '-p', '--model', model, ...(model.includes('haiku') ? [] : ['--effort', 'high']),
       '--system-prompt', await (system ?? systemPrompt()),
       '--tools', '', '--strict-mcp-config', '--setting-sources', '',
       '--disable-slash-commands', '--no-session-persistence', '--output-format', 'json',
@@ -136,11 +143,11 @@ export async function composeViaGemini(messages: ChatMessage[], system?: Promise
 }
 
 /** Texto curto (roteiro, pauta) com o mesmo motor de IA do worker. */
-export async function generateText(system: string, content: string, maxTokens = 2000): Promise<string> {
+export async function generateText(system: string, content: string, maxTokens = 2000, model: string = MODEL): Promise<string> {
   const msg: ChatMessage[] = [{ role: 'user', content }];
   if (ENGINE === 'gemini') return composeViaGemini(msg, system);
-  if (ENGINE === 'cli') return composeViaCli(msg, system);
-  const r = await new Anthropic().messages.create({ model: MODEL, max_tokens: maxTokens, system, messages: msg });
+  if (ENGINE === 'cli') return composeViaCli(msg, system, model);
+  const r = await new Anthropic().messages.create({ model, max_tokens: maxTokens, system, messages: msg });
   return r.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
 }
 
@@ -167,9 +174,19 @@ const defaultDeps: VideoDeps = {
     }
     return response.content.map((b) => (b.type === 'text' ? b.text : '')).join('');
   },
+  async agent(dir, prompt) {
+    await prepareAgentProject(dir, HYPERFRAMES_BIN);
+    return composeWithAgent(dir, prompt, { bin: CLAUDE_BIN, model: MODEL, system: await systemPrompt() });
+  },
   async script(brief, duration) {
     const system = 'Você é redator de locução publicitária em português do Brasil. Responda só com o texto a ser falado.';
     return generateText(system, buildScriptPrompt(brief, duration), 600);
+  },
+  async hooks(brief) {
+    return runHookBank({
+      ask: (role, system, user) =>
+        role === 'judge' ? generateText(system, user, 1000, judgeModel()) : generateText(system, user, 8000),
+    }, brief);
   },
   narrate: (text) => (narrationProvider() === 'gemini' ? synthesizeGemini(text) : synthesize(text)),
   ...defaultRenderDeps,
@@ -215,11 +232,20 @@ export async function runVideoJob(
       if (track) await cp(join(MUSIC_DIR, track.file), join(dir, 'assets', 'music.mp3'));
     }
 
+    // Banco de ganchos: 10 ganchos tipados + escolha do jurado. Falha aqui não derruba o job.
+    let bank: HookBank | null = null;
+    if (!options.still) {
+      try { bank = await deps.hooks(video.prompt); } catch (err) {
+        console.warn(`Banco de ganchos ignorado (vídeo ${video.id}): ${err instanceof Error ? err.message : err}`);
+      }
+    }
+    const hookLine = bank ? bank.hooks[bank.chosenIndex].line : null;
+
     // Narração (ElevenLabs ou Gemini TTS, ver NARRATION_PROVIDER). Falha aqui não derruba o job: o vídeo sai só com a trilha.
     let narration: Narration | null = null;
     if (!options.still) {
       try {
-        const text = cleanScript(await deps.script(video.prompt, options.duration), narrationWordLimit(options.duration));
+        const text = cleanScript(await deps.script(hookLine ? `${video.prompt}\nAbra a locução exatamente com esta frase de gancho: "${hookLine}"` : video.prompt, options.duration), narrationWordLimit(options.duration));
         narration = text ? await deps.narrate(text) : null;
         if (narration) await writeFile(join(dir, 'assets', 'narration.mp3'), narration.audio);
       } catch (err) {
@@ -229,28 +255,42 @@ export async function runVideoJob(
     }
     const hasMusic = await access(join(dir, 'assets', 'music.mp3')).then(() => true, () => false);
 
-    const messages: ChatMessage[] = [{
-      role: 'user',
-      content: buildUserPrompt({
-        prompt: video.prompt, format: video.format, tone: video.tone, imageFiles,
-        style: options.style, duration: options.duration, target: options.target, still: options.still,
-        audio: audioPromptLines(narration, hasMusic, options.duration),
-      }),
-    }];
+    // Cinemático (ou VIDEO_AGENT=all) vai pelo agente com revisão por quadros; o resto, chamada única.
+    const useAgent = shouldUseAgent(agentMode(process.env), ENGINE, options.style, options.still);
+    const userPrompt = buildUserPrompt({
+      prompt: video.prompt, format: video.format, tone: video.tone, imageFiles,
+      style: options.style, duration: options.duration, target: options.target, still: options.still,
+      audio: audioPromptLines(narration, hasMusic, options.duration),
+      hook: bank ? hookPromptLines(bank) : undefined,
+      output: useAgent ? 'files' : 'html',
+    });
+    const messages: ChatMessage[] = [{ role: 'user', content: userPrompt }];
 
     let lastCheck = '';
     let passed = false;
+    let review = '';
     for (let attempt = 0; attempt <= MAX_FIX_ROUNDS; attempt++) {
-      const reply = await deps.compose(messages);
-      const html = extractHtml(reply);
-      if (!html) throw new Error('A IA não devolveu um HTML de composição');
-      await writeFile(join(dir, 'index.html'), html);
+      let reply = '';
+      if (useAgent) {
+        review = await deps.agent(dir, buildAgentPrompt(userPrompt, attempt > 0 ? lastCheck : undefined));
+      } else {
+        reply = await deps.compose(messages);
+        const html = extractHtml(reply);
+        if (!html) throw new Error('A IA não devolveu um HTML de composição');
+        await writeFile(join(dir, 'index.html'), html);
+      }
+      // O check do worker é o portão final, mesmo quando o agente diz que já passou.
       const result = await deps.check(dir);
       if (result.ok) { passed = true; break; }
       lastCheck = result.output;
-      messages.push({ role: 'assistant', content: reply }, { role: 'user', content: buildFixPrompt(result.output) });
+      if (!useAgent) messages.push({ role: 'assistant', content: reply }, { role: 'user', content: buildFixPrompt(result.output) });
     }
     if (!passed) throw new Error(`Composição inválida depois de ${MAX_FIX_ROUNDS + 1} tentativas: ${lastCheck.slice(-1500)}`);
+    if (useAgent) {
+      // Os quadros de revisão e o wrapper não fazem parte do vídeo.
+      await rm(join(dir, 'snapshots'), { recursive: true, force: true });
+      await rm(join(dir, HF_WRAPPER), { force: true });
+    }
 
     const mp4 = join(dir, 'out.mp4');
     const jpg = join(dir, 'poster.jpg');
@@ -263,7 +303,12 @@ export async function runVideoJob(
     const up2 = await db.storage.from(BUCKET).upload(`${base}.jpg`, await deps.readFile(jpg), { contentType: 'image/jpeg', upsert: true });
     if (up2.error) throw new Error(`Upload do poster falhou: ${up2.error.message}`);
 
-    await finishJob(db, 'marketing_videos', video.id, { video_path: `${base}.mp4`, poster_path: `${base}.jpg` });
+    await finishJob(db, 'marketing_videos', video.id, {
+      video_path: `${base}.mp4`, poster_path: `${base}.jpg`,
+      // Os 10 ganchos e a escolha ficam no job (jsonb que já existe) para o João ver na aprovação.
+      // O relatório da revisão do agente vai junto, para entender o que ele corrigiu.
+      ...(bank || review ? { director_output: { ...(bank ? { hooks: bank } : {}), ...(review ? { review } : {}) } } : {}),
+    });
   } catch (err) {
     await failJob(db, 'marketing_videos', video.id, err instanceof Error ? err.message : String(err));
   } finally {

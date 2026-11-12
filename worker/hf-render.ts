@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { runCommand } from './exec';
 
 // The pinned local CLI; `npx hyperframes` from a temp dir would fetch the latest from npm.
-const HYPERFRAMES_BIN = join(process.cwd(), 'node_modules', '.bin', 'hyperframes');
+export const HYPERFRAMES_BIN = join(process.cwd(), 'node_modules', '.bin', 'hyperframes');
 
 export interface RenderDeps {
   check(dir: string): Promise<{ ok: boolean; output: string }>;

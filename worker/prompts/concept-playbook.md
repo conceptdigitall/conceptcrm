@@ -3,11 +3,13 @@
 Destilado do segundo cérebro da Concept (mega prompt "semana de reels", estilo viral para software/IA, brandbook, aprendizados de HyperFrames). Vale para todo vídeo. Quando o briefing for de um negócio local de cliente, use o nicho e as cores do briefing; quando for da própria Concept (atendimento, recepcionista de IA, CRM, automação, site, agendamento), aplique a marca abaixo. Em conflito com as regras criativas genéricas, este playbook vence.
 
 ### 1. Gancho (o que decide o vídeo)
-- Até 6 palavras, visível nos 2 primeiros segundos. É uma CENA CONCRETA do nicho (horário, objeto, situação), nunca frase que serve para qualquer negócio.
-- Formatos de gancho: dor em pergunta, afirmação contra o senso comum, número concreto (só se vier do briefing), consequência, imagem absurda.
+- O gancho vem ESCOLHIDO no pedido (bloco "GANCHO ESCOLHIDO"), de um banco de 10 ganchos tipados (3 curiosidade, 3 dor, 3 prova, 1 conflito) julgado antes da composição. Quando o bloco existir, a abertura é exatamente ela: o que se move em 0,0 s, a fala de até 12 palavras em texto grande, e a história cumpre a promessa na batida indicada.
+- Fórmula: [movimento ou impacto visual] + [afirmação curta] + [promessa específica]. Cena CONCRETA do nicho (horário, objeto, situação), nunca frase que serve para qualquer negócio.
+- Gancho de prova só usa número que está no briefing. Sem número real, não existe gancho de prova.
+- Sem bloco de gancho no pedido: faça o seu pela mesma fórmula, até 6 palavras, visível nos 2 primeiros segundos.
 - Gancho absurdo: imagem exagerada que o resto do vídeo explica. Exemplos de estilo: "Meu cliente mandou mensagem às 3h. Ninguém respondeu.", "Sua loja abre 24h. Seu atendimento, não.", "Contratei um funcionário que nunca dorme.", "O cliente desistiu enquanto você dormia." O absurdo fica só na imagem do gancho: sem número inventado, sem promessa de resultado, sem caso real, sem ofender ninguém.
 - Deixe uma pergunta aberta no gancho que a última cena responde, para segurar até o fim.
-- Proibido: "oi, gente", "neste vídeo", "você sabia", "olá pessoal", "revolucione", "potencialize", "método definitivo", "streamline".
+- Proibido: "você não vai acreditar", "oi, gente", "neste vídeo", "você sabia", "olá pessoal", logo ou introdução na abertura, "revolucione", "potencialize", "método definitivo", "streamline".
 
 ### 2. Estrutura em 4 atos (15 a 28 s)
 1. GANCHO (0-3 s): para o scroll.
@@ -56,7 +58,7 @@ Invente um pedido diferente do nicho a cada vídeo (corte, consulta, orçamento,
 - Zonas seguras 9:16: mantenha texto importante longe das bordas (cerca de 250 px no topo e 400 px embaixo), onde a interface do Instagram cobre o vídeo.
 
 ### 8. Autoconferência antes de responder
-1. O gancho tem até 6 palavras e cita uma cena concreta do nicho?
+1. A abertura é o gancho escolhido (ou, sem ele, tem até 6 palavras e uma cena concreta do nicho) e algo se move em 0,0 s?
 2. Cada texto tem tempo de leitura suficiente e cabe sem corte nem sobreposição, com contraste forte?
 3. Há pelo menos uma cena mostrando o produto/UI/chat de verdade?
 4. O CTA é único, é um convite à conversa e está na última cena?

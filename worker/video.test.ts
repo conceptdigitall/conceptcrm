@@ -55,6 +55,7 @@ function deps(over: Record<string, unknown> = {}) {
     compose: vi.fn().mockResolvedValue(HTML),
     script: vi.fn().mockResolvedValue('Seu produto é bom. Chame a gente.'),
     narrate: vi.fn().mockResolvedValue({ audio: Buffer.from('mp3'), text: 'Seu produto é bom.', duration: 2, words: [{ word: 'Seu', start: 0, end: 0.3 }] }),
+    hooks: vi.fn().mockResolvedValue(null),
     check: vi.fn().mockResolvedValue({ ok: true, output: '' }),
     render: vi.fn().mockResolvedValue(undefined),
     poster: vi.fn().mockResolvedValue(undefined),
@@ -64,6 +65,23 @@ function deps(over: Record<string, unknown> = {}) {
 }
 
 describe('runVideoJob', () => {
+  const hook = { kind: 'dor', firstFrame: 'Cadeira girando', line: 'Três da tarde, nenhum cliente', promise: 'p', payoffBeat: 'virada' };
+  const bank = { hooks: [hook], chosenIndex: 0, reason: 'melhor' };
+  it('salva os ganchos em director_output e usa o escolhido na abertura', async () => {
+    const { db, updates } = fakeDb();
+    const d = deps({ hooks: vi.fn().mockResolvedValue(bank) });
+    await runVideoJob(db, video, d);
+    expect(updates.at(-1)).toMatchObject({ status: 'done', director_output: { hooks: bank } });
+    expect((d.compose.mock.calls[0][0] as { content: string }[])[0].content).toContain('GANCHO ESCOLHIDO');
+    expect(d.script.mock.calls[0][0]).toContain('Três da tarde, nenhum cliente');
+  });
+  it('segue sem ganchos quando o banco falha', async () => {
+    const { db, updates } = fakeDb();
+    const d = deps({ hooks: vi.fn().mockRejectedValue(new Error('boom')) });
+    await runVideoJob(db, video, d);
+    expect(updates.at(-1)).toMatchObject({ status: 'done' });
+    expect(updates.at(-1)).not.toHaveProperty('director_output');
+  });
   it('composes, checks, renders, uploads and finishes', async () => {
     const { db, updates, uploads } = fakeDb();
     const d = deps();

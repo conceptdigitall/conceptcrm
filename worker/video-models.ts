@@ -2,6 +2,7 @@
 // pode ser Gemini; diretor e checagem de foto chamam a Anthropic e só aceitam modelos claude-*.
 
 export const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+export const SONNET_MODEL = 'claude-sonnet-5-5';
 
 type Env = Record<string, string | undefined>;
 
@@ -10,6 +11,11 @@ const isClaude = (model?: string): model is string => !!model?.startsWith('claud
 /** Diretor dos pacotes: o VIDEO_MODEL quando é Claude, senão Haiku. */
 export function directorModel(env: Env = process.env): string {
   return isClaude(env.VIDEO_MODEL) ? env.VIDEO_MODEL : HAIKU_MODEL;
+}
+
+/** Jurado do banco de ganchos: Sonnet, salvo VIDEO_JUDGE_MODEL. */
+export function judgeModel(env: Env = process.env): string {
+  return isClaude(env.VIDEO_JUDGE_MODEL) ? env.VIDEO_JUDGE_MODEL : SONNET_MODEL;
 }
 
 /** Foto escura/borrada é tarefa simples: fica no Haiku, salvo VIDEO_VISION_MODEL. */
