@@ -81,7 +81,7 @@ async function tick(): Promise<boolean> {
   if (Date.now() - lastPautaAt > PAUTA_EVERY_MS) {
     const worked = await runPautaTick(db, accountIds, {
       now: () => new Date(),
-      generateText: generateTextHaiku,
+      generateText: (system, content) => generateText(system, content, 8000),
     });
     // Fez algo: olha de novo logo (pode haver outro item); senão espera o intervalo.
     if (!worked) lastPautaAt = Date.now();
