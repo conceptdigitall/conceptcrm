@@ -19,6 +19,7 @@ import {
 import { textoDeDado } from '@/lib/marketing/json-text';
 import { parseReferenceAnalysis } from '@/lib/marketing/references';
 import { PLAYBOOK_SYSTEM, parsePlaybook, playbookPrompt, type PlaybookRef } from '@/lib/marketing/playbook';
+import { fetchMarketTrends, type TrendItem } from '@/lib/marketing/trends-search';
 import type { VideoStyle } from '@/lib/marketing/video-options';
 import type { MarketingPautaItem, MarketingSettings, PautaFormato, Playbook, VideoTone } from '@/types';
 import { enqueuePostWithVideo, type PautaSlot } from './autopilot';
@@ -27,6 +28,7 @@ import { HAIKU_MODEL } from './video-models';
 export interface PautaDeps {
   now(): Date;
   generateText(system: string, content: string): Promise<string>;
+  fetchTrends?(): Promise<TrendItem[]>;
 }
 
 // Falha de IA não é refeita na hora (chave própria, separada da do piloto).
@@ -41,12 +43,8 @@ const TONE_CYCLE: VideoTone[] = ['default', 'app-store', 'polished', 'cinematic'
 export function slotDoFormato(f: PautaFormato, n: number): PautaSlot {
   const style = STYLE_CYCLE[n % STYLE_CYCLE.length];
   const tone = TONE_CYCLE[n % TONE_CYCLE.length];
-  if (f === 'feed') {
-    return { kind: 'feed', mediaType: 'foto', format: 'square', tone, options: { style, duration: 15, target: 'reels', still: true, pauta: true } };
-  }
-  if (f === 'reel') {
-    return { kind: 'feed', mediaType: 'video', format: 'vertical', tone, options: { style, duration: 30, target: 'reels', pauta: true } };
-  }
+  if (f === 'feed') return { kind: 'feed', mediaType: 'foto', format: 'square', tone, options: { style, duration: 15, target: 'reels', still: true, pauta: true } };
+  if (f === 'reel') return { kind: 'feed', mediaType: 'video', format: 'vertical', tone, options: { style, duration: 30, target: 'reels', pauta: true } };
   return { kind: 'story', mediaType: 'video', format: 'vertical', tone, options: { style, duration: 15, target: 'story', pauta: true } };
 }
 
@@ -144,7 +142,6 @@ async function briefDoReel(db: SupabaseClient, item: MarketingPautaItem): Promis
 async function produzirCarrossel(db: SupabaseClient, item: MarketingPautaItem, now: Date): Promise<boolean> {
   const laminas = laminasDoRoteiro(item.roteiro)?.slice(0, CARROSSEL_MAX);
   if (!laminas) {
-    // Sem lâminas suficientes não adianta tentar de novo: vai para a reescrita.
     const { error: aErr } = await db
       .from('marketing_pauta_itens')
       .update({ status: 'ajuste', comentario: 'Carrossel precisa de 3 a 7 lâminas', updated_at: now.toISOString() })
@@ -170,10 +167,7 @@ async function produzirCarrossel(db: SupabaseClient, item: MarketingPautaItem, n
   const { data: ligado, error: uErr } = await db
     .from('marketing_pauta_itens')
     .update({ post_id: postId, produzido_em: now.toISOString(), updated_at: now.toISOString() })
-    .eq('id', item.id)
-    .is('post_id', null)
-    .is('produzido_em', null)
-    .select('id');
+    .eq('id', item.id).is('post_id', null).is('produzido_em', null).select('id');
   if (uErr || !ligado || ligado.length === 0) {
     const { error: dErr } = await db.from('marketing_posts').delete().eq('id', postId);
     if (dErr) console.error('[pauta] rollback: não apaguei o post do carrossel:', dErr.message);
@@ -194,20 +188,12 @@ async function apagarVideoOuFalhar(db: SupabaseClient, videoId: string): Promise
   const { error } = await db.from('marketing_videos').delete().eq('id', videoId);
   if (!error) return;
   console.error('[pauta] rollback: não apaguei o vídeo, marcando failed:', error.message);
-  const { error: fErr } = await db
-    .from('marketing_videos')
-    .update({ status: 'failed', error: 'Produção da pauta desfeita' })
-    .eq('id', videoId);
+  const { error: fErr } = await db.from('marketing_videos').update({ status: 'failed', error: 'Produção da pauta desfeita' }).eq('id', videoId);
   if (fErr) console.error('[pauta] rollback: não consegui marcar o vídeo como failed:', fErr.message);
 }
 
 async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: PautaDeps, now: Date): Promise<boolean> {
-  const { data, error } = await db
-    .from('marketing_pauta_itens')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('status', 'ajuste')
-    .limit(1);
+  const { data, error } = await db.from('marketing_pauta_itens').select('*').eq('account_id', accountId).eq('status', 'ajuste').limit(1);
   if (error) throw new Error(`Não consegui ler os ajustes: ${error.message}`);
   const item = (data as MarketingPautaItem[] | null)?.[0];
   if (!item) return false;
@@ -220,8 +206,7 @@ async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: Pau
     if (!laminas) throw new Error('A IA reescreveu o carrossel com menos de 3 lâminas');
     novo.roteiro = laminas.slice(0, CARROSSEL_MAX).join('\n');
   }
-  const { error: uErr } = await db
-    .from('marketing_pauta_itens')
+  const { error: uErr } = await db.from('marketing_pauta_itens')
     .update({ ...novo, versao: item.versao + 1, status: 'pending_approval', comentario: null, updated_at: now.toISOString() })
     .eq('id', item.id);
   if (uErr) throw new Error(`Não consegui gravar o ajuste: ${uErr.message}`);
@@ -306,6 +291,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   const settings = (settingsRow as MarketingSettings | null) ?? { ...DEFAULT_SETTINGS, account_id: accountId };
 
   const { refs, playbook } = await gerarPlaybook(db, accountId, deps, now);
+  const trends = deps.fetchTrends ? await deps.fetchTrends() : await fetchMarketTrends();
 
   const raw = await deps.generateText(PAUTA_SYSTEM, pautaPrompt({
     semanaInicio: pauta.semana_inicio,
@@ -314,6 +300,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
     recentTitles: (recent ?? []).map((p) => p.title).filter(Boolean),
     playbook,
     referencias: refs,
+    trends,
   }));
   const itens = parsePautaItens(raw, pauta.semana_inicio, new Set(refs.map((r) => r.id)));
   if (!itens) throw new Error('A IA não devolveu uma pauta válida');
@@ -335,8 +322,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
 }
 
 async function fecharPauta(db: SupabaseClient, accountId: string, now: Date): Promise<boolean> {
-  const { data: abertas } = await db
-    .from('marketing_pautas').select('id').eq('account_id', accountId).eq('status', 'pending_approval');
+  const { data: abertas } = await db.from('marketing_pautas').select('id').eq('account_id', accountId).eq('status', 'pending_approval');
   for (const p of (abertas as { id: string }[] | null) ?? []) {
     const { data: itens } = await db.from('marketing_pauta_itens').select('status').eq('pauta_id', p.id);
     const aberto = (itens ?? []).some((i) => i.status === 'pending_approval' || i.status === 'ajuste');
@@ -351,7 +337,6 @@ async function fecharPauta(db: SupabaseClient, accountId: string, now: Date): Pr
 
 /** Haiku para pauta e reescrita (mesma conta Anthropic do worker de vídeo). */
 export async function generateTextHaiku(system: string, content: string): Promise<string> {
-  // 3000 cortava o JSON de 5 a 7 itens (mesmo erro do diretor: 1500 cortava).
   const r = await new Anthropic().messages.create({
     model: HAIKU_MODEL,
     max_tokens: 8000,
