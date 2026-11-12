@@ -394,8 +394,8 @@ export async function POST(req: Request) {
     // ========================================================
     // 2. REGRAS HUMANAS & RESPOSTA INTELIGENTE (CLAUDE)
     // ========================================================
-    // Delay otimizado para presença humana sem estourar timeout da Vercel (3 a 6 segundos)
-    const randomDelay = Math.floor(Math.random() * (6000 - 3000 + 1)) + 3000;
+    // Delay humanizado entre 10 e 30 segundos (proteção contra banimento do chip / anti-spam)
+    const randomDelay = Math.floor(Math.random() * (30000 - 10000 + 1)) + 10000;
     await simulateHumanPresence(remoteJid, randomDelay);
 
     const [replyText] = await Promise.all([
@@ -852,34 +852,22 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     return `Muito obrigado pela confiança, ${firstName}! Pagamento confirmado e registrado no nosso sistema. Já estamos alinhando a equipe para darmos início!`;
   };
 
-  const primaryModel = process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
+  const candidateModels = Array.from(
+    new Set(
+      [
+        process.env.CLAUDE_MODEL,
+        'claude-3-haiku-20240307',
+        'claude-3-5-sonnet-20241022',
+        'claude-3-5-sonnet-20240620',
+        'claude-3-opus-20240229',
+      ].filter(Boolean) as string[]
+    )
+  );
 
-  try {
-    const response = await anthropic.messages.create({
-      model: primaryModel,
-      max_tokens: 220,
-      temperature: 0.5,
-      system: systemPrompt,
-      tools,
-      messages: chatMessages,
-    });
-
-    const toolUse = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
-    if (toolUse && toolUse.name === 'schedule_appointment') {
-      return await processToolCall(toolUse);
-    }
-    if (toolUse && toolUse.name === 'confirm_deal_payment') {
-      return await processPaymentToolCall(toolUse);
-    }
-
-    const textBlock = response.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
-    return cleanReplyFormatting(textBlock?.text || '');
-  } catch (err) {
-    console.error(`[Evolution Webhook] Erro ao chamar Claude (${primaryModel}):`, err);
-    // Fallback para claude-3-5-haiku-20241022 caso a conta/modelo precise de fallback
+  for (const model of candidateModels) {
     try {
-      const fallbackResponse = await anthropic.messages.create({
-        model: 'claude-3-5-haiku-20241022',
+      const response = await anthropic.messages.create({
+        model,
         max_tokens: 220,
         temperature: 0.5,
         system: systemPrompt,
@@ -887,20 +875,22 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
         messages: chatMessages,
       });
 
-      const fallbackToolUse = fallbackResponse.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
-      if (fallbackToolUse && fallbackToolUse.name === 'schedule_appointment') {
-        return await processToolCall(fallbackToolUse);
+      const toolUse = response.content.find((b) => b.type === 'tool_use') as Anthropic.ToolUseBlock | undefined;
+      if (toolUse && toolUse.name === 'schedule_appointment') {
+        return await processToolCall(toolUse);
       }
-      if (fallbackToolUse && fallbackToolUse.name === 'confirm_deal_payment') {
-        return await processPaymentToolCall(fallbackToolUse);
+      if (toolUse && toolUse.name === 'confirm_deal_payment') {
+        return await processPaymentToolCall(toolUse);
       }
 
-      const textBlock = fallbackResponse.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
+      const textBlock = response.content.find((b) => b.type === 'text') as Anthropic.TextBlock | undefined;
       return cleanReplyFormatting(textBlock?.text || '');
-    } catch (fallbackErr) {
-      console.error('[Evolution Webhook] Erro no fallback do Claude:', fallbackErr);
-      return '';
+    } catch (err: unknown) {
+      console.warn(`[Evolution Webhook] Modelo ${model} falhou, tentando fallback:`, (err as Error)?.message || err);
     }
   }
+
+  console.error('[Evolution Webhook] Todos os modelos de IA falharam.');
+  return '';
 }
 
