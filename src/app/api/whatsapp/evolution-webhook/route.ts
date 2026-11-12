@@ -528,7 +528,7 @@ function generateGoogleCalendarUrl({
     text: title,
     dates,
     details: details || '',
-    location: location || 'https://meet.google.com/new',
+    location: location || 'Google Meet (link enviado no WhatsApp)',
   });
 
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
@@ -693,7 +693,6 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     const rawIso = input.datetime_iso || new Date().toISOString();
     const scheduledDate = new Date(rawIso);
     const validDate = !isNaN(scheduledDate.getTime()) ? scheduledDate : new Date();
-    const meetingUrl = 'https://meet.google.com/new';
 
     const resolvedClientName = input.client_name?.trim() || (userName !== 'Novo Lead' ? userName : '') || 'Cliente';
     const countdown = getDaysUntil(validDate);
@@ -735,7 +734,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
             input.client_company ? `🏢 Empresa/Nicho: ${input.client_company}` : null,
             input.client_email ? `✉️ E-mail: ${input.client_email}` : null,
             input.notes ? `📝 Dores/Escopo: ${input.notes}` : null,
-            `🔗 Google Meet: ${meetingUrl}`,
+            `🔗 Google Meet: envio no dia da reunião`,
           ]
             .filter(Boolean)
             .join('\n');
@@ -754,7 +753,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
           scheduled_at: validDate.toISOString(),
           duration_minutes: 30,
           status: 'confirmed',
-          meeting_url: meetingUrl,
+          meeting_url: null,
           notes: input.notes || null,
         };
         if (accountId) appointmentPayload.account_id = accountId;
@@ -784,8 +783,8 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
       title: input.title || `Reunião Concept Digital: ${resolvedClientName}`,
       startDate: validDate,
       durationMinutes: 30,
-      details: `Reunião com ${resolvedClientName}\nWhatsApp: ${clientPhoneDisplay}\n${input.client_company ? `Empresa: ${input.client_company}\n` : ''}${input.client_email ? `E-mail: ${input.client_email}\n` : ''}Notas: ${input.notes || 'Sessão de alinhamento e demonstração de ativos digitais Concept Digital.'}\n\nLink Google Meet: ${meetingUrl}`,
-      location: meetingUrl,
+      details: `Reunião com ${resolvedClientName}\nWhatsApp: ${clientPhoneDisplay}\n${input.client_company ? `Empresa: ${input.client_company}\n` : ''}${input.client_email ? `E-mail: ${input.client_email}\n` : ''}Notas: ${input.notes || 'Sessão de alinhamento e demonstração de ativos digitais Concept Digital.'}\n\nObs: O link do Google Meet será enviado no WhatsApp antes da reunião.`,
+      location: 'Google Meet (link enviado no WhatsApp)',
     });
 
     // 5. Notificar no WhatsApp do sócio e número pessoal ("13978071057" e "13982292700")
@@ -798,7 +797,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
       (input.client_email ? `✉️ *E-mail:* ${input.client_email}\n` : '') +
       `📅 *Data & Hora:* ${formattedDate}\n` +
       `${countdown.label}\n` +
-      `🔗 *Link do Google Meet:* ${meetingUrl}\n` +
+      `🔗 *Google Meet:* Link será enviado no dia da reunião\n` +
       (input.notes ? `📝 *Contexto/Diagnóstico:* ${input.notes}\n` : '') +
       `\n📆 *Adicionar ao Google Calendar:*\n${gcalUrl}\n\n` +
       `_Sincronizado automaticamente no CRM Concept Digital_`;
@@ -815,10 +814,10 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
       })
     ).catch((pErr) => console.error('[Evolution Webhook] Erro em disparos aos sócios:', pErr));
 
-    // 6. Mensagem de resposta para o cliente no WhatsApp com confirmação, Meet e link do Google Calendar
+    // 6. Mensagem de resposta para o cliente no WhatsApp com confirmação sem link cru do Meet
     return (
       `Perfeito, ${resolvedClientName}! Agendado para ${formattedDate}.\n\n` +
-      `Aqui está o link da nossa chamada no Google Meet: ${meetingUrl}\n\n` +
+      `Já deixei reservado na nossa agenda. No dia da nossa conversa, te mando por aqui o link da nossa sala no Google Meet uns 15 minutos antes para você entrar direto.\n\n` +
       `Se quiser adicionar direto na sua agenda: ${gcalUrl}\n\n` +
       `Te vejo lá!`
     );
