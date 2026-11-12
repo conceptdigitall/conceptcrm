@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-export type JobTable = 'lead_searches' | 'marketing_videos' | 'lead_columns';
+export type JobTable = 'lead_searches' | 'marketing_videos' | 'lead_columns' | 'marketing_references';
 
 export async function claimNext<T>(
   db: SupabaseClient, table: JobTable, accountIds: string[],

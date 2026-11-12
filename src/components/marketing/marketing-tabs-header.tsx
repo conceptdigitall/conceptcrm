@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
-export type MarketingSubtab = 'feed' | 'stories' | 'videos' | 'ads' | 'projects' | 'library' | 'settings';
+export type MarketingSubtab = 'feed' | 'stories' | 'videos' | 'ads' | 'projects' | 'library' | 'references' | 'settings';
 
 interface MarketingTabsHeaderProps {
   currentTab: MarketingSubtab;
@@ -23,6 +23,7 @@ const TABS: { id: MarketingSubtab; label: string }[] = [
   { id: 'ads', label: 'Tráfego IA' },
   { id: 'projects', label: 'Projetos' },
   { id: 'library', label: 'Biblioteca' },
+  { id: 'references', label: 'Referências' },
   { id: 'settings', label: 'Ajustes' },
 ];
 
@@ -78,7 +79,7 @@ export function MarketingTabsHeader({
         )}
       </header>
 
-      {/* No celular rola de lado (7 abas não cabem em 2 linhas legíveis). */}
+      {/* No celular rola de lado (8 abas não cabem em 2 linhas legíveis). */}
       <nav
         ref={navRef}
         className="-mx-4 flex gap-1 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:self-start md:overflow-visible md:rounded-2xl md:border md:border-border md:bg-muted md:p-1"

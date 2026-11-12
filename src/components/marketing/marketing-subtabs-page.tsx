@@ -14,6 +14,7 @@ import { FeedTab } from '@/components/marketing/feed-tab';
 import { StoriesTab } from '@/components/marketing/stories-tab';
 import { ProjectsTab } from '@/components/marketing/projects-tab';
 import { LibraryTab } from '@/components/marketing/library-tab';
+import { ReferencesTab } from '@/components/marketing/references-tab';
 import { SettingsTab } from '@/components/marketing/settings-tab';
 import { CreatePostModal } from '@/components/marketing/create-post-modal';
 import { VideoGenerator } from '@/components/marketing/video-generator';
@@ -233,6 +234,8 @@ export function MarketingSubtabsPage() {
             selectedPostId={librarySelectedPostId}
           />
         )}
+
+        {currentTab === 'references' && <ReferencesTab />}
 
         {currentTab === 'settings' && (
           <SettingsTab

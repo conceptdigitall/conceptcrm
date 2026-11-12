@@ -8,14 +8,19 @@ import { weekStart } from '@/lib/marketing/autopilot';
 import { DEFAULT_SETTINGS } from '@/lib/marketing/content';
 import {
   PAUTA_SYSTEM,
+  CARROSSEL_MAX,
   ajustePrompt,
+  laminasDoRoteiro,
   parseItemAjustado,
   parsePautaItens,
   pautaPrompt,
   semanaInicioISO,
 } from '@/lib/marketing/pauta';
+import { textoDeDado } from '@/lib/marketing/json-text';
+import { parseReferenceAnalysis } from '@/lib/marketing/references';
+import { PLAYBOOK_SYSTEM, parsePlaybook, playbookPrompt, type PlaybookRef } from '@/lib/marketing/playbook';
 import type { VideoStyle } from '@/lib/marketing/video-options';
-import type { MarketingPautaItem, MarketingSettings, PautaFormato, VideoTone } from '@/types';
+import type { MarketingPautaItem, MarketingSettings, PautaFormato, Playbook, VideoTone } from '@/types';
 import { enqueuePostWithVideo, type PautaSlot } from './autopilot';
 import { HAIKU_MODEL } from './video-models';
 
@@ -86,16 +91,20 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
     // produzido_em (e não post_id): apagar o post zera post_id, e sem esta marca
     // o worker compraria um vídeo novo a cada passe.
     .is('produzido_em', null)
+    // Mais antigo primeiro: um item que falha sempre não pode esconder os demais.
+    .order('updated_at', { ascending: true })
     .limit(1);
   if (error) throw new Error(`Não consegui ler os aprovados: ${error.message}`);
   const item = (data as MarketingPautaItem[] | null)?.[0];
   if (!item) return false;
 
+  if (item.formato === 'carrossel') return produzirCarrossel(db, item, now);
+
   const { data: irmaos } = await db.from('marketing_pauta_itens').select('post_id').eq('pauta_id', item.pauta_id);
   const n = (irmaos ?? []).filter((r) => r.post_id).length;
   const { postId, videoId } = await enqueuePostWithVideo(db, accountId, slotDoFormato(item.formato, n), {
     title: item.tema,
-    brief: `${item.gancho}\n${item.roteiro}`.slice(0, 1000),
+    brief: await briefDoReel(db, item),
     caption: item.legenda_base,
   });
   // `.is('post_id', null)` + `.select()`: zero linhas conta como falha, e então
@@ -114,6 +123,63 @@ async function produzirAprovado(db: SupabaseClient, accountId: string, now: Date
     throw new Error(`Não consegui ligar o post ao item: ${uErr?.message ?? 'nenhuma linha atualizada'}`);
   }
   console.log(`[pauta] aprovado em produção: ${item.tema}`);
+  return true;
+}
+
+const BRIEF_MAX = 1000;
+
+/** Gancho + roteiro (+ gancho da referência, por último: é o que se corta primeiro). Teto de 1000 caracteres. */
+async function briefDoReel(db: SupabaseClient, item: MarketingPautaItem): Promise<string> {
+  const base = `${item.gancho}\n${item.roteiro}`.slice(0, BRIEF_MAX);
+  if (!item.referencia_id) return base;
+  const { data } = await db.from('marketing_references').select('analise').eq('id', item.referencia_id).maybeSingle();
+  // Referência apagada ou com análise quebrada: o reel sai sem a linha extra.
+  const analise = data ? parseReferenceAnalysis(JSON.stringify((data as { analise: unknown }).analise ?? null)) : null;
+  if (!analise) return base;
+  const linha = `Gancho de referência: ${textoDeDado(analise.gancho.tipo)} — ${textoDeDado(analise.gancho.primeiroQuadro)}`;
+  return `${base}\n${linha}`.slice(0, BRIEF_MAX);
+}
+
+/** Carrossel não tem vídeo: o post já nasce em aprovação e a arte de cada lâmina sai na publicação. */
+async function produzirCarrossel(db: SupabaseClient, item: MarketingPautaItem, now: Date): Promise<boolean> {
+  const laminas = laminasDoRoteiro(item.roteiro)?.slice(0, CARROSSEL_MAX);
+  if (!laminas) {
+    // Sem lâminas suficientes não adianta tentar de novo: vai para a reescrita.
+    const { error: aErr } = await db
+      .from('marketing_pauta_itens')
+      .update({ status: 'ajuste', comentario: 'Carrossel precisa de 3 a 7 lâminas', updated_at: now.toISOString() })
+      .eq('id', item.id);
+    if (aErr) throw new Error(`Não consegui mandar o carrossel para ajuste: ${aErr.message}`);
+    return true;
+  }
+  const { data: post, error: pErr } = await db.from('marketing_posts').insert({
+    account_id: item.account_id,
+    created_by: null,
+    kind: 'feed',
+    media_type: 'carrossel',
+    title: item.tema,
+    idea: item.gancho,
+    caption: item.legenda_base,
+    media_urls: [],
+    video_id: null,
+    frames: laminas.map((text) => ({ text, interaction: 'nenhuma' })),
+    status: 'pending_approval',
+  }).select('id').single();
+  if (pErr || !post) throw new Error(`Não consegui criar o post do carrossel: ${pErr?.message}`);
+  const postId = post.id as string;
+  const { data: ligado, error: uErr } = await db
+    .from('marketing_pauta_itens')
+    .update({ post_id: postId, produzido_em: now.toISOString(), updated_at: now.toISOString() })
+    .eq('id', item.id)
+    .is('post_id', null)
+    .is('produzido_em', null)
+    .select('id');
+  if (uErr || !ligado || ligado.length === 0) {
+    const { error: dErr } = await db.from('marketing_posts').delete().eq('id', postId);
+    if (dErr) console.error('[pauta] rollback: não apaguei o post do carrossel:', dErr.message);
+    throw new Error(`Não consegui ligar o post ao item: ${uErr?.message ?? 'nenhuma linha atualizada'}`);
+  }
+  console.log(`[pauta] carrossel em aprovação: ${item.tema}`);
   return true;
 }
 
@@ -149,6 +215,11 @@ async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: Pau
   const raw = await deps.generateText(PAUTA_SYSTEM, ajustePrompt(item, item.comentario ?? ''));
   const novo = parseItemAjustado(raw);
   if (!novo) throw new Error('A IA não devolveu o item reescrito');
+  if (item.formato === 'carrossel') {
+    const laminas = laminasDoRoteiro(novo.roteiro);
+    if (!laminas) throw new Error('A IA reescreveu o carrossel com menos de 3 lâminas');
+    novo.roteiro = laminas.slice(0, CARROSSEL_MAX).join('\n');
+  }
   const { error: uErr } = await db
     .from('marketing_pauta_itens')
     .update({ ...novo, versao: item.versao + 1, status: 'pending_approval', comentario: null, updated_at: now.toISOString() })
@@ -156,6 +227,49 @@ async function reescreverAjuste(db: SupabaseClient, accountId: string, deps: Pau
   if (uErr) throw new Error(`Não consegui gravar o ajuste: ${uErr.message}`);
   console.log(`[pauta] ajuste reescrito: ${novo.tema}`);
   return true;
+}
+
+const REFERENCIAS_DIAS = 30;
+const REFERENCIAS_MAX = 20;
+
+/** Referências analisadas (done) nos últimos 30 dias, as 20 mais recentes. */
+export async function carregarReferencias(db: SupabaseClient, accountId: string, now: Date): Promise<PlaybookRef[]> {
+  const desde = new Date(now.getTime() - REFERENCIAS_DIAS * 24 * 60 * 60 * 1000).toISOString();
+  const { data, error } = await db
+    .from('marketing_references')
+    .select('id, url, eixo, nicho, analise')
+    .eq('account_id', accountId)
+    .eq('status', 'done')
+    .gte('finished_at', desde)
+    .order('finished_at', { ascending: false })
+    .limit(REFERENCIAS_MAX);
+  if (error) throw new Error(`Não consegui ler as referências: ${error.message}`);
+  const refs: PlaybookRef[] = [];
+  for (const row of (data as (Omit<PlaybookRef, 'analise'> & { analise: unknown })[] | null) ?? []) {
+    // Reaproveita a checagem canônica (forma e limites): análise quebrada fica de fora.
+    const analise = parseReferenceAnalysis(JSON.stringify(row.analise ?? null));
+    if (!analise) {
+      console.error(`[pauta] playbook: referência ${row.id} com análise inválida, ignorada`);
+      continue;
+    }
+    refs.push({ ...row, analise });
+  }
+  return refs;
+}
+
+/** Resume as referências em playbook. Qualquer falha só loga: a pauta sai sem playbook. */
+async function gerarPlaybook(db: SupabaseClient, accountId: string, deps: PautaDeps, now: Date): Promise<{ refs: PlaybookRef[]; playbook: Playbook | null }> {
+  let refs: PlaybookRef[] = [];
+  try {
+    refs = await carregarReferencias(db, accountId, now);
+    if (refs.length === 0) return { refs, playbook: null };
+    const playbook = parsePlaybook(await deps.generateText(PLAYBOOK_SYSTEM, playbookPrompt(refs)));
+    if (!playbook) console.error('[pauta] playbook: a IA não devolveu um JSON válido');
+    return { refs, playbook };
+  } catch (err) {
+    console.error('[pauta] playbook:', err instanceof Error ? err.message : err);
+    return { refs, playbook: null };
+  }
 }
 
 async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps, now: Date): Promise<boolean> {
@@ -191,13 +305,17 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
   ]);
   const settings = (settingsRow as MarketingSettings | null) ?? { ...DEFAULT_SETTINGS, account_id: accountId };
 
+  const { refs, playbook } = await gerarPlaybook(db, accountId, deps, now);
+
   const raw = await deps.generateText(PAUTA_SYSTEM, pautaPrompt({
     semanaInicio: pauta.semana_inicio,
     settings,
     projects: (projects ?? []).map((p) => `${p.name} (${p.category})`),
     recentTitles: (recent ?? []).map((p) => p.title).filter(Boolean),
+    playbook,
+    referencias: refs,
   }));
-  const itens = parsePautaItens(raw, pauta.semana_inicio);
+  const itens = parsePautaItens(raw, pauta.semana_inicio, new Set(refs.map((r) => r.id)));
   if (!itens) throw new Error('A IA não devolveu uma pauta válida');
 
   const stamp = now.toISOString();
@@ -205,7 +323,7 @@ async function gerarPauta(db: SupabaseClient, accountId: string, deps: PautaDeps
     itens.map((i) => ({ ...i, pauta_id: pauta.id, account_id: accountId, status: 'pending_approval', versao: 1, updated_at: stamp })),
   );
   if (iErr) throw new Error(`Não consegui gravar os itens: ${iErr.message}`);
-  const { error: pErr } = await db.from('marketing_pautas').update({ status: 'pending_approval' }).eq('id', pauta.id);
+  const { error: pErr } = await db.from('marketing_pautas').update({ status: 'pending_approval', playbook }).eq('id', pauta.id);
   if (pErr) {
     // Sem isso, a pauta seguiria `gerando` com itens e a próxima tentativa duplicaria tudo.
     const { error: dErr } = await db.from('marketing_pauta_itens').delete().eq('pauta_id', pauta.id);

@@ -27,6 +27,7 @@ export const API_SCOPES = [
   'deals:read',
   'deals:write',
   'marketing:generate',
+  'marketing:references',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -46,6 +47,7 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'deals:read': 'List pipelines, stages and deals',
   'deals:write': 'Create deals, move stages and mark won/lost',
   'marketing:generate': 'Queue marketing videos, read their status and approve or reject posts (internal accounts only)',
+  'marketing:references': 'Send viral references for analysis and read their results (internal accounts only)',
 };
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */
