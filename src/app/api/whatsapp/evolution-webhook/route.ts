@@ -852,7 +852,7 @@ REGRAS RÍGIDAS DE CONDUTA NO CHAT:
     return `Muito obrigado pela confiança, ${firstName}! Pagamento confirmado e registrado no nosso sistema. Já estamos alinhando a equipe para darmos início!`;
   };
 
-  const primaryModel = process.env.CLAUDE_MODEL || 'claude-haiku-4-5-20251001';
+  const primaryModel = process.env.CLAUDE_MODEL || 'claude-3-5-haiku-20241022';
 
   try {
     const response = await anthropic.messages.create({
