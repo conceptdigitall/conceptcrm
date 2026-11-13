@@ -59,7 +59,7 @@
     "date-fns": "^4.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.30.0",
-    "next": "16.3.8",
+    "next": "16.4.1",
     "next-intl": "^4.13.5",
     "opus-recorder": "^8.0.5",
     "react": "19.2.4",
@@ -97,6 +97,6 @@
     "sharp": "^0.35.4",
     "brace-expansion@^1.0.0": "^1.1.18",
     "brace-expansion@^5.0.0": "^5.0.9",
-    "undici": "^7.30.0"
+    "undici": "^7.30.1"
   }
 }
