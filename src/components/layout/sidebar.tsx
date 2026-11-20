@@ -11,6 +11,8 @@ import {
   ChevronDown,
   Clapperboard,
   Crown,
+  FileText,
+  Wallet,
   GitBranch,
   LayoutDashboard,
   LogOut,
@@ -132,6 +134,8 @@ const navGroups: NavGroup[] = [
     items: [
       { href: "/prospeccao", labelKey: "prospecting", icon: Search, internalOnly: true },
       { href: "/marketing", labelKey: "marketing", icon: Clapperboard, internalOnly: true },
+      { href: "/documentos", labelKey: "documents", icon: FileText, internalOnly: true },
+      { href: "/financeiro", labelKey: "finance", icon: Wallet, internalOnly: true },
       { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
     ],
   },
