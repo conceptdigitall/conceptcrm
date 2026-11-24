@@ -1,0 +1,19 @@
+# Usado só pelo Dockerfile.worker (BuildKit lê <Dockerfile>.dockerignore antes do .dockerignore).
+# Diferente do .dockerignore do app: mantém os .md de worker/prompts (são o prompt do vídeo).
+.git
+.github
+.next
+node_modules
+mcp-server
+supabase
+docs
+.env*
+.servicos-logs
+.vscode
+.idea
+coverage
+tsconfig.tsbuildinfo
+worker/laya/.venv
+**/__pycache__
+**/*.mp4
+!worker/**/*.mp4

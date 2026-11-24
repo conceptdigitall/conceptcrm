@@ -75,8 +75,51 @@ Liga com `MARKETING_AUTOPILOT=1` no `.env.local` e reinicie o worker. Por padrã
 
 As trilhas de fundo ficam em `worker/music/` e são listadas em `worker/music/tracks.json` (arquivo, tons, fonte e licença). O worker escolhe uma faixa pelo tom do vídeo (mesmo vídeo, mesma faixa). Só adicione faixas com licença que permita uso comercial no Instagram sem atribuição obrigatória, e anote a fonte no JSON.
 
-## Mover para um servidor
-Rodar o mesmo `npm run worker` num VPS com Docker, Node 22+ e FFmpeg, com as mesmas variáveis.
+## Dividir as filas (WORKER_TASKS)
+
+`WORKER_TASKS` diz quais filas este worker atende, separadas por vírgula:
+`prospeccao`, `planilha`, `video`, `referencias`, `pauta`, `piloto`. Sem a variável, atende tudo (como antes).
+Cada worker só devolve à fila, ao iniciar, os jobs "running" das filas dele. Assim dois workers com
+listas **sem sobreposição** convivem sem um roubar o job do outro. Nunca rode duas listas que se cruzam.
+
+## Rodar no Railway (vídeo, referências, pauta e piloto)
+
+A imagem é o `Dockerfile.worker` (Node 22, FFmpeg, Chrome do HyperFrames, fontes, yt-dlp). Ela não tem
+Docker nem Laya, então **prospecção e planilha ficam no Mac**.
+
+1. No Railway: New Project → Deploy from GitHub repo → este repositório (branch `main`).
+2. No serviço, em Variables:
+   - `RAILWAY_DOCKERFILE_PATH=Dockerfile.worker` (sem isso ele usa o `Dockerfile` do app Next)
+   - `WORKER_TASKS=video,referencias,pauta,piloto`
+   - `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`,
+     `NEXT_PUBLIC_INTERNAL_ACCOUNT_IDS`, `GEMINI_API_KEY` (os mesmos valores do `.env.local`)
+   - `VIDEO_ENGINE=gemini` e `VIDEO_MODEL=gemini-3.8-flash` (o motor `cli` precisa do Claude Code logado
+     e não funciona no servidor), `NARRATION_PROVIDER=gemini`, `GEMINI_TTS_VOICE=pt-br-commercial-2`
+   - `MARKETING_AUTOPILOT=1` só se o piloto deve rodar (e opcionais `AUTOPILOT_FEED_PER_WEEK`,
+     `AUTOPILOT_STORIES_PER_WEEK`, `NEXT_PUBLIC_MARKETING_NICHE`)
+3. Settings: sem domínio público (o worker não escuta porta), 1 réplica, restart "On Failure".
+   Memória: Chrome + render pedem pelo menos 2 GB; 4 GB dá folga.
+4. No Mac, troque o worker para só o que precisa do Mac: no `.env.local` coloque
+   `WORKER_TASKS=prospeccao,planilha` e reinicie o LaunchAgent:
+
+       launchctl kickstart -k gui/$(id -u)/com.conceptdigital.marketingworker
+
+   Faça isso **antes** de ligar o Railway: os dois atendendo vídeo ao mesmo tempo disputam a fila.
+5. Confira nos logs do Railway: `Tarefas: video, referencias, pauta, piloto` e `Vídeo: motor gemini`.
+
+Redeploy manda SIGTERM: o worker para depois do job atual se der tempo. Um render cortado no meio volta
+para a fila quando o novo container inicia.
+
+Testar a imagem no Mac (o Railway é amd64; no Mac a emulação deixa o render lento):
+
+    docker build --platform linux/amd64 -f Dockerfile.worker -t concept-worker .
+    docker run --rm --platform linux/amd64 --env-file .env.local -e WORKER_TASKS=video concept-worker
+
+Cuidado: esse `docker run` atende a fila de verdade do Supabase do `.env.local`.
+
+## Mover para outro servidor
+O mesmo `Dockerfile.worker` serve num VPS com Docker. Sem Docker: `npm run worker` com Node 22+, FFmpeg,
+yt-dlp e `npx hyperframes browser ensure`, com as mesmas variáveis.
 
 ## Planilha Preditiva (Laya)
 
