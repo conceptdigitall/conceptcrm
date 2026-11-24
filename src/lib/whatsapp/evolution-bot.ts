@@ -21,6 +21,80 @@ export function isHumanHandoffReply(text: string | null | undefined): boolean {
   return text.toUpperCase().includes(HUMAN_SENTINEL)
 }
 
+/**
+ * O cliente pediu para falar com uma pessoa. A IA responde
+ * `[ATENDENTE] resumo do assunto`; o webhook manda ATTENDANT_HANDOFF_REPLY
+ * ao cliente, pausa a IA e avisa os sócios no WhatsApp.
+ */
+export const ATTENDANT_SENTINEL = '[ATENDENTE]'
+
+export const ATTENDANT_HANDOFF_REPLY =
+  'Claro, já avisei a equipe. Uma pessoa vai continuar seu atendimento por aqui assim que possível.'
+
+/** Devolve o resumo do assunto quando a IA pediu um atendente; senão null. */
+export function parseAttendantRequest(text: string | null | undefined): { summary: string } | null {
+  if (!text) return null
+  const idx = text.toUpperCase().indexOf(ATTENDANT_SENTINEL)
+  if (idx === -1) return null
+  const summary = text
+    .slice(idx + ATTENDANT_SENTINEL.length)
+    .replace(/[*_`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 400)
+  return { summary }
+}
+
+/** Sócios que recebem os avisos (atendente, agendamento, pagamento). */
+export const PARTNER_NUMBERS = [
+  '5513978071057', // João Petraglia
+  '5513982292700', // Matheus Baduris
+  '5511997396671', // Danilo Petraglia
+  '5513981958787', // Arthur Valente
+] as const
+
+/** Lista final: sócios fixos + ADMIN_WHATSAPP_NUMBERS, com DDI 55. */
+export function partnerNotificationNumbers(envList?: string | null): string[] {
+  const extra = envList
+    ? envList.split(',').map((n) => n.trim().replace(/\D/g, '')).filter(Boolean)
+    : []
+  const withDdi = [...PARTNER_NUMBERS, ...extra].map((n) =>
+    n.length >= 10 && n.length <= 11 && !n.startsWith('55') ? `55${n}` : n,
+  )
+  return Array.from(new Set(withDdi))
+}
+
+/** O número é de um sócio? (aceita com ou sem DDI). */
+export function isPartnerNumber(phone: string | null | undefined, envList?: string | null): boolean {
+  const digits = (phone ?? '').replace(/\D/g, '')
+  if (!digits) return false
+  const full = digits.length <= 11 && !digits.startsWith('55') ? `55${digits}` : digits
+  return partnerNotificationNumbers(envList).includes(full)
+}
+
+/** Mensagem que os sócios recebem quando um cliente pede atendente. */
+export function buildAttendantAlert(args: {
+  contactName: string | null | undefined
+  phone: string
+  summary: string
+  lastMessage: string
+  conversationUrl: string | null
+}): string {
+  const name = (args.contactName || '').trim() || 'Sem nome'
+  const lines = [
+    '🙋 Cliente pediu para falar com um atendente',
+    '',
+    `Contato: ${name}`,
+    `WhatsApp: +${args.phone}`,
+    `Assunto: ${args.summary || 'não informado, veja a conversa'}`,
+    `Última mensagem: "${args.lastMessage.trim().slice(0, 300)}"`,
+    '',
+    'A IA foi pausada nessa conversa. Responda pelo WhatsApp da Concept ou pelo CRM.',
+  ]
+  if (args.conversationUrl) lines.push(args.conversationUrl)
+  return lines.join('\n')
+}
+
 /** Modelos tentados em ordem. O da tela de Configurações vem primeiro;
  *  os demais só entram se ele falhar (ex.: ID descontinuado → 404). */
 export const FALLBACK_MODELS = ['claude-sonnet-5-5', 'claude-haiku-4-5'] as const
@@ -96,6 +170,12 @@ Responda exatamente ${HUMAN_SENTINEL} (só isso, nada mais) quando:
 - a pessoa oferecer trabalho, pedir emprego ou falar de serviço que a Concept não vende;
 - você não tiver certeza de que é um lead ou cliente falando de serviços da Concept.
 Nunca diga que "houve uma confusão", que a pessoa "está falando com outra pessoa" ou que você é um robô para se explicar. Na dúvida, ${HUMAN_SENTINEL}.
+
+PEDIDO DE ATENDENTE:
+Se um cliente ou lead pedir para falar com uma pessoa (atendente, humano, alguém da equipe, o João ou outro sócio), disser que não quer falar com robô ou se irritar com o atendimento automático, responda exatamente:
+${ATTENDANT_SENTINEL} <uma frase com o assunto e o que a pessoa quer>
+Exemplo: ${ATTENDANT_SENTINEL} Quer orçamento de loja virtual para uma loja de roupas e prefere falar com uma pessoa.
+Não escreva mais nada além disso: o sistema avisa a equipe e responde ao cliente.
 
 REGRAS DE CONDUTA NO CHAT:
 1. Responda em no máximo 2 ou 3 frases curtas, como uma pessoa no WhatsApp. Nada de blocos longos nem listas sem pedido.

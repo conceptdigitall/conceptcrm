@@ -18,8 +18,13 @@ import {
 import {
   buildCandidateModels,
   buildEvolutionSystemPrompt,
+  ATTENDANT_HANDOFF_REPLY,
+  buildAttendantAlert,
   isEchoOfCrmSend,
   isHumanHandoffReply,
+  isPartnerNumber,
+  parseAttendantRequest,
+  partnerNotificationNumbers,
   joinKnowledge,
 } from '@/lib/whatsapp/evolution-bot';
 import {
@@ -236,6 +241,8 @@ async function handleOwnerMessage(data: any): Promise<string> {
     const messageId: string | null = key?.id || null;
     const peerNumber = resolvePeerNumber(data);
     if (!peerNumber || peerNumber.length < 10) return 'ignored_from_me';
+    // Avisos do robô para os sócios (e conversas com eles) não viram inbox.
+    if (isPartnerNumber(peerNumber, process.env.ADMIN_WHATSAPP_NUMBERS)) return 'ignored_partner';
 
     const { accountId, userId } = await getAccountAndUser();
     if (!accountId) return 'ignored_from_me';
@@ -354,6 +361,79 @@ async function handleOwnerMessage(data: any): Promise<string> {
     console.error('[Evolution Webhook] Erro ao tratar mensagem enviada pelo celular:', err);
     return 'ignored_from_me';
   }
+}
+
+const CRM_PUBLIC_URL = (process.env.CRM_PUBLIC_URL || 'https://concept-crm-gamma.vercel.app').replace(/\/$/, '');
+
+/**
+ * O cliente pediu para falar com uma pessoa: responde que a equipe foi
+ * avisada, pausa a IA na conversa e manda o resumo para os sócios.
+ */
+async function handOffToAttendant(args: {
+  conversationId: string | null;
+  remoteJid: string;
+  senderNumber: string;
+  senderName: string;
+  summary: string;
+  lastMessage: string;
+}): Promise<string> {
+  const { conversationId, remoteJid, senderNumber, senderName, summary, lastMessage } = args;
+  const nowIso = new Date().toISOString();
+
+  // 1. Pausa antes de qualquer envio, para o robô não voltar a responder.
+  if (conversationId) {
+    await supabaseAdmin()
+      .from('conversations')
+      .update({
+        ai_autoreply_disabled: true,
+        ai_handoff_summary: `Cliente pediu atendente: ${summary || 'veja a conversa'}`,
+        updated_at: nowIso,
+      })
+      .eq('id', conversationId);
+  }
+
+  // 2. Resposta ao cliente, pelo mesmo endereço que ele usou.
+  let sentMessageId: string | null = null;
+  for (const target of replyTargets(remoteJid, senderNumber)) {
+    try {
+      const res = await sendEvolutionMessage(target, ATTENDANT_HANDOFF_REPLY);
+      sentMessageId = res?.key?.id ?? null;
+      if (sentMessageId) break;
+    } catch (err) {
+      console.warn('[Evolution Webhook] Falha ao avisar o cliente do atendente:', (err as Error)?.message);
+    }
+  }
+  if (conversationId) {
+    await supabaseAdmin().from('messages').insert({
+      conversation_id: conversationId,
+      message_id: sentMessageId,
+      content_text: ATTENDANT_HANDOFF_REPLY,
+      content_type: 'text',
+      sender_type: 'bot',
+      status: sentMessageId ? 'sent' : 'failed',
+      ai_generated: true,
+    });
+    await supabaseAdmin()
+      .from('conversations')
+      .update({ last_message_text: ATTENDANT_HANDOFF_REPLY, last_message_at: nowIso })
+      .eq('id', conversationId);
+  }
+
+  // 3. Aviso para os sócios (todos, caso o João não possa responder).
+  const alert = buildAttendantAlert({
+    contactName: senderName,
+    phone: senderNumber,
+    summary,
+    lastMessage,
+    conversationUrl: conversationId ? `${CRM_PUBLIC_URL}/inbox?c=${conversationId}` : null,
+  });
+  const results = await Promise.allSettled(
+    getAdminNotificationNumbers().map((num) => sendEvolutionMessage(num, alert)),
+  );
+  const failed = results.filter((r) => r.status === 'rejected').length;
+  if (failed) console.error(`[Evolution Webhook] Aviso de atendente falhou para ${failed} sócio(s)`);
+
+  return 'handed_to_attendant';
 }
 
 /** Entregue / lido nas mensagens que saíram daqui (MESSAGES_UPDATE). */
@@ -714,6 +794,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: `saved_${parsed.contentType}` });
     }
 
+    // Sócio escrevendo para o número da Concept: a IA nunca responde.
+    if (isPartnerNumber(senderNumber, process.env.ADMIN_WHATSAPP_NUMBERS)) {
+      return NextResponse.json({ status: 'partner_no_ai' });
+    }
+
     // IA pausada nesta conversa (botão "Pausar IA" no CRM): a mensagem já foi
     // salva acima, mas o robô não responde. Antes ele ignorava a pausa.
     if (conversationId && (await isAiPaused(conversationId))) {
@@ -759,6 +844,20 @@ export async function POST(req: Request) {
       if (await isAiPaused(conversationId)) {
         return NextResponse.json({ status: 'ai_paused' });
       }
+    }
+
+    // Cliente pediu atendente: avisa, pausa a IA e chama os sócios.
+    const attendant = parseAttendantRequest(replyText);
+    if (attendant) {
+      const status = await handOffToAttendant({
+        conversationId,
+        remoteJid,
+        senderNumber,
+        senderName,
+        summary: attendant.summary,
+        lastMessage: messageText,
+      });
+      return NextResponse.json({ status });
     }
 
     // Conversa pessoal / fora do escopo: não responde e pausa a IA aqui.
@@ -917,16 +1016,7 @@ function generateGoogleCalendarUrl({
  * Retorna os números de WhatsApp dos diretores/sócios para receberem avisos imediatos
  */
 function getAdminNotificationNumbers(): string[] {
-  const defaultNumbers = ['5513978071057', '5513982292700'];
-  const envVal = process.env.ADMIN_WHATSAPP_NUMBERS;
-  const customList = envVal
-    ? envVal.split(',').map((n) => n.trim().replace(/\D/g, '')).filter(Boolean)
-    : [];
-
-  const combined = Array.from(new Set([...defaultNumbers, ...customList]));
-  return combined.map((n) => {
-    return n.length >= 10 && n.length <= 11 && !n.startsWith('55') ? '55' + n : n;
-  });
+  return partnerNotificationNumbers(process.env.ADMIN_WHATSAPP_NUMBERS);
 }
 
 async function generateClaudeReply({
