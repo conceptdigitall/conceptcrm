@@ -2,20 +2,12 @@
  * Leitura das mensagens que a Evolution API (Baileys) entrega no webhook.
  *
  * Antes o webhook só entendia `conversation` e `extendedTextMessage`;
- * áudio, foto, vídeo, documento, figurinha e template eram descartados e
- * nunca apareciam no CRM. Aqui cada tipo vira o vocabulário de
- * `messages.content_type` (text, image, audio, video, document,
- * location, template).
+ * o resto era descartado. Agora entram também áudio e documento
+ * (`messages.content_type` text, audio, document). Foto, vídeo,
+ * figurinha, localização e template continuam fora, por decisão do João.
  */
 
-export type EvolutionContentType =
-  | 'text'
-  | 'image'
-  | 'audio'
-  | 'video'
-  | 'document'
-  | 'location'
-  | 'template';
+export type EvolutionContentType = 'text' | 'audio' | 'document';
 
 export interface ParsedEvolutionMessage {
   contentType: EvolutionContentType;
@@ -70,11 +62,9 @@ export function parseEvolutionMessage(message: Raw): ParsedEvolutionMessage | nu
     return text.trim() ? { ...base, contentType: 'text', text } : null;
   }
 
+  // Por decisão do João, só áudio e documento entram no CRM. Foto, vídeo,
+  // figurinha, localização e template são ignorados.
   const media: Array<[string, EvolutionContentType]> = [
-    ['imageMessage', 'image'],
-    ['stickerMessage', 'image'],
-    ['videoMessage', 'video'],
-    ['ptvMessage', 'video'],
     ['audioMessage', 'audio'],
     ['documentMessage', 'document'],
   ];
@@ -92,34 +82,11 @@ export function parseEvolutionMessage(message: Raw): ParsedEvolutionMessage | nu
     };
   }
 
-  if (m.locationMessage || m.liveLocationMessage) {
-    const loc = m.locationMessage || m.liveLocationMessage;
-    const label = [str(loc.name), str(loc.address)].filter(Boolean).join(' · ');
-    const coords =
-      typeof loc.degreesLatitude === 'number'
-        ? `https://maps.google.com/?q=${loc.degreesLatitude},${loc.degreesLongitude}`
-        : '';
-    return { ...base, contentType: 'location', text: [label, coords].filter(Boolean).join('\n') };
-  }
-
   if (m.contactMessage || m.contactsArrayMessage) {
     const names: string[] = m.contactMessage
       ? [str(m.contactMessage.displayName)]
       : (m.contactsArrayMessage.contacts || []).map((c: Raw) => str(c?.displayName));
     return { ...base, contentType: 'text', text: `📇 Contato: ${names.filter(Boolean).join(', ') || 'compartilhado'}` };
-  }
-
-  if (m.templateMessage) {
-    const t = m.templateMessage.hydratedTemplate || m.templateMessage.hydratedFourRowTemplate || {};
-    const text = [str(t.hydratedTitleText), str(t.hydratedContentText), str(t.hydratedFooterText)]
-      .filter(Boolean)
-      .join('\n\n');
-    return {
-      ...base,
-      contentType: 'template',
-      text,
-      templateName: str(m.templateMessage.templateId || t.templateId) || null,
-    };
   }
 
   if (m.buttonsResponseMessage) {
@@ -165,18 +132,10 @@ export function parseProtocolAction(message: Raw): EvolutionProtocolAction | nul
 export function previewText(parsed: ParsedEvolutionMessage): string {
   if (parsed.text.trim()) return parsed.text;
   switch (parsed.contentType) {
-    case 'image':
-      return '📷 Foto';
     case 'audio':
       return '🎤 Áudio';
-    case 'video':
-      return '🎥 Vídeo';
     case 'document':
       return '📄 Documento';
-    case 'location':
-      return '📍 Localização';
-    case 'template':
-      return 'Mensagem de template';
     default:
       return '';
   }

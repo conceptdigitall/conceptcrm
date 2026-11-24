@@ -18,15 +18,9 @@ describe('parseEvolutionMessage', () => {
     expect(parseEvolutionMessage({ conversation: '   ' })).toBeNull()
   })
 
-  it('keeps audio, image with caption, video and documents', () => {
+  it('keeps only audio and documents', () => {
     const audio = parseEvolutionMessage({ audioMessage: { mimetype: 'audio/ogg; codecs=opus' }, messageContextInfo: {} })
     expect(audio).toMatchObject({ contentType: 'audio', hasMedia: true, text: '', mimeType: 'audio/ogg; codecs=opus' })
-
-    const img = parseEvolutionMessage({ imageMessage: { caption: 'olha', mimetype: 'image/jpeg' } })
-    expect(img).toMatchObject({ contentType: 'image', text: 'olha', hasMedia: true })
-
-    expect(parseEvolutionMessage({ stickerMessage: { mimetype: 'image/webp' } })?.contentType).toBe('image')
-    expect(parseEvolutionMessage({ videoMessage: {} })?.contentType).toBe('video')
 
     const doc = parseEvolutionMessage({
       documentWithCaptionMessage: { message: { documentMessage: { fileName: 'proposta.pdf', mimetype: 'application/pdf' } } },
@@ -34,23 +28,22 @@ describe('parseEvolutionMessage', () => {
     expect(doc).toMatchObject({ contentType: 'document', fileName: 'proposta.pdf', text: 'proposta.pdf' })
   })
 
+  it('ignores photo, video, sticker, location and template', () => {
+    expect(parseEvolutionMessage({ imageMessage: { caption: 'olha', mimetype: 'image/jpeg' } })).toBeNull()
+    expect(parseEvolutionMessage({ videoMessage: {} })).toBeNull()
+    expect(parseEvolutionMessage({ stickerMessage: { mimetype: 'image/webp' } })).toBeNull()
+    expect(parseEvolutionMessage({ locationMessage: { degreesLatitude: -23.9, degreesLongitude: -46.4 } })).toBeNull()
+    expect(
+      parseEvolutionMessage({ templateMessage: { hydratedTemplate: { hydratedContentText: 'Promo' } } }),
+    ).toBeNull()
+  })
+
   it('unwraps ephemeral and view-once envelopes', () => {
     expect(parseEvolutionMessage({ ephemeralMessage: { message: { conversation: 'some' } } })?.text).toBe('some')
-    expect(parseEvolutionMessage({ viewOnceMessageV2: { message: { imageMessage: {} } } })?.contentType).toBe('image')
+    expect(parseEvolutionMessage({ viewOnceMessageV2: { message: { audioMessage: {} } } })?.contentType).toBe('audio')
   })
 
-  it('reads templates sent by businesses', () => {
-    const t = parseEvolutionMessage({
-      templateMessage: { templateId: '1449', hydratedTemplate: { hydratedContentText: 'Promo de hoje', hydratedFooterText: 'Loja' } },
-    })
-    expect(t).toMatchObject({ contentType: 'template', templateName: '1449' })
-    expect(t?.text).toContain('Promo de hoje')
-  })
-
-  it('reads location and button replies, ignores reactions and protocol', () => {
-    const loc = parseEvolutionMessage({ locationMessage: { degreesLatitude: -23.9, degreesLongitude: -46.4, name: 'Loja' } })
-    expect(loc?.contentType).toBe('location')
-    expect(loc?.text).toContain('maps.google.com')
+  it('reads button replies, ignores reactions and protocol', () => {
     expect(parseEvolutionMessage({ buttonsResponseMessage: { selectedDisplayText: 'Sim' } })?.text).toBe('Sim')
     expect(parseEvolutionMessage({ reactionMessage: { text: '❤️' } })).toBeNull()
     expect(parseEvolutionMessage({ protocolMessage: { type: 0 } })).toBeNull()
@@ -61,7 +54,7 @@ describe('parseEvolutionMessage', () => {
 describe('previewText', () => {
   it('uses the caption or a label for media', () => {
     expect(previewText({ contentType: 'audio', text: '', hasMedia: true, mimeType: null, fileName: null, templateName: null })).toBe('🎤 Áudio')
-    expect(previewText({ contentType: 'image', text: 'olha', hasMedia: true, mimeType: null, fileName: null, templateName: null })).toBe('olha')
+    expect(previewText({ contentType: 'document', text: 'proposta.pdf', hasMedia: true, mimeType: null, fileName: null, templateName: null })).toBe('proposta.pdf')
   })
 })
 
