@@ -34,6 +34,7 @@ import {
 import { ConceptLogo } from "@/components/brand/concept-logo";
 import type { AccountRole } from "@/lib/auth/roles";
 import { isInternalAccount } from "@/lib/internal-accounts";
+import { isFinanceAccount } from "@/lib/finance-accounts";
 import { isStoreAccount } from "@/lib/store-accounts";
 import { ModeToggle } from "@/components/layout/mode-toggle";
 import { MOBILE_PRIMARY_HREFS } from "@/components/layout/mobile-bottom-nav";
@@ -99,6 +100,7 @@ interface NavItem {
   beta?: boolean;
   /** Concept Digital's own tools; hidden unless the account is internal. */
   internalOnly?: boolean;
+  /** Financeiro; hidden unless isFinanceAccount (see finance-accounts.ts). */ financeOnly?: boolean;
   /** Módulo Loja; hidden unless the account is in NEXT_PUBLIC_STORE_ACCOUNT_IDS. */
   storeOnly?: boolean;
 }
@@ -135,7 +137,7 @@ const navGroups: NavGroup[] = [
       { href: "/prospeccao", labelKey: "prospecting", icon: Search, internalOnly: true },
       { href: "/marketing", labelKey: "marketing", icon: Clapperboard, internalOnly: true },
       { href: "/documentos", labelKey: "documents", icon: FileText, internalOnly: true },
-      { href: "/financeiro", labelKey: "finance", icon: Wallet, internalOnly: true },
+      { href: "/financeiro", labelKey: "finance", icon: Wallet, financeOnly: true },
       { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
     ],
   },
@@ -178,7 +180,8 @@ export function Sidebar({ open = false, onClose, totalUnread = 0 }: SidebarProps
 
   const visible = (item: NavItem) =>
     (!item.internalOnly || isInternalAccount(account?.id)) &&
-    (!item.storeOnly || isStoreAccount(account?.id));
+    (!item.storeOnly || isStoreAccount(account?.id)) &&
+    (!item.financeOnly || isFinanceAccount(account?.id));
   const groups = navGroups
     .map((g) => ({ ...g, items: g.items.filter(visible) }))
     .filter((g) => g.items.length > 0);

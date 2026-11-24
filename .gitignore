@@ -49,6 +49,9 @@ worker/laya/.venv/
 # logs do npm run servicos
 .servicos-logs/
 
+# Financeiro em modo local (FINANCE_STORAGE=local) — dados reais da empresa
+.data/
+
 # Laya — modelos, embeddings e caches locais (pesados)
 *.pt
 *.npy
