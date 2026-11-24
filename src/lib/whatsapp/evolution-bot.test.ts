@@ -84,3 +84,44 @@ describe('isEchoOfCrmSend', () => {
     expect(isEchoOfCrmSend([], { messageId: null, text: '' })).toBe(false)
   })
 })
+
+describe('attendant handoff', () => {
+  it('reads the summary after the sentinel', async () => {
+    const { parseAttendantRequest, ATTENDANT_SENTINEL, isHumanHandoffReply: isHuman } = await import('./evolution-bot')
+    expect(parseAttendantRequest(`${ATTENDANT_SENTINEL} Quer orçamento de **loja** e prefere uma pessoa.`)).toEqual({
+      summary: 'Quer orçamento de loja e prefere uma pessoa.',
+    })
+    expect(parseAttendantRequest('[atendente]')).toEqual({ summary: '' })
+    expect(parseAttendantRequest('Oi, tudo bem?')).toBeNull()
+    expect(isHuman(`${ATTENDANT_SENTINEL} algo`)).toBe(false)
+  })
+
+  it('notifies the four partners plus extra numbers, without duplicates', async () => {
+    const { partnerNotificationNumbers, isPartnerNumber } = await import('./evolution-bot')
+    const list = partnerNotificationNumbers('13978071057, 11 91234-5678')
+    expect(list).toEqual(['5513978071057', '5513982292700', '5511997396671', '5513981958787', '5511912345678'])
+    expect(isPartnerNumber('5513981958787')).toBe(true)
+    expect(isPartnerNumber('13982292700')).toBe(true)
+    expect(isPartnerNumber('5513991382442')).toBe(false)
+  })
+
+  it('builds the partner alert with contact, topic and CRM link', async () => {
+    const { buildAttendantAlert } = await import('./evolution-bot')
+    const text = buildAttendantAlert({
+      contactName: 'Ana',
+      phone: '5513999990000',
+      summary: 'Quer loja virtual',
+      lastMessage: 'quero falar com uma pessoa',
+      conversationUrl: 'https://crm.test/inbox?c=1',
+    })
+    expect(text).toContain('Contato: Ana')
+    expect(text).toContain('+5513999990000')
+    expect(text).toContain('Assunto: Quer loja virtual')
+    expect(text).toContain('https://crm.test/inbox?c=1')
+  })
+
+  it('tells the model how to ask for an attendant', () => {
+    const prompt = buildEvolutionSystemPrompt({ persona: null, knowledge: '', nowBrasilia: 'x', dateContext: '', userName: 'Ana' })
+    expect(prompt).toContain('[ATENDENTE]')
+  })
+})
