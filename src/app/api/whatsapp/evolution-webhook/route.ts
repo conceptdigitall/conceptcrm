@@ -22,6 +22,17 @@ import {
   isHumanHandoffReply,
   joinKnowledge,
 } from '@/lib/whatsapp/evolution-bot';
+import {
+  DELETED_PREFIX,
+  mapEvolutionStatus,
+  markDeletedText,
+  parseEvolutionMessage,
+  parseProtocolAction,
+  previewText,
+  replyTargets,
+  statusesBelow,
+} from '@/lib/whatsapp/evolution-message';
+import { mirrorEvolutionMedia } from '@/lib/whatsapp/evolution-media';
 
 export const maxDuration = 60;
 
@@ -77,7 +88,9 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function simulateHumanPresence(remoteJid: string, delayMs: number) {
   if (!EVOLUTION_URL || !EVOLUTION_KEY || !INSTANCE) return;
   try {
-    const cleanNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
+    const cleanNumber = remoteJid.endsWith('@lid')
+      ? remoteJid
+      : remoteJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
     await fetch(`${EVOLUTION_URL}/chat/markMessageAsRead/${INSTANCE}`, {
       method: 'POST',
       headers: { 'apikey': EVOLUTION_KEY, 'Content-Type': 'application/json' },
@@ -104,8 +117,11 @@ async function sendEvolutionMessage(number: string, text: string) {
   if (!EVOLUTION_URL || !EVOLUTION_KEY || !INSTANCE) {
     throw new Error('Evolution API não configurada (EVOLUTION_API_KEY ou EVOLUTION_INSTANCE_NAME ausente)');
   }
-  let cleanNumber = number.replace('@s.whatsapp.net', '').replace('@lid', '').replace(/\D/g, '');
-  if (cleanNumber.length >= 10 && cleanNumber.length <= 11 && !cleanNumber.startsWith('55')) {
+  // @lid vai como JID completo; número vira só dígitos com DDI.
+  let cleanNumber = number.endsWith('@lid')
+    ? number
+    : number.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+  if (!cleanNumber.endsWith('@lid') && cleanNumber.length >= 10 && cleanNumber.length <= 11 && !cleanNumber.startsWith('55')) {
     cleanNumber = '55' + cleanNumber;
   }
   const res = await fetch(`${EVOLUTION_URL}/message/sendText/${INSTANCE}`, {
@@ -113,6 +129,9 @@ async function sendEvolutionMessage(number: string, text: string) {
     headers: { 'apikey': EVOLUTION_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ number: cleanNumber, text }),
   });
+  if (!res.ok) {
+    throw new Error(`Evolution sendText ${res.status}`);
+  }
   return res.json();
 }
 
@@ -210,8 +229,10 @@ async function handleOwnerMessage(data: any): Promise<string> {
     if (!remoteJid || remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') {
       return 'ignored_from_me';
     }
-    const text: string =
-      data?.message?.conversation || data?.message?.extendedTextMessage?.text || '';
+    const parsed = parseEvolutionMessage(data?.message);
+    if (!parsed) return 'ignored_from_me';
+    const text: string = parsed.text;
+    const preview = previewText(parsed);
     const messageId: string | null = key?.id || null;
     const peerNumber = resolvePeerNumber(data);
     if (!peerNumber || peerNumber.length < 10) return 'ignored_from_me';
@@ -293,25 +314,37 @@ async function handleOwnerMessage(data: any): Promise<string> {
     }
 
     const nowIso = new Date().toISOString();
-    if (text.trim()) {
-      await db.from('messages').upsert(
-        {
-          conversation_id: conversationId,
-          message_id: messageId,
-          content_text: text,
-          content_type: 'text',
-          sender_type: 'agent',
-          status: 'sent',
-        },
-        { onConflict: 'conversation_id,message_id', ignoreDuplicates: true },
-      );
-    }
+    const mediaUrl =
+      parsed.hasMedia && messageId
+        ? await mirrorEvolutionMedia({
+            storage: db.storage,
+            accountId,
+            messageId,
+            parsed,
+            messageTimestamp: data?.messageTimestamp,
+            evolution: { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: INSTANCE },
+          })
+        : null;
+    await db.from('messages').upsert(
+      {
+        conversation_id: conversationId,
+        message_id: messageId,
+        content_text: text || null,
+        content_type: parsed.contentType,
+        media_url: mediaUrl,
+        media_type: parsed.mimeType,
+        template_name: parsed.templateName,
+        sender_type: 'agent',
+        status: 'sent',
+      },
+      { onConflict: 'conversation_id,message_id', ignoreDuplicates: true },
+    );
     await db
       .from('conversations')
       .update({
         ai_autoreply_disabled: true,
         ai_handoff_summary: 'IA pausada: você respondeu pelo celular. Retome a IA quando quiser.',
-        ...(text.trim() ? { last_message_text: text, last_message_at: nowIso } : {}),
+        ...(preview ? { last_message_text: preview, last_message_at: nowIso } : {}),
         updated_at: nowIso,
       })
       .eq('id', conversationId);
@@ -321,6 +354,51 @@ async function handleOwnerMessage(data: any): Promise<string> {
     console.error('[Evolution Webhook] Erro ao tratar mensagem enviada pelo celular:', err);
     return 'ignored_from_me';
   }
+}
+
+/** Entregue / lido nas mensagens que saíram daqui (MESSAGES_UPDATE). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function applyStatusUpdates(payload: any): Promise<string> {
+  const items = Array.isArray(payload) ? payload : [payload];
+  let updated = 0;
+  for (const item of items) {
+    const id: string | undefined = item?.keyId || item?.key?.id;
+    const next = mapEvolutionStatus(item?.status ?? item?.update?.status);
+    if (!id || !next) continue;
+    const { error } = await supabaseAdmin()
+      .from('messages')
+      .update({ status: next })
+      .eq('message_id', id)
+      .in('status', statusesBelow(next));
+    if (error) console.warn('[Evolution Webhook] Erro ao atualizar status:', error.message);
+    else updated++;
+  }
+  return updated ? 'status_updated' : 'status_ignored';
+}
+
+/** Apagada para todos: mantém o original, marcado como apagado. */
+async function markMessageDeleted(targetId: string): Promise<void> {
+  const { data: rows } = await supabaseAdmin()
+    .from('messages')
+    .select('id, content_text')
+    .eq('message_id', targetId)
+    .limit(5);
+  for (const row of rows ?? []) {
+    if ((row.content_text ?? '').startsWith(DELETED_PREFIX)) continue;
+    await supabaseAdmin()
+      .from('messages')
+      .update({ content_text: markDeletedText(row.content_text) })
+      .eq('id', row.id);
+  }
+}
+
+/** Mensagem editada no WhatsApp: troca o texto salvo. */
+async function applyMessageEdit(targetId: string, text: string): Promise<void> {
+  await supabaseAdmin()
+    .from('messages')
+    .update({ content_text: `${text}\n(editada)` })
+    .eq('message_id', targetId)
+    .eq('content_type', 'text');
 }
 
 /** True quando já existe mensagem do cliente mais nova que esta. */
@@ -388,13 +466,36 @@ export async function POST(req: Request) {
 
     const body = await req.json();
 
+    const event = String(body.event || '').toLowerCase().replace('_', '.');
+
+    // Entregue / lido nas mensagens que enviamos.
+    if (event === 'messages.update') {
+      const status = await applyStatusUpdates(body.data);
+      return NextResponse.json({ status });
+    }
+    // Apagada para todos (algumas versões mandam como evento próprio).
+    if (event === 'messages.delete') {
+      const d = Array.isArray(body.data) ? body.data[0] : body.data;
+      const targetId = d?.keyId || d?.key?.id || d?.id;
+      if (typeof targetId === 'string') await markMessageDeleted(targetId);
+      return NextResponse.json({ status: 'deleted' });
+    }
+
     // 1. FILTRO: Ignora se o evento não for estritamente nova mensagem
-    if (body.event !== 'messages.upsert' && body.event !== 'MESSAGES_UPSERT') {
+    if (event !== 'messages.upsert') {
       return NextResponse.json({ status: 'ignored_not_upsert' });
     }
 
     const data = body.data;
     const key = data?.key;
+
+    // Apagar para todos / editar: atualiza a mensagem que já está no CRM.
+    const protocol = parseProtocolAction(data?.message);
+    if (protocol) {
+      if (protocol.kind === 'revoke') await markMessageDeleted(protocol.targetId);
+      else await applyMessageEdit(protocol.targetId, protocol.text);
+      return NextResponse.json({ status: `protocol_${protocol.kind}` });
+    }
 
     // 2. MENSAGEM QUE SAIU DESTE NÚMERO: eco do CRM/robô (ignora) ou o João
     //    digitando no celular (salva na inbox e pausa a IA nesta conversa).
@@ -422,15 +523,15 @@ export async function POST(req: Request) {
       return NextResponse.json({ status: 'blocked_fake_number' });
     }
 
-    // 4. FILTRO DE CONTEÚDO VAZIO
-    const messageText =
-      data?.message?.conversation ||
-      data?.message?.extendedTextMessage?.text ||
-      '';
-
-    if (!messageText.trim()) {
-      return NextResponse.json({ status: 'ignored_empty_text' });
+    // 4. CONTEÚDO: texto, mídia, localização, template… Antes só texto
+    //    entrava; áudio, foto e documento sumiam do CRM.
+    const parsed = parseEvolutionMessage(data?.message);
+    if (!parsed) {
+      return NextResponse.json({ status: 'ignored_unsupported' });
     }
+    // O que a IA lê e o que aparece na lista da inbox.
+    const messageText = parsed.contentType === 'text' ? parsed.text : '';
+    const preview = previewText(parsed);
 
     // 5. Extrair número limpo tratando variações de JID (@s.whatsapp.net, @lid)
     let rawNumber = remoteJid.replace('@s.whatsapp.net', '').replace('@lid', '');
@@ -441,7 +542,7 @@ export async function POST(req: Request) {
     const senderNumber = rawNumber.replace(/\D/g, '') || rawNumber;
     const senderName = data?.pushName || 'Novo Lead';
 
-    console.log(`[Nova Mensagem] ${senderName} (${senderNumber}): ${messageText}`);
+    console.log(`[Nova Mensagem] ${senderName} (${senderNumber}): ${parsed.contentType}`);
 
     // ========================================================
     // 1. GRAVAR NO BANCO DO CRM (SUPABASE) PARA MOSTRAR NA INBOX
@@ -496,7 +597,7 @@ export async function POST(req: Request) {
 
     // 2.1 Garantir que o lead possua um Deal aberto no Pipeline de Vendas do CRM
     if (contact?.id && accountId) {
-      syncLeadDeal(supabaseAdmin(), accountId, userId, contact.id, senderName, messageText).catch((err) =>
+      syncLeadDeal(supabaseAdmin(), accountId, userId, contact.id, senderName, preview).catch((err) =>
         console.error('[Evolution Webhook] Erro ao sincronizar deal do lead:', err)
       );
     }
@@ -527,7 +628,7 @@ export async function POST(req: Request) {
             user_id: userId,
             contact_id: contact.id,
             status: 'open',
-            last_message_text: messageText,
+            last_message_text: preview,
             last_message_at: nowIso,
             unread_count: 1,
           })
@@ -553,7 +654,7 @@ export async function POST(req: Request) {
           .from('conversations')
           .update({
             status: 'open',
-            last_message_text: messageText,
+            last_message_text: preview,
             last_message_at: nowIso,
             unread_count: (conv.unread_count || 0) + 1,
             updated_at: nowIso,
@@ -564,6 +665,17 @@ export async function POST(req: Request) {
       // 4. Salvar a mensagem na conversa criada com upsert
       if (conversationId) {
         const messageId = key?.id || null;
+        const mediaUrl =
+          parsed.hasMedia && messageId
+            ? await mirrorEvolutionMedia({
+                storage: supabaseAdmin().storage,
+                accountId,
+                messageId,
+                parsed,
+                messageTimestamp: data?.messageTimestamp,
+                evolution: { url: EVOLUTION_URL, apiKey: EVOLUTION_KEY, instance: INSTANCE },
+              })
+            : null;
 
         const { data: insertedRows, error: msgErr } = await supabaseAdmin()
           .from('messages')
@@ -571,8 +683,11 @@ export async function POST(req: Request) {
             {
               conversation_id: conversationId,
               message_id: messageId,
-              content_text: messageText,
-              content_type: 'text',
+              content_text: parsed.text || null,
+              content_type: parsed.contentType,
+              media_url: mediaUrl,
+              media_type: parsed.mimeType,
+              template_name: parsed.templateName,
               sender_type: 'customer',
               status: 'delivered',
             },
@@ -590,6 +705,13 @@ export async function POST(req: Request) {
           return NextResponse.json({ status: 'duplicate_ignored' });
         }
       }
+    }
+
+    // Áudio, foto, documento, template…: fica salvo na inbox, mas a IA só
+    // responde texto (não ouve áudio nem vê imagem; responder às cegas é
+    // como ela inventa coisas).
+    if (parsed.contentType !== 'text' || !messageText.trim()) {
+      return NextResponse.json({ status: `saved_${parsed.contentType}` });
     }
 
     // IA pausada nesta conversa (botão "Pausar IA" no CRM): a mensagem já foi
@@ -658,9 +780,19 @@ export async function POST(req: Request) {
       const sanitizedReply = cleanReplyFormatting(replyText);
       if (sanitizedReply) {
         // Envia via WhatsApp (garante formato internacional com DDI/DDD)
-        const targetRecipient = senderNumber && senderNumber.length >= 10 ? senderNumber : remoteJid;
-        const sendResult = await sendEvolutionMessage(targetRecipient, sanitizedReply);
-        const sentMessageId: string | null = sendResult?.key?.id ?? null;
+        // Responde pelo mesmo endereço que o cliente usou (@lid quando for o
+        // caso); o número de telefone fica como reserva.
+        let sentMessageId: string | null = null;
+        for (const target of replyTargets(remoteJid, senderNumber)) {
+          try {
+            const sendResult = await sendEvolutionMessage(target, sanitizedReply);
+            sentMessageId = sendResult?.key?.id ?? null;
+            if (sentMessageId) break;
+            console.warn('[Evolution Webhook] Envio sem id para', target.endsWith('@lid') ? 'lid' : 'número');
+          } catch (err) {
+            console.warn('[Evolution Webhook] Falha ao enviar, tentando reserva:', (err as Error)?.message);
+          }
+        }
 
         // Salva a resposta da IA no CRM também
         if (conversationId) {
@@ -670,7 +802,7 @@ export async function POST(req: Request) {
             content_text: sanitizedReply,
             content_type: 'text',
             sender_type: 'bot',
-            status: 'sent',
+            status: sentMessageId ? 'sent' : 'failed',
             ai_generated: true,
           });
 
