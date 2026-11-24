@@ -49,8 +49,8 @@ BEGIN
     DROP POLICY IF EXISTS "Permitir insercao anonima page_views" ON public.page_views;
     CREATE POLICY "Permitir insercao anonima page_views" ON public.page_views FOR INSERT TO anon, authenticated WITH CHECK (true);
 
+    -- ATUALIZACAO: nao permitir update livre por anonimos para evitar manipulacao de metricas
     DROP POLICY IF EXISTS "Permitir atualizacao anonima page_views" ON public.page_views;
-    CREATE POLICY "Permitir atualizacao anonima page_views" ON public.page_views FOR UPDATE TO anon, authenticated USING (true);
 
     DROP POLICY IF EXISTS "Permitir insercao anonima project_clicks" ON public.project_clicks;
     CREATE POLICY "Permitir insercao anonima project_clicks" ON public.project_clicks FOR INSERT TO anon, authenticated WITH CHECK (true);

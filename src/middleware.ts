@@ -2,6 +2,18 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+  // Financeiro em modo local (FINANCE_STORAGE=local, nunca em produção): sem
+  // Supabase não há login, então a raiz e /financeiro vão direto ao painel local.
+  if (
+    process.env.FINANCE_STORAGE === 'local' &&
+    process.env.NODE_ENV !== 'production' &&
+    (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/financeiro')
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/local/financeiro'
+    return NextResponse.redirect(url)
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -78,7 +90,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings', '/pedidos', '/loja']
+  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings', '/pedidos', '/loja', '/financeiro']
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'

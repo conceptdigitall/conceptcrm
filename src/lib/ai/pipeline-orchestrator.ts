@@ -206,8 +206,9 @@ export async function recordDealPayment(
   paymentDetails: {
     amount?: number;
     notes?: string;
+    pendingVerification?: boolean;
   }
-): Promise<{ success: boolean; dealTitle?: string; value?: number }> {
+): Promise<{ success: boolean; dealTitle?: string; value?: number; pending?: boolean }> {
   if (!accountId || !contactId) return { success: false };
 
   try {
@@ -235,16 +236,27 @@ export async function recordDealPayment(
 
     const nowIso = new Date().toISOString();
     const finalValue = paymentDetails.amount !== undefined && paymentDetails.amount > 0 ? paymentDetails.amount : deal.value;
+    const isPending = Boolean(paymentDetails.pendingVerification);
 
     const patch: Record<string, unknown> = {
-      status: 'won',
       value: finalValue,
       updated_at: nowIso,
-      notes: [deal.notes, `💰 Pagamento/Contrato confirmado em ${nowIso}`, paymentDetails.notes].filter(Boolean).join('\n'),
+      notes: [
+        deal.notes,
+        isPending
+          ? `⚠️ Pagamento informado pelo cliente no chat em ${nowIso} (PENDENTE DE CONFERÊNCIA BANCÁRIA)`
+          : `💰 Pagamento/Contrato confirmado em ${nowIso}`,
+        paymentDetails.notes,
+      ]
+        .filter(Boolean)
+        .join('\n'),
     };
 
-    if (wonStage) {
-      patch.stage_id = wonStage.id;
+    if (!isPending) {
+      patch.status = 'won';
+      if (wonStage) {
+        patch.stage_id = wonStage.id;
+      }
     }
 
     const { error: updErr } = await db.from('deals').update(patch).eq('id', deal.id);
@@ -253,8 +265,8 @@ export async function recordDealPayment(
       return { success: false };
     }
 
-    console.info(`[pipeline-orchestrator] Deal ${deal.id} marcado como WON! Valor: R$ ${finalValue}`);
-    return { success: true, dealTitle: deal.title, value: finalValue };
+    console.info(`[pipeline-orchestrator] Deal ${deal.id} atualizado. Pendente: ${isPending}. Valor: R$ ${finalValue}`);
+    return { success: true, dealTitle: deal.title, value: finalValue, pending: isPending };
   } catch (err) {
     console.error('[pipeline-orchestrator] Exceção em recordDealPayment:', err);
     return { success: false };

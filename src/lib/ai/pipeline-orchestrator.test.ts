@@ -188,4 +188,48 @@ describe('pipeline-orchestrator', () => {
       })
     );
   });
+
+  it('recordDealPayment com pendingVerification mantem status aberto para conferencia', async () => {
+    const updateSpy = vi.fn().mockReturnThis();
+    const mockDb = {
+      from: vi.fn((table: string) => {
+        if (table === 'deals') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            limit: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { id: 'deal-1', title: 'Site Dentista', value: 1200, pipeline_id: 'pipe-1', notes: null },
+              error: null,
+            }),
+            update: updateSpy,
+          };
+        }
+        if (table === 'pipeline_stages') {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({
+              data: [{ id: 'stage-won', name: 'Ganho / Fechado' }],
+              error: null,
+            }),
+          };
+        }
+        return {} as any;
+      }),
+    } as any;
+
+    const result = await recordDealPayment(mockDb, 'acc-1', 'cont-1', {
+      amount: 1500,
+      notes: 'Cliente mandou comprovante no chat',
+      pendingVerification: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.pending).toBe(true);
+    const updatePayload = updateSpy.mock.calls[0][0];
+    expect(updatePayload.status).toBeUndefined();
+    expect(updatePayload.stage_id).toBeUndefined();
+    expect(updatePayload.notes).toContain('PENDENTE DE CONFERÊNCIA BANCÁRIA');
+  });
 });
