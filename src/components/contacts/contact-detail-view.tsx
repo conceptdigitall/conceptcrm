@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { isStoreAccount } from '@/lib/store-accounts';
 import { ContactPurchases } from '@/components/store/contact-purchases';
 import { ContactDocumentsTab } from '@/components/contacts/contact-documents-tab';
+import { FollowUpDialog } from '@/components/contacts/follow-up-dialog';
 import { formatCurrency } from '@/lib/currency';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag, ContactNote, CustomField, ContactCustomValue, Deal, MessageTemplate } from '@/types';
@@ -42,6 +43,7 @@ import {
   X,
   DollarSign,
   LayoutTemplate,
+  MessageCircleReply,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { contactHandle } from '@/lib/whatsapp/wa-identity';
@@ -99,6 +101,7 @@ export function ContactDetailView({
 
   // Deals tab
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [followUpOpen, setFollowUpOpen] = useState(false);
   const [loadingDeals, setLoadingDeals] = useState(false);
 
   const fetchContact = useCallback(async () => {
@@ -436,7 +439,15 @@ export function ContactDetailView({
                   </div>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setFollowUpOpen(true)}
+                >
+                  <MessageCircleReply className="size-4" />
+                  Follow-up
+                </Button>
                 <Button
                   size="sm"
                   onClick={() => setTemplatePickerOpen(true)}
@@ -784,6 +795,14 @@ export function ContactDetailView({
       onOpenChange={setTemplatePickerOpen}
       onSelect={handleSendTemplate}
     />
+    {contactId && (
+      <FollowUpDialog
+        contactId={contactId}
+        contactName={contact?.name || contact?.phone || 'contato'}
+        open={followUpOpen}
+        onOpenChange={setFollowUpOpen}
+      />
+    )}
     </>
   );
 }

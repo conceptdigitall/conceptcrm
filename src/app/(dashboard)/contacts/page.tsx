@@ -54,6 +54,7 @@ import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
+import { CoolingLeadsStrip } from '@/components/contacts/cooling-leads-strip';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
@@ -96,6 +97,8 @@ export default function ContactsPage() {
 
   // All tags for display
   const [tagsMap, setTagsMap] = useState<Record<string, Tag>>({});
+  // Leads esfriando (contactId → dias sem resposta), para o selo na tabela.
+  const [coolingMap, setCoolingMap] = useState<Record<string, number>>({});
 
   // Guards against out-of-order fetch responses: each fetchContacts run
   // claims a sequence number and only the latest is allowed to commit its
@@ -382,6 +385,9 @@ export default function ContactsPage() {
         </div>
       </div>
 
+      {/* Leads esfriando: proposta sem resposta → follow-up */}
+      <CoolingLeadsStrip onOpen={openDetail} onLoaded={setCoolingMap} />
+
       {/* Search + tag filter */}
       <div className="space-y-2">
         <div className="flex flex-col sm:flex-row gap-2">
@@ -602,6 +608,14 @@ export default function ContactsPage() {
                   </TableCell>
                   <TableCell className="text-foreground font-medium">
                     {contact.name || <span className="text-muted-foreground italic">{t('unnamed')}</span>}
+                    {coolingMap[contact.id] != null && (
+                      <span
+                        className="ml-2 inline-flex items-center rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-600"
+                        title="Última mensagem foi nossa e o cliente não respondeu"
+                      >
+                        sem resposta há {coolingMap[contact.id]}d
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground font-mono text-xs">
                     {contact.phone}
