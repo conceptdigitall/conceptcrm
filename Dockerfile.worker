@@ -39,8 +39,18 @@ USER node
 COPY --chown=node:node package.json package-lock.json ./
 RUN npm ci --include=dev --no-audit --no-fund --fetch-retries=5 --fetch-retry-maxtimeout=120000
 
-# Chrome do HyperFrames em ~/.cache/hyperframes (onde o render procura sozinho).
-RUN ./node_modules/.bin/hyperframes browser ensure
+# Chrome headless do render, instalado como no Dockerfile.render oficial do HyperFrames
+# (@puppeteer/browsers + PRODUCER_HEADLESS_SHELL_PATH). O `hyperframes browser ensure`
+# travava depois do download no Railway e o spinner dele estourava o limite de log;
+# aqui a saída vai para um arquivo e só aparece se falhar.
+ENV PRODUCER_HEADLESS_SHELL_PATH=/home/node/chrome-headless-shell
+RUN npx --yes @puppeteer/browsers@2 install chrome-headless-shell@152.0.7977.30 \
+      --path /home/node/.cache/puppeteer > /tmp/chrome-install.log 2>&1 \
+      || (tail -n 40 /tmp/chrome-install.log; exit 1); \
+    BIN=$(find /home/node/.cache/puppeteer -name chrome-headless-shell -type f | head -1); \
+    test -n "$BIN" || (echo "chrome-headless-shell não encontrado" >&2; tail -n 40 /tmp/chrome-install.log; exit 1); \
+    ln -s "$BIN" "$PRODUCER_HEADLESS_SHELL_PATH" \
+    && "$PRODUCER_HEADLESS_SHELL_PATH" --version
 
 COPY --chown=node:node . .
 
